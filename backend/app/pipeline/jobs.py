@@ -1,0 +1,64 @@
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.models import Job, JobStatus, utcnow
+
+
+async def get_running_job(session: AsyncSession) -> Job | None:
+    result = await session.execute(select(Job).where(Job.status == JobStatus.running))
+    return result.scalars().first()
+
+
+async def start_job(session: AsyncSession) -> tuple[Job, bool]:
+    """回傳 (job, created)。已有 running job 時回傳它,created=False。"""
+    existing = await get_running_job(session)
+    if existing is not None:
+        return existing, False
+    job = Job(status=JobStatus.running, progress={"stage": "starting"})
+    session.add(job)
+    await session.commit()
+    return job, True
+
+
+async def update_progress(
+    sessionmaker: async_sessionmaker[AsyncSession], job_id: int, progress: dict
+) -> None:
+    async with sessionmaker() as session:
+        await session.execute(
+            update(Job).where(Job.id == job_id).values(progress=progress)
+        )
+        await session.commit()
+
+
+async def finish_job(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    job_id: int,
+    error: str | None = None,
+) -> None:
+    async with sessionmaker() as session:
+        await session.execute(
+            update(Job)
+            .where(Job.id == job_id)
+            .values(
+                status=JobStatus.failed if error else JobStatus.done,
+                finished_at=utcnow(),
+                error_message=error,
+            )
+        )
+        await session.commit()
+
+
+async def fail_orphan_jobs(sessionmaker: async_sessionmaker[AsyncSession]) -> int:
+    """API 重啟時把中斷的 running job 標成 failed。回傳清理數。"""
+    async with sessionmaker() as session:
+        result = await session.execute(
+            update(Job)
+            .where(Job.status == JobStatus.running)
+            .values(
+                status=JobStatus.failed,
+                finished_at=utcnow(),
+                error_message="伺服器重啟,任務中斷;請再按一次更新",
+            )
+        )
+        await session.commit()
+        return result.rowcount

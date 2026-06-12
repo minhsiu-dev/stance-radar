@@ -15,6 +15,9 @@ async def lifespan(application: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        from app.pipeline.jobs import fail_orphan_jobs
+
+        await fail_orphan_jobs(sessionmaker)
         application.state.engine = engine
         application.state.sessionmaker = sessionmaker
         yield
