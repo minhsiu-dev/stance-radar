@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import enum
+import uuid
+from datetime import date as date_type
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
-    Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text,
+    BigInteger, Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer,
+    Numeric, String, Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -40,6 +44,11 @@ class JobStatus(str, enum.Enum):
     running = "running"
     done = "done"
     failed = "failed"
+
+
+class TransactionSide(str, enum.Enum):
+    buy = "buy"
+    sell = "sell"
 
 
 def _enum(e: type[enum.Enum], name: str) -> Enum:
@@ -145,3 +154,47 @@ class Job(Base):
     )
     progress: Mapped[dict] = mapped_column(JSONB, default=dict)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PriceBar(Base):
+    """日 K 快取:歷史日 K 不可變,存過就不再向 yfinance 重抓。"""
+
+    __tablename__ = "price_bars"
+
+    ticker: Mapped[str] = mapped_column(String(10), primary_key=True)
+    date: Mapped[date_type] = mapped_column(Date, primary_key=True)
+    open: Mapped[float] = mapped_column(Float)
+    high: Mapped[float] = mapped_column(Float)
+    low: Mapped[float] = mapped_column(Float)
+    close: Mapped[float] = mapped_column(Float)
+    volume: Mapped[int] = mapped_column(BigInteger)
+
+
+class PriceCoverage(Base):
+    """每檔 ticker 在 price_bars 中已涵蓋的連續日期區間。"""
+
+    __tablename__ = "price_coverage"
+
+    ticker: Mapped[str] = mapped_column(String(10), primary_key=True)
+    start_date: Mapped[date_type] = mapped_column(Date)
+    end_date: Mapped[date_type] = mapped_column(Date)
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PortfolioTransaction(Base):
+    __tablename__ = "portfolio_transactions"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    ticker: Mapped[str] = mapped_column(String(10), index=True)
+    side: Mapped[TransactionSide] = mapped_column(
+        _enum(TransactionSide, "transaction_side")
+    )
+    shares: Mapped[Decimal] = mapped_column(Numeric(18, 6))
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 4))
+    executed_on: Mapped[date_type] = mapped_column(Date)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )

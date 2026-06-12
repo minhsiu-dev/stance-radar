@@ -1,8 +1,9 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import delete, func, select
 
-from app.models import Channel, Job, JobStatus, Mention, Stance, Video, VideoStance, VideoStatus
+from app.models import Channel, Job, JobStatus, Mention, PortfolioTransaction, PriceBar, PriceCoverage, Stance, TransactionSide, Video, VideoStance, VideoStatus, utcnow
 
 
 def _channel() -> Channel:
@@ -91,3 +92,33 @@ async def test_mention_persists_context_columns(sessionmaker):
         row = (await s.execute(select(Mention))).scalar_one()
         assert row.context_before == "先講一下個股"
         assert row.context_after == "總之我會繼續持有"
+
+
+async def test_price_bar_roundtrip(session):
+    session.add(PriceBar(
+        ticker="AAPL", date=date(2026, 6, 1),
+        open=1.0, high=2.0, low=0.5, close=1.5, volume=100,
+    ))
+    session.add(PriceCoverage(
+        ticker="AAPL", start_date=date(2025, 1, 1), end_date=date(2026, 6, 1),
+        last_synced_at=utcnow(),
+    ))
+    await session.commit()
+    bar = await session.get(PriceBar, ("AAPL", date(2026, 6, 1)))
+    assert bar is not None and bar.close == 1.5
+    cov = await session.get(PriceCoverage, "AAPL")
+    assert cov.end_date == date(2026, 6, 1)
+
+
+async def test_portfolio_transaction_roundtrip(session):
+    tx = PortfolioTransaction(
+        ticker="AAPL", side=TransactionSide.buy,
+        shares=Decimal("10.5"), price=Decimal("123.45"),
+        executed_on=date(2026, 6, 1),
+    )
+    session.add(tx)
+    await session.commit()
+    loaded = await session.get(PortfolioTransaction, tx.id)
+    assert loaded.shares == Decimal("10.5")
+    assert loaded.side is TransactionSide.buy
+    assert loaded.note is None
