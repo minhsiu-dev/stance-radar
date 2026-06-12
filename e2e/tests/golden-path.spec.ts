@@ -24,8 +24,9 @@ test("golden path: add channel → analyze → dashboard → stock page", async 
   await page.getByRole("link", { name: "AAPL · Buy" }).first().click();
   await expect(page).toHaveURL(/\/en\/stocks\/AAPL/);
 
-  // 4. Stock page: price header, mentions table (timestamp, quote, stance)
+  // 4. Stock page: price header, then open the Mentions tab to inspect the table
   await expect(page.getByText("Apple Inc.")).toBeVisible();
+  await page.getByRole("tab", { name: "Mentions" }).click();
   await expect(page.getByRole("cell", { name: "0:12" })).toBeVisible();
   await expect(page.getByText("蘋果這季財報很強,我會買")).toBeVisible();
 });
