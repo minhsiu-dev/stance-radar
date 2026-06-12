@@ -15,5 +15,21 @@ services:
       timeout: 2s
       retries: 30
 
+  api:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://stance:stance@db:5432/stance_radar
+      USE_FAKE_ADAPTERS: ${USE_FAKE_ADAPTERS:-false}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${HOME}/.claude:/root/.claude:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:
