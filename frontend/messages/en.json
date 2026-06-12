@@ -68,6 +68,8 @@
     "header": {
       "marketCap": "Market cap",
       "peRatio": "P/E (TTM)",
+      "peLabelTF": "P/E (T / F)",
+      "peTooltip": "Trailing / Forward",
       "eps": "EPS (TTM)",
       "week52Range": "52w range",
       "volume": "Volume",

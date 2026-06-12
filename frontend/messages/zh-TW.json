@@ -68,6 +68,8 @@
     "header": {
       "marketCap": "市值",
       "peRatio": "本益比 (TTM)",
+      "peLabelTF": "本益比 (歷史 / 預估)",
+      "peTooltip": "歷史 / 預估",
       "eps": "EPS (TTM)",
       "week52Range": "52 週區間",
       "volume": "成交量",
