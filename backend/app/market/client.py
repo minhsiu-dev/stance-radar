@@ -286,7 +286,7 @@ class YFinanceMarketClient:
             return out
         for t in tickers:
             try:
-                sub = df[t] if len(tickers) > 1 else df
+                sub = df[t] if df.columns.nlevels > 1 else df
             except KeyError:
                 continue
             sub = sub.dropna(subset=["Close"])
@@ -297,7 +297,7 @@ class YFinanceMarketClient:
                     high=round(float(row.High), 4),
                     low=round(float(row.Low), 4),
                     close=round(float(row.Close), 4),
-                    volume=int(row.Volume),
+                    volume=int(row.Volume) if row.Volume == row.Volume else 0,  # NaN 量能 → 0
                 )
                 for idx, row in zip(sub.index, sub.itertuples())
             ]
