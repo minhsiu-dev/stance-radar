@@ -270,3 +270,12 @@ async def test_fake_daily_history_unknown_ticker_returns_empty():
     fake = FakeMarketClient()
     out = await fake.get_daily_history(["ZZZZ"], date(2026, 5, 1), date(2026, 5, 10))
     assert out["ZZZZ"] == []
+
+
+async def test_fake_news_is_deterministic():
+    fake = FakeMarketClient()
+    items = await fake.get_news("AAPL")
+    assert len(items) == 2
+    assert all(n.ticker == "AAPL" and n.title and n.url for n in items)
+    assert items == await fake.get_news("AAPL")
+    assert await fake.get_news("ZZZZ") == []
