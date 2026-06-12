@@ -8,6 +8,7 @@
     "trigger": "搜尋…",
     "placeholder": "搜尋股票代號或公司名…",
     "mentioned": "已被你的頻道提及",
+    "mentionCount": "{count} 次提及",
     "all": "全部股票",
     "recent": "最近瀏覽",
     "empty": "查無結果，試試輸入 AAPL 之類的代號。",

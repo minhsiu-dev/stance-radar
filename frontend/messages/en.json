@@ -8,6 +8,7 @@
     "trigger": "Search…",
     "placeholder": "Search ticker or company…",
     "mentioned": "Mentioned by your channels",
+    "mentionCount": "{count, plural, one {# mention} other {# mentions}}",
     "all": "All stocks",
     "recent": "Recent",
     "empty": "No results. Try a ticker like AAPL.",

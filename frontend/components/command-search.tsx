@@ -136,15 +136,19 @@ export function CommandSearch() {
           <CommandEmpty>{t("empty")}</CommandEmpty>
           {!debounced && recent.length > 0 && (
             <CommandGroup heading={t("recent")}>
-              {recent.map((ticker) => (
-                <CommandItem
-                  key={`recent-${ticker}`}
-                  value={`recent-${ticker}`}
-                  onSelect={() => navigate(ticker)}
-                >
-                  {ticker}
-                </CommandItem>
-              ))}
+              {/* 最近瀏覽是短 token,用 pill 橫排比整列好掃、好點 */}
+              <div className="flex flex-wrap gap-1.5 px-2 pb-1.5 pt-0.5">
+                {recent.map((ticker) => (
+                  <CommandItem
+                    key={`recent-${ticker}`}
+                    value={`recent-${ticker}`}
+                    onSelect={() => navigate(ticker)}
+                    className="rounded-full! border bg-card px-3 py-1 font-mono text-sm data-selected:border-foreground/40 [&_svg]:hidden"
+                  >
+                    {ticker}
+                  </CommandItem>
+                ))}
+              </div>
             </CommandGroup>
           )}
           {mentionedFiltered.length > 0 && (
@@ -154,10 +158,11 @@ export function CommandSearch() {
                   key={`m-${s.ticker}`}
                   value={`m-${s.ticker}`}
                   onSelect={() => navigate(s.ticker)}
+                  className="[&_svg]:hidden"
                 >
                   <span className="font-mono">{s.ticker}</span>
-                  <span className="ml-auto w-10 text-right font-mono tabular-nums text-xs text-muted-foreground">
-                    {s.mention_count}
+                  <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                    {t("mentionCount", { count: s.mention_count })}
                   </span>
                 </CommandItem>
               ))}
