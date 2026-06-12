@@ -9,12 +9,12 @@ async def get_running_job(session: AsyncSession) -> Job | None:
     return result.scalars().first()
 
 
-async def start_job(session: AsyncSession) -> tuple[Job, bool]:
+async def start_job(session: AsyncSession, kind: str = "discover") -> tuple[Job, bool]:
     """回傳 (job, created)。已有 running job 時回傳它,created=False。"""
     existing = await get_running_job(session)
     if existing is not None:
         return existing, False
-    job = Job(status=JobStatus.running, progress={"stage": "starting"})
+    job = Job(status=JobStatus.running, kind=kind, progress={"stage": "starting"})
     session.add(job)
     await session.commit()
     return job, True

@@ -8,6 +8,12 @@ async def test_start_job_creates_running_job(session):
     job, created = await jobs.start_job(session)
     assert created is True
     assert job.status == JobStatus.running
+    assert job.kind == "discover"  # 預設 kind
+
+
+async def test_start_job_with_kind(session):
+    job, _ = await jobs.start_job(session, kind="analyze")
+    assert job.kind == "analyze"
 
 
 async def test_start_job_returns_existing_running_job(session):
