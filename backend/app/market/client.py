@@ -1,0 +1,187 @@
+import asyncio
+import logging
+import math
+from dataclasses import dataclass
+from datetime import date, timedelta
+from typing import Protocol
+
+from app.market.cache import TTLCache
+
+logger = logging.getLogger(__name__)
+
+RANGE_TO_PERIOD = {"3m": "3mo", "6m": "6mo", "1y": "1y", "3y": "3y", "5y": "5y"}
+
+
+class StockNotFound(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class StockSummary:
+    ticker: str
+    name: str
+    price: float | None
+    change: float | None
+    change_percent: float | None
+    market_cap: float | None
+    pe_ratio: float | None
+    eps: float | None
+    week52_high: float | None
+    week52_low: float | None
+    volume: int | None
+    dividend_yield: float | None
+
+
+@dataclass(frozen=True)
+class Candle:
+    date: str  # YYYY-MM-DD
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+
+
+class MarketClient(Protocol):
+    async def get_summary(self, ticker: str) -> StockSummary: ...
+    async def get_candles(self, ticker: str, range_key: str) -> list[Candle]: ...
+    async def ticker_exists(self, ticker: str) -> bool: ...
+
+
+class YFinanceMarketClient:
+    def __init__(self) -> None:
+        self._summary_cache = TTLCache(ttl_seconds=900)     # 15 分鐘
+        self._candles_cache = TTLCache(ttl_seconds=3600)    # 1 小時
+        self._exists_cache = TTLCache(ttl_seconds=86400)    # 1 天
+
+    async def get_summary(self, ticker: str) -> StockSummary:
+        cached = self._summary_cache.get(ticker)
+        if cached is not None:
+            return cached
+        summary = await asyncio.to_thread(self._fetch_summary, ticker)
+        self._summary_cache.set(ticker, summary)
+        return summary
+
+    async def get_candles(self, ticker: str, range_key: str) -> list[Candle]:
+        if range_key not in RANGE_TO_PERIOD:
+            raise ValueError(f"unknown range: {range_key}")
+        key = f"{ticker}:{range_key}"
+        cached = self._candles_cache.get(key)
+        if cached is not None:
+            return cached
+        candles = await asyncio.to_thread(self._fetch_candles, ticker, range_key)
+        self._candles_cache.set(key, candles)
+        return candles
+
+    async def ticker_exists(self, ticker: str) -> bool:
+        cached = self._exists_cache.get(ticker)
+        if cached is not None:
+            return cached
+        exists = await asyncio.to_thread(self._check_exists, ticker)
+        self._exists_cache.set(ticker, exists)
+        return exists
+
+    def _fetch_summary(self, ticker: str) -> StockSummary:
+        import yfinance as yf
+
+        info = yf.Ticker(ticker).info or {}
+        price = info.get("regularMarketPrice") or info.get("currentPrice")
+        if price is None:
+            raise StockNotFound(ticker)
+        prev_close = info.get("regularMarketPreviousClose")
+        change = round(price - prev_close, 4) if prev_close else None
+        change_percent = (
+            round((price - prev_close) / prev_close * 100, 4) if prev_close else None
+        )
+        return StockSummary(
+            ticker=ticker.upper(),
+            name=info.get("shortName") or info.get("longName") or ticker.upper(),
+            price=price,
+            change=change,
+            change_percent=change_percent,
+            market_cap=info.get("marketCap"),
+            pe_ratio=info.get("trailingPE"),
+            eps=info.get("trailingEps"),
+            week52_high=info.get("fiftyTwoWeekHigh"),
+            week52_low=info.get("fiftyTwoWeekLow"),
+            volume=info.get("regularMarketVolume") or info.get("volume"),
+            dividend_yield=info.get("dividendYield"),
+        )
+
+    def _fetch_candles(self, ticker: str, range_key: str) -> list[Candle]:
+        import yfinance as yf
+
+        df = yf.Ticker(ticker).history(
+            period=RANGE_TO_PERIOD[range_key], interval="1d", auto_adjust=True
+        )
+        if df.empty:
+            raise StockNotFound(ticker)
+        return [
+            Candle(
+                date=idx.strftime("%Y-%m-%d"),
+                open=round(float(row.Open), 4),
+                high=round(float(row.High), 4),
+                low=round(float(row.Low), 4),
+                close=round(float(row.Close), 4),
+                volume=int(row.Volume),
+            )
+            for idx, row in zip(df.index, df.itertuples())
+        ]
+
+    def _check_exists(self, ticker: str) -> bool:
+        import yfinance as yf
+
+        try:
+            return not yf.Ticker(ticker).history(period="5d").empty
+        except Exception:  # yfinance 例外型別不穩定,一律視為不存在並留 log
+            logger.warning("ticker_exists check failed for %s", ticker, exc_info=True)
+            return False
+
+
+_RANGE_TO_DAYS = {"3m": 65, "6m": 130, "1y": 260, "3y": 780, "5y": 1300}
+_FAKE_END_DATE = date(2026, 6, 10)
+
+
+class FakeMarketClient:
+    """確定性假資料,測試與 USE_FAKE_ADAPTERS=true 模式使用。"""
+
+    KNOWN = {"AAPL": "Apple Inc.", "NVDA": "NVIDIA Corporation", "TSLA": "Tesla, Inc."}
+
+    async def ticker_exists(self, ticker: str) -> bool:
+        return ticker in self.KNOWN
+
+    async def get_summary(self, ticker: str) -> StockSummary:
+        if ticker not in self.KNOWN:
+            raise StockNotFound(ticker)
+        base = float(100 + sum(ord(c) for c in ticker) % 150)
+        return StockSummary(
+            ticker=ticker, name=self.KNOWN[ticker], price=base,
+            change=1.23, change_percent=round(1.23 / base * 100, 4),
+            market_cap=base * 1e10, pe_ratio=27.5, eps=round(base / 27.5, 2),
+            week52_high=base * 1.3, week52_low=base * 0.7,
+            volume=42_000_000, dividend_yield=0.5,
+        )
+
+    async def get_candles(self, ticker: str, range_key: str) -> list[Candle]:
+        if ticker not in self.KNOWN:
+            raise StockNotFound(ticker)
+        if range_key not in _RANGE_TO_DAYS:
+            raise ValueError(f"unknown range: {range_key}")
+        n = _RANGE_TO_DAYS[range_key]
+        base = float(100 + sum(ord(c) for c in ticker) % 150)
+        days: list[date] = []
+        d = _FAKE_END_DATE
+        while len(days) < n:
+            if d.weekday() < 5:  # 平日
+                days.append(d)
+            d -= timedelta(days=1)
+        days.reverse()
+        candles = []
+        for i, day in enumerate(days):
+            close = round(base + 10 * math.sin(i / 10), 2)
+            candles.append(Candle(
+                date=day.strftime("%Y-%m-%d"),
+                open=round(close - 0.5, 2), high=round(close + 1.0, 2),
+                low=round(close - 1.0, 2), close=close, volume=1_000_000 + i,
+            ))
+        return candles
