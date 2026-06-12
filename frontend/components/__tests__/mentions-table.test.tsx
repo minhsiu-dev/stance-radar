@@ -20,14 +20,27 @@ const ROW = {
   video_title: "Some video",
   channel_id: "ch_abc",
   channel_title: "Joseph Carlson",
+  channel_thumbnail: "https://example.com/avatar.jpg",
   published_at: "2026-06-10T00:00:00Z",
-  start_seconds: 42,
-  quote: "I'm bullish on Google",
   stance: "buy",
-  reasoning: "deep moat",
-  context_before: "Let's talk about big tech.",
-  context_after: "That's my take for now.",
-  youtube_url: "https://youtu.be/v1?t=42s",
+  summary: "Overall bullish on Google",
+  youtube_url: "https://www.youtube.com/watch?v=v1",
+  mentions: [
+    {
+      start_seconds: 42,
+      quote: "I'm bullish on Google",
+      context_before: "Let's talk about big tech.",
+      context_after: "That's my take for now.",
+      youtube_url: "https://www.youtube.com/watch?v=v1&t=42s",
+    },
+    {
+      start_seconds: 125,
+      quote: "Still adding to my Google position",
+      context_before: null,
+      context_after: null,
+      youtube_url: "https://www.youtube.com/watch?v=v1&t=125s",
+    },
+  ],
 };
 
 function setup(data = [ROW]) {
@@ -42,33 +55,60 @@ function setup(data = [ROW]) {
 }
 
 describe("MentionsTable", () => {
+  it("renders channel avatar only, not channel name text", async () => {
+    setup();
+    await screen.findByText(/I'm bullish on Google/);
+    expect(screen.queryByText("Joseph Carlson")).toBeNull();
+    const avatar = screen.getByAltText("Joseph Carlson");
+    expect(avatar.tagName).toBe("IMG");
+    expect(avatar.getAttribute("src")).toBe("https://example.com/avatar.jpg");
+    expect(avatar.getAttribute("title")).toBe("Joseph Carlson");
+  });
+
+  it("renders one row per video with all mention timestamps as deep links", async () => {
+    setup();
+    await screen.findByText(/I'm bullish on Google/);
+    const t1 = screen.getByRole("link", { name: "0:42" });
+    const t2 = screen.getByRole("link", { name: "2:05" });
+    expect(t1.getAttribute("href")).toBe("https://www.youtube.com/watch?v=v1&t=42s");
+    expect(t2.getAttribute("href")).toBe("https://www.youtube.com/watch?v=v1&t=125s");
+    // 多筆提及仍只有一列(一個 stance badge)
+    expect(screen.getAllByText("Buy")).toHaveLength(1);
+  });
+
+  it("shows +N indicator when a video has multiple mentions", async () => {
+    setup();
+    await screen.findByText(/I'm bullish on Google/);
+    expect(screen.getByText("+1")).toBeInTheDocument();
+  });
+
   it("does not render video title column", async () => {
     setup();
-    await screen.findByText("I'm bullish on Google");
+    await screen.findByText(/I'm bullish on Google/);
     expect(screen.queryByText("Some video")).toBeNull();
   });
 
-  it("does not render reasoning column", async () => {
+  it("does not render summary text in the table", async () => {
     setup();
-    await screen.findByText("I'm bullish on Google");
-    expect(screen.queryByText("deep moat")).toBeNull();
+    await screen.findByText(/I'm bullish on Google/);
+    expect(screen.queryByText("Overall bullish on Google")).toBeNull();
   });
 
   it("row click does NOT navigate", async () => {
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null as never);
     setup();
-    const row = (await screen.findByText("I'm bullish on Google")).closest("tr")!;
+    const row = (await screen.findByText(/I'm bullish on Google/)).closest("tr")!;
     fireEvent.click(row);
     expect(openSpy).not.toHaveBeenCalled();
     openSpy.mockRestore();
   });
 
-  it("ArrowUpRight link opens YouTube in new tab", async () => {
+  it("ArrowUpRight link opens the video on YouTube in new tab", async () => {
     setup();
-    await screen.findByText("I'm bullish on Google");
+    await screen.findByText(/I'm bullish on Google/);
     const link = screen.getByRole("link", { name: /Open/i });
     expect(link.getAttribute("target")).toBe("_blank");
-    expect(link.getAttribute("href")).toContain("youtu.be/v1");
+    expect(link.getAttribute("href")).toBe("https://www.youtube.com/watch?v=v1");
   });
 
   it("invokes onRowHover with video_id on mouseEnter / null on leave", async () => {
@@ -80,7 +120,7 @@ describe("MentionsTable", () => {
         </SWRConfig>
       </NextIntlClientProvider>,
     );
-    const row = (await screen.findByText("I'm bullish on Google")).closest("tr")!;
+    const row = (await screen.findByText(/I'm bullish on Google/)).closest("tr")!;
     fireEvent.mouseEnter(row);
     expect(onRowHover).toHaveBeenLastCalledWith("v1");
     fireEvent.mouseLeave(row);

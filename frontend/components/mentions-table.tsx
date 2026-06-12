@@ -30,6 +30,28 @@ import { formatDate, formatSeconds } from "@/lib/format";
 import type { MentionRow, StanceValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+function ChannelAvatar({ title, thumbnail }: { title: string; thumbnail: string }) {
+  if (!thumbnail) {
+    return (
+      <span
+        title={title}
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-medium uppercase"
+      >
+        {title.slice(0, 1)}
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={thumbnail}
+      alt={title}
+      title={title}
+      className="h-7 w-7 rounded-full object-cover"
+    />
+  );
+}
+
 export function MentionsTable({
   ticker,
   selectedVideoId,
@@ -143,7 +165,7 @@ export function MentionsTable({
         <TableBody ref={bodyRef}>
           {rows.map((m) => (
             <TableRow
-              key={`${m.video_id}-${m.start_seconds}`}
+              key={m.video_id}
               data-video-id={m.video_id}
               className={cn(selectedVideoId === m.video_id && "bg-accent")}
               onMouseEnter={() => onRowHover?.(m.video_id)}
@@ -152,11 +174,27 @@ export function MentionsTable({
               <TableCell className="whitespace-nowrap">
                 {formatDate(m.published_at)}
               </TableCell>
-              <TableCell className="whitespace-nowrap">
-                {m.channel_title}
+              <TableCell>
+                <ChannelAvatar
+                  title={m.channel_title}
+                  thumbnail={m.channel_thumbnail}
+                />
               </TableCell>
               <TableCell className="font-mono">
-                {formatSeconds(m.start_seconds)}
+                <span className="flex flex-wrap gap-x-2 gap-y-1">
+                  {m.mentions.map((d) => (
+                    <a
+                      key={d.start_seconds}
+                      href={d.youtube_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {formatSeconds(d.start_seconds)}
+                    </a>
+                  ))}
+                </span>
               </TableCell>
               <TableCell className="max-w-80">
                 <HoverCard>
@@ -164,22 +202,34 @@ export function MentionsTable({
                     delay={150}
                     render={
                       <span className="line-clamp-2 cursor-help">
-                        {m.quote}
+                        {m.mentions[0]?.quote}
+                        {m.mentions.length > 1 && (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            +{m.mentions.length - 1}
+                          </span>
+                        )}
                       </span>
                     }
                   />
-                  <HoverCardContent className="w-[480px] text-sm leading-relaxed">
-                    {m.context_before && (
-                      <p className="mb-2 text-muted-foreground">
-                        {m.context_before}
-                      </p>
-                    )}
-                    <p className="font-medium">{m.quote}</p>
-                    {m.context_after && (
-                      <p className="mt-2 text-muted-foreground">
-                        {m.context_after}
-                      </p>
-                    )}
+                  <HoverCardContent className="max-h-96 w-[480px] space-y-4 overflow-y-auto text-sm leading-relaxed">
+                    {m.mentions.map((d) => (
+                      <div key={d.start_seconds}>
+                        <p className="mb-1 font-mono text-xs text-muted-foreground">
+                          {formatSeconds(d.start_seconds)}
+                        </p>
+                        {d.context_before && (
+                          <p className="mb-2 text-muted-foreground">
+                            {d.context_before}
+                          </p>
+                        )}
+                        <p className="font-medium">{d.quote}</p>
+                        {d.context_after && (
+                          <p className="mt-2 text-muted-foreground">
+                            {d.context_after}
+                          </p>
+                        )}
+                      </div>
+                    ))}
                   </HoverCardContent>
                 </HoverCard>
               </TableCell>

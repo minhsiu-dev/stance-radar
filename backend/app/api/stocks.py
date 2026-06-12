@@ -169,32 +169,61 @@ async def stock_stances(ticker: str, session: AsyncSession = Depends(get_session
     ])
 
 
+def _majority_stance(mentions: list[Mention]) -> str:
+    counts = {"buy": 0, "neutral": 0, "sell": 0}
+    for m in mentions:
+        counts[m.stance.value] += 1
+    return max(counts, key=lambda k: counts[k])
+
+
 @router.get("/{ticker}/mentions")
 async def stock_mentions(ticker: str, session: AsyncSession = Depends(get_session)):
+    """一部影片一列:stance 取整部影片的總體立場,timestamps 列出每次提及。"""
     rows = (await session.execute(
-        select(Mention, Video, Channel)
+        select(Mention, Video, Channel, VideoStance)
         .join(Video, Mention.video_id == Video.id)
         .join(Channel, Video.channel_id == Channel.id)
+        .outerjoin(
+            VideoStance,
+            (VideoStance.video_id == Mention.video_id)
+            & (VideoStance.ticker == Mention.ticker),
+        )
         .where(Mention.ticker == ticker.upper())
         .order_by(Video.published_at.desc(), Mention.start_seconds.asc())
     )).all()
-    return ok([
-        {
-            "video_id": video.id,
-            "video_title": video.title,
-            "channel_id": channel.id,
-            "channel_title": channel.title,
-            "published_at": video.published_at.isoformat(),
+
+    grouped: dict[str, dict] = {}
+    video_mentions: dict[str, list[Mention]] = {}
+    for mention, video, channel, video_stance in rows:
+        if video.id not in grouped:
+            grouped[video.id] = {
+                "video_id": video.id,
+                "video_title": video.title,
+                "channel_id": channel.id,
+                "channel_title": channel.title,
+                "channel_thumbnail": channel.thumbnail_url,
+                "published_at": video.published_at.isoformat(),
+                "stance": video_stance.stance.value if video_stance else None,
+                "summary": video_stance.summary if video_stance else None,
+                "youtube_url": f"https://www.youtube.com/watch?v={video.id}",
+                "mentions": [],
+            }
+            video_mentions[video.id] = []
+        video_mentions[video.id].append(mention)
+        grouped[video.id]["mentions"].append({
             "start_seconds": mention.start_seconds,
             "quote": mention.quote,
-            "stance": mention.stance.value,
-            "reasoning": mention.reasoning,
             "context_before": mention.context_before,
             "context_after": mention.context_after,
             "youtube_url": (
                 f"https://www.youtube.com/watch?v={video.id}"
                 f"&t={int(mention.start_seconds)}s"
             ),
-        }
-        for mention, video, channel in rows
-    ])
+        })
+    # 舊資料可能沒有 VideoStance → 以逐筆 mention 多數決補上
+    result = [
+        row if row["stance"] is not None
+        else {**row, "stance": _majority_stance(video_mentions[row["video_id"]])}
+        for row in grouped.values()
+    ]
+    return ok(result)

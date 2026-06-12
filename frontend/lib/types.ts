@@ -108,19 +108,25 @@ export interface StanceRow {
   summary: string;
 }
 
+export interface MentionDetail {
+  start_seconds: number;
+  quote: string;
+  context_before: string | null;
+  context_after: string | null;
+  youtube_url: string;
+}
+
 export interface MentionRow {
   video_id: string;
   video_title: string;
   channel_id: string;
   channel_title: string;
+  channel_thumbnail: string;
   published_at: string;
-  start_seconds: number;
-  quote: string;
   stance: StanceValue;
-  reasoning: string;
-  context_before: string | null;
-  context_after: string | null;
+  summary: string | null;
   youtube_url: string;
+  mentions: MentionDetail[];
 }
 
 export interface StockListItem {

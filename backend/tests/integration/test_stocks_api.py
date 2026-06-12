@@ -73,16 +73,50 @@ async def test_stock_stances_ascending_for_chart(api):
     }
 
 
-async def test_stock_mentions_descending_with_deep_links(api):
+async def test_stock_mentions_grouped_per_video_with_deep_links(api):
     app, client = await seed(api)
     resp = await client.get("/api/stocks/AAPL/mentions")
     data = resp.json()["data"]
     assert [row["video_id"] for row in data] == ["alpha_vid_3", "beta_vid_2"]  # 新→舊
     first = data[0]
-    assert first["start_seconds"] == 12.5
-    assert first["youtube_url"] == "https://www.youtube.com/watch?v=alpha_vid_3&t=12s"
-    assert first["stance"] == "buy"
-    assert first["quote"] == "蘋果這季財報很強,我會買"
+    # 影片層級欄位
+    assert first["stance"] == "buy"  # 來自 VideoStance(整部影片總體立場)
+    assert first["summary"] == "財報強勁,整體看多 AAPL"
+    assert first["channel_thumbnail"] is not None
+    assert first["youtube_url"] == "https://www.youtube.com/watch?v=alpha_vid_3"
+    # 巢狀 mentions:每次提及一筆,含 deep link
+    m = first["mentions"][0]
+    assert m["start_seconds"] == 12.5
+    assert m["youtube_url"] == "https://www.youtube.com/watch?v=alpha_vid_3&t=12s"
+    assert m["quote"] == "蘋果這季財報很強,我會買"
+
+
+async def test_stock_mentions_one_row_per_video_with_multiple_timestamps(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    app, client = api
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch_m", title="ch_m", thumbnail_url="http://x/a.jpg",
+                      uploads_playlist_id="UU_m"))
+        s.add(Video(
+            id="v_multi", channel_id="ch_m", title="multi",
+            published_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            thumbnail_url="", duration_seconds=60, status=VideoStatus.analyzed,
+        ))
+        # 同一部影片三次提及,逐筆 stance 不一致,且沒有 VideoStance 列
+        for sec, stance in ((10.0, Stance.buy), (20.0, Stance.buy), (30.0, Stance.sell)):
+            s.add(Mention(video_id="v_multi", ticker="AMD", start_seconds=sec,
+                          quote=f"q{sec}", stance=stance, reasoning="r"))
+        await s.commit()
+
+    resp = await client.get("/api/stocks/AMD/mentions")
+    data = resp.json()["data"]
+    assert len(data) == 1  # 一部影片只有一列
+    row = data[0]
+    assert [m["start_seconds"] for m in row["mentions"]] == [10.0, 20.0, 30.0]
+    assert row["stance"] == "buy"  # 無 VideoStance 時取逐筆多數決
+    assert row["channel_thumbnail"] == "http://x/a.jpg"
 
 
 async def test_search_returns_results(api):
@@ -190,8 +224,8 @@ async def test_mentions_endpoint_returns_context_columns(api, sessionmaker):
     assert response.status_code == 200
     rows = response.json()["data"]
     row = next(r for r in rows if r["video_id"] == "v_ctx")
-    assert row["context_before"] == "先前一句"
-    assert row["context_after"] == "後續一句"
+    assert row["mentions"][0]["context_before"] == "先前一句"
+    assert row["mentions"][0]["context_after"] == "後續一句"
 
 
 @pytest.mark.asyncio

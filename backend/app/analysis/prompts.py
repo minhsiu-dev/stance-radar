@@ -20,6 +20,8 @@ SYSTEM_PROMPT = """\
 5. 另外為每一檔被提及的股票,給出這部影片的「整體立場」(stances):
    綜合所有提及後,說話者對它的總體態度,加一句總結。
 6. 完全沒有美股提及時,mentions 與 stances 都回報空陣列。
+7. 語言規則:reasoning 與 summary 一律用「英文」撰寫,不論 transcript 是什麼語言;
+   quote 維持 transcript 原文,不要翻譯。
 """
 
 ANALYSIS_TOOL = {
@@ -37,7 +39,10 @@ ANALYSIS_TOOL = {
                         "start_seconds": {"type": "number"},
                         "quote": {"type": "string"},
                         "stance": {"type": "string", "enum": ["buy", "neutral", "sell"]},
-                        "reasoning": {"type": "string"},
+                        "reasoning": {
+                            "type": "string",
+                            "description": "One sentence in English explaining the stance",
+                        },
                     },
                     "required": ["ticker", "start_seconds", "quote", "stance", "reasoning"],
                 },
@@ -49,7 +54,10 @@ ANALYSIS_TOOL = {
                     "properties": {
                         "ticker": {"type": "string"},
                         "stance": {"type": "string", "enum": ["buy", "neutral", "sell"]},
-                        "summary": {"type": "string"},
+                        "summary": {
+                            "type": "string",
+                            "description": "One sentence in English summarizing the overall stance",
+                        },
                     },
                     "required": ["ticker", "stance", "summary"],
                 },

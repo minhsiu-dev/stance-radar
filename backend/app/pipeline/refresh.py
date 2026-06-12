@@ -190,7 +190,9 @@ class RefreshRunner:
             for m in result.mentions:
                 if m.ticker in valid:
                     before, after = surrounding_segments(
-                        transcript.segments, start_seconds=m.start_seconds
+                        transcript.segments,
+                        start_seconds=m.start_seconds,
+                        quote=m.quote,
                     )
                     session.add(Mention(
                         video_id=video_id, ticker=m.ticker,
