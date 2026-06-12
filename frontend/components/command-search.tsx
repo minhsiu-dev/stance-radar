@@ -124,7 +124,7 @@ export function CommandSearch() {
           value={query}
           onValueChange={setQuery}
         />
-        <CommandList>
+        <CommandList className="max-h-[60vh] py-1">
           {fallback && (
             <div className="px-3 py-2 text-xs text-muted-foreground">
               {t("fallback")}
@@ -177,6 +177,23 @@ export function CommandSearch() {
             </CommandGroup>
           )}
         </CommandList>
+        <div className="flex items-center justify-between gap-3 border-t border-border/60 bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <kbd className="rounded border bg-background px-1 font-sans text-[10px]">↑</kbd>
+              <kbd className="rounded border bg-background px-1 font-sans text-[10px]">↓</kbd>
+              <span>navigate</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <kbd className="rounded border bg-background px-1 font-sans text-[10px]">↵</kbd>
+              <span>open</span>
+            </span>
+          </div>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border bg-background px-1 font-sans text-[10px]">esc</kbd>
+            <span>close</span>
+          </span>
+        </div>
         </Command>
       </CommandDialog>
     </>
