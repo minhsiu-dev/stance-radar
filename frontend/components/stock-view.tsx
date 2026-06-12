@@ -1,21 +1,52 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { MentionsTable } from "@/components/mentions-table";
+import { useState } from "react";
+import { useTranslations } from "next-intl";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { PriceChart } from "@/components/price-chart";
 import { StockHeader } from "@/components/stock-header";
+import { OverviewTab } from "@/components/overview-tab";
+import { MentionsTab } from "@/components/mentions-tab";
+import { FinancialsTab } from "@/components/financials-tab";
 
 export function StockView({ ticker }: { ticker: string }) {
+  const t = useTranslations("Stock.tabs");
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
-  const handleSelect = useCallback((videoId: string) => {
-    setSelectedVideoId(videoId);
-  }, []);
+  const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
 
   return (
     <div className="space-y-8">
       <StockHeader ticker={ticker} />
-      <PriceChart ticker={ticker} onSelectVideo={handleSelect} />
-      <MentionsTable ticker={ticker} selectedVideoId={selectedVideoId} />
+      <PriceChart
+        ticker={ticker}
+        hoveredVideoId={hoveredVideoId}
+        onSelectVideo={setSelectedVideoId}
+      />
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">{t("overview")}</TabsTrigger>
+          <TabsTrigger value="mentions">{t("mentions")}</TabsTrigger>
+          <TabsTrigger value="financials">{t("financials")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="overview">
+          <OverviewTab ticker={ticker} />
+        </TabsContent>
+        <TabsContent value="mentions">
+          <MentionsTab
+            ticker={ticker}
+            selectedVideoId={selectedVideoId}
+            onRowHover={setHoveredVideoId}
+          />
+        </TabsContent>
+        <TabsContent value="financials">
+          <FinancialsTab ticker={ticker} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
