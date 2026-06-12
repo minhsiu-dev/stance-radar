@@ -37,7 +37,8 @@
       "statusFailed": "分析失敗",
       "statusPending": "待分析",
       "statusNoMentions": "未提及美股",
-      "loadError": "讀取失敗:{message}"
+      "loadError": "讀取失敗:{message}",
+      "noMore": "已無更多影片"
     }
   },
   "Channels": {

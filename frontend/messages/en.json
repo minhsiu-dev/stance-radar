@@ -37,7 +37,8 @@
       "statusFailed": "Analysis failed",
       "statusPending": "Pending analysis",
       "statusNoMentions": "No US stock mentions",
-      "loadError": "Failed to load: {message}"
+      "loadError": "Failed to load: {message}",
+      "noMore": "No more results"
     }
   },
   "Channels": {
