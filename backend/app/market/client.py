@@ -9,7 +9,17 @@ from app.market.cache import TTLCache
 
 logger = logging.getLogger(__name__)
 
-RANGE_TO_PERIOD = {"3m": "3mo", "6m": "6mo", "1y": "1y", "3y": "3y", "5y": "5y"}
+RANGE_TO_FETCH: dict[str, tuple[str, str]] = {
+    "1d":  ("1d",  "5m"),
+    "5d":  ("5d",  "30m"),
+    "1m":  ("1mo", "1d"),
+    "3m":  ("3mo", "1d"),
+    "6m":  ("6mo", "1d"),
+    "ytd": ("ytd", "1d"),
+    "1y":  ("1y",  "1d"),
+    "3y":  ("3y",  "1d"),
+    "5y":  ("5y",  "1d"),
+}
 
 
 class StockNotFound(Exception):
@@ -35,7 +45,7 @@ class StockSummary:
 
 @dataclass(frozen=True)
 class Candle:
-    date: str  # YYYY-MM-DD
+    time: str | int  # "YYYY-MM-DD" for daily, unix seconds (UTC) for intraday
     open: float
     high: float
     low: float
@@ -87,7 +97,7 @@ class YFinanceMarketClient:
         return summary
 
     async def get_candles(self, ticker: str, range_key: str) -> list[Candle]:
-        if range_key not in RANGE_TO_PERIOD:
+        if range_key not in RANGE_TO_FETCH:
             raise ValueError(f"unknown range: {range_key}")
         key = f"{ticker}:{range_key}"
         cached = self._candles_cache.get(key)
@@ -136,14 +146,16 @@ class YFinanceMarketClient:
     def _fetch_candles(self, ticker: str, range_key: str) -> list[Candle]:
         import yfinance as yf
 
+        period, interval = RANGE_TO_FETCH[range_key]
         df = yf.Ticker(ticker).history(
-            period=RANGE_TO_PERIOD[range_key], interval="1d", auto_adjust=True
+            period=period, interval=interval, auto_adjust=True
         )
         if df.empty:
             raise StockNotFound(ticker)
+        intraday = interval != "1d"
         return [
             Candle(
-                date=idx.strftime("%Y-%m-%d"),
+                time=(int(idx.timestamp()) if intraday else idx.strftime("%Y-%m-%d")),
                 open=round(float(row.Open), 4),
                 high=round(float(row.High), 4),
                 low=round(float(row.Low), 4),
@@ -236,8 +248,9 @@ class YFinanceMarketClient:
         return reports
 
 
-_RANGE_TO_DAYS = {"3m": 65, "6m": 130, "1y": 260, "3y": 780, "5y": 1300}
+_RANGE_TO_DAYS = {"1m": 22, "3m": 65, "6m": 130, "ytd": 110, "1y": 260, "3y": 780, "5y": 1300}
 _FAKE_END_DATE = date(2026, 6, 10)
+_FAKE_END_EPOCH = 1_780_000_000  # arbitrary deterministic epoch for fake intraday
 
 
 class FakeMarketClient:
@@ -264,14 +277,33 @@ class FakeMarketClient:
     async def get_candles(self, ticker: str, range_key: str) -> list[Candle]:
         if ticker not in self.KNOWN:
             raise StockNotFound(ticker)
-        if range_key not in _RANGE_TO_DAYS:
+        if range_key not in RANGE_TO_FETCH:
             raise ValueError(f"unknown range: {range_key}")
-        n = _RANGE_TO_DAYS[range_key]
         base = float(100 + sum(ord(c) for c in ticker) % 150)
+        if range_key == "1d":
+            n = 78  # 6.5h trading day / 5m
+            step = 300
+        elif range_key == "5d":
+            n = 65  # 5 trading days, 30m bars
+            step = 1800
+        else:
+            return self._fake_daily(ticker, range_key, base)
+        candles = []
+        for i in range(n):
+            close = round(base + 5 * math.sin(i / 8), 2)
+            candles.append(Candle(
+                time=_FAKE_END_EPOCH - (n - 1 - i) * step,
+                open=round(close - 0.2, 2), high=round(close + 0.3, 2),
+                low=round(close - 0.4, 2), close=close, volume=10_000 + i,
+            ))
+        return candles
+
+    def _fake_daily(self, ticker: str, range_key: str, base: float) -> list[Candle]:
+        n = _RANGE_TO_DAYS[range_key]
         days: list[date] = []
         d = _FAKE_END_DATE
         while len(days) < n:
-            if d.weekday() < 5:  # 平日
+            if d.weekday() < 5:
                 days.append(d)
             d -= timedelta(days=1)
         days.reverse()
@@ -279,7 +311,7 @@ class FakeMarketClient:
         for i, day in enumerate(days):
             close = round(base + 10 * math.sin(i / 10), 2)
             candles.append(Candle(
-                date=day.strftime("%Y-%m-%d"),
+                time=day.strftime("%Y-%m-%d"),
                 open=round(close - 0.5, 2), high=round(close + 1.0, 2),
                 low=round(close - 1.0, 2), close=close, volume=1_000_000 + i,
             ))

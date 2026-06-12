@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_market, get_session
 from app.envelope import fail, ok
-from app.market.client import RANGE_TO_PERIOD, MarketClient, StockNotFound
+from app.market.client import RANGE_TO_FETCH, MarketClient, StockNotFound
 from app.models import Channel, Mention, Video, VideoStance
 
 logger = logging.getLogger(__name__)
@@ -82,9 +82,9 @@ async def stock_candles(
     range_key: str = Query("1y", alias="range"),
     market: MarketClient = Depends(get_market),
 ):
-    if range_key not in RANGE_TO_PERIOD:
+    if range_key not in RANGE_TO_FETCH:
         return fail(
-            f"range 必須是 {', '.join(sorted(RANGE_TO_PERIOD))}", status_code=422
+            f"range 必須是 {', '.join(sorted(RANGE_TO_FETCH))}", status_code=422
         )
     try:
         candles = await market.get_candles(ticker.upper(), range_key)

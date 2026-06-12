@@ -40,9 +40,12 @@ async def test_stock_summary_and_unknown_404(api):
 async def test_candles_default_range_and_invalid_range(api):
     app, client = api
     resp = await client.get("/api/stocks/AAPL/candles")
-    data = resp.json()["data"]
+    body = resp.json()
+    data = body["data"]
     assert len(data) == 260  # 預設 1y
-    assert set(data[0]) == {"date", "open", "high", "low", "close", "volume"}
+    assert "time" in body["data"][0]
+    assert "date" not in body["data"][0]
+    assert set(data[0]) == {"time", "open", "high", "low", "close", "volume"}
 
     resp = await client.get("/api/stocks/AAPL/candles", params={"range": "2w"})
     assert resp.status_code == 422
