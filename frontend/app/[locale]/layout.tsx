@@ -24,10 +24,13 @@ export default async function LocaleLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} suppressHydrationWarning className="font-sans">
-      <body
-        className={`${fontVariables} min-h-screen bg-background text-foreground antialiased`}
-      >
+    <html
+      lang={locale}
+      suppressHydrationWarning
+      // 字型變數必須在 html 上:font-sans 的 var(--font-geist-sans) 才解析得到
+      className={`${fontVariables} font-sans`}
+    >
+      <body className="min-h-screen bg-background text-foreground antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
