@@ -158,6 +158,8 @@ async def stock_mentions(ticker: str, session: AsyncSession = Depends(get_sessio
             "quote": mention.quote,
             "stance": mention.stance.value,
             "reasoning": mention.reasoning,
+            "context_before": mention.context_before,
+            "context_after": mention.context_after,
             "youtube_url": (
                 f"https://www.youtube.com/watch?v={video.id}"
                 f"&t={int(mention.start_seconds)}s"

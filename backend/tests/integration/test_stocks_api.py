@@ -158,3 +158,31 @@ async def test_stance_summary_aapl_has_at_least_one_stance(api):
     res = await client.get("/api/stocks/AAPL/stance-summary")
     body = res.json()["data"]
     assert body["buy"] + body["neutral"] + body["sell"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_mentions_endpoint_returns_context_columns(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    app, client = api
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch1", title="ch1", thumbnail_url="", uploads_playlist_id="UU"))
+        s.add(Video(
+            id="v_ctx", channel_id="ch1", title="t",
+            published_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            thumbnail_url="", duration_seconds=60, status=VideoStatus.analyzed,
+        ))
+        s.add(Mention(
+            video_id="v_ctx", ticker="AAPL", start_seconds=1.0,
+            quote="q", stance=Stance.buy, reasoning="r",
+            context_before="先前一句", context_after="後續一句",
+        ))
+        await s.commit()
+
+    response = await client.get("/api/stocks/AAPL/mentions")
+    assert response.status_code == 200
+    rows = response.json()["data"]
+    row = next(r for r in rows if r["video_id"] == "v_ctx")
+    assert row["context_before"] == "先前一句"
+    assert row["context_after"] == "後續一句"
