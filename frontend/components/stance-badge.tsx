@@ -3,9 +3,9 @@ import type { StanceValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const STANCE_STYLES: Record<StanceValue, string> = {
-  buy: "border-green-600/40 bg-green-600/15 text-green-500",
-  neutral: "border-zinc-500/40 bg-zinc-500/15 text-zinc-400",
-  sell: "border-red-600/40 bg-red-600/15 text-red-500",
+  buy: "border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  neutral: "border-zinc-500/40 bg-zinc-500/15 text-zinc-700 dark:text-zinc-300",
+  sell: "border-orange-500/40 bg-orange-500/15 text-orange-700 dark:text-orange-300",
 };
 
 const STANCE_LABELS: Record<StanceValue, string> = {
