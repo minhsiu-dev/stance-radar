@@ -27,6 +27,17 @@
       "reversal": "Reversal",
       "reversalHint": "Same channel flipped between buy and sell on the same stock"
     },
+    "performance": {
+      "portfolio": "My portfolio",
+      "empty": "No holdings yet",
+      "emptyCta": "Add some on the portfolio page",
+      "loadError": "Failed to load performance: {message}"
+    },
+    "news": {
+      "title": "Holdings news",
+      "generalTitle": "Market news",
+      "empty": "No news right now"
+    },
     "leaderboard": {
       "title": "Channel accuracy leaderboard",
       "subtitle": "{days}d after each call · vs {benchmark}",

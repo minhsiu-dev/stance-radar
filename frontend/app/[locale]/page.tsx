@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
 import { AutoRefreshHint } from "@/components/auto-refresh-hint";
-import { ChannelLeaderboard } from "@/components/channel-leaderboard";
 import { FeedList } from "@/components/feed-list";
+import { NewsCard } from "@/components/news-card";
 import { PendingReviewBanner } from "@/components/pending-review-banner";
+import { PerformanceCards } from "@/components/performance-cards";
 import { RefreshButton } from "@/components/refresh-button";
 import { StanceFlips } from "@/components/stance-flips";
 import { TrendingStocks } from "@/components/trending-stocks";
@@ -20,9 +21,10 @@ export default async function DashboardPage() {
         </div>
       </div>
       <PendingReviewBanner />
-      <TrendingStocks />
+      <PerformanceCards />
       <StanceFlips />
-      <ChannelLeaderboard />
+      <NewsCard />
+      <TrendingStocks />
       <FeedList />
     </div>
   );
