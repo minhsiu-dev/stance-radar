@@ -1,8 +1,12 @@
 {
   "Nav": {
     "brand": "Stance Radar",
-    "dashboard": "首頁",
+    "portfolio": "持股",
     "channels": "頻道管理"
+  },
+  "Footer": {
+    "disclaimer": "Stance Radar — 僅供研究參考,非投資建議",
+    "sources": "市場資料:Yahoo Finance(延遲報價) · 立場判讀:Claude"
   },
   "Search": {
     "trigger": "搜尋…",

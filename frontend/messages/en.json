@@ -1,8 +1,12 @@
 {
   "Nav": {
     "brand": "Stance Radar",
-    "dashboard": "Dashboard",
+    "portfolio": "Portfolio",
     "channels": "Channels"
+  },
+  "Footer": {
+    "disclaimer": "Stance Radar — for research only, not investment advice",
+    "sources": "Market data: Yahoo Finance (delayed) · Stance analysis: Claude"
   },
   "Search": {
     "trigger": "Search…",
