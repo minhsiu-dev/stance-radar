@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import patch
+import pandas as pd
 
 from app.market.client import (
     RANGE_TO_PERIOD,
@@ -142,3 +143,65 @@ async def test_fake_financials_unknown_ticker():
     client = FakeMarketClient()
     with pytest.raises(StockNotFound):
         await client.get_financials("ZZZZ", "quarterly")
+
+
+@pytest.mark.asyncio
+async def test_yfinance_financials_quarterly_takes_up_to_8():
+    client = YFinanceMarketClient()
+    cols = pd.to_datetime([f"2024-{m:02d}-30" for m in (3, 6, 9, 12)])
+    df = pd.DataFrame(
+        {
+            cols[0]: [100, 40, 25, 24, 20],
+            cols[1]: [110, 44, 27, 26, 22],
+            cols[2]: [120, 48, 29, 28, 24],
+            cols[3]: [130, 52, 31, 30, 26],
+        },
+        index=[
+            "Total Revenue",
+            "Gross Profit",
+            "Operating Income",
+            "Pretax Income",
+            "Net Income",
+        ],
+    )
+
+    class T:
+        quarterly_income_stmt = df
+        income_stmt = df
+
+    with patch("yfinance.Ticker", return_value=T()):
+        reports = await client.get_financials("AAPL", "quarterly")
+    assert len(reports) == 4
+    assert reports[0].period_end == "2024-03-30"
+    assert reports[-1].total_revenue == 130
+
+
+@pytest.mark.asyncio
+async def test_yfinance_financials_handles_missing_row():
+    client = YFinanceMarketClient()
+    df = pd.DataFrame(
+        {pd.Timestamp("2024-12-31"): [100, 22]},
+        index=["Total Revenue", "Net Income"],
+    )
+
+    class T:
+        quarterly_income_stmt = df
+        income_stmt = df
+
+    with patch("yfinance.Ticker", return_value=T()):
+        reports = await client.get_financials("AAPL", "annual")
+    assert reports[0].total_revenue == 100
+    assert reports[0].gross_profit is None
+
+
+@pytest.mark.asyncio
+async def test_yfinance_financials_empty_raises_not_found():
+    client = YFinanceMarketClient()
+
+    class T:
+        quarterly_income_stmt = pd.DataFrame()
+        income_stmt = pd.DataFrame()
+
+    with patch("yfinance.Ticker", return_value=T()):
+        with pytest.raises(StockNotFound):
+            await client.get_financials("AAPL", "quarterly")

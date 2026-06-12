@@ -75,6 +75,7 @@ class YFinanceMarketClient:
         self._candles_cache = TTLCache(ttl_seconds=3600)    # 1 小時
         self._exists_cache = TTLCache(ttl_seconds=86400)    # 1 天
         self._search_cache = TTLCache(ttl_seconds=300)      # 5 分鐘
+        self._financials_cache = TTLCache(ttl_seconds=3600) # 1 小時
 
     async def get_summary(self, ticker: str) -> StockSummary:
         cached = self._summary_cache.get(ticker)
@@ -186,6 +187,51 @@ class YFinanceMarketClient:
                 exchange=row.get("exchange"),
             ))
         return out
+
+    async def get_financials(
+        self, ticker: str, period: Literal["quarterly", "annual"]
+    ) -> list[FinancialReport]:
+        key = f"{ticker}:{period}"
+        cached = self._financials_cache.get(key)
+        if cached is not None:
+            return cached
+        reports = await asyncio.to_thread(self._fetch_financials, ticker, period)
+        self._financials_cache.set(key, reports)
+        return reports
+
+    def _fetch_financials(
+        self, ticker: str, period: Literal["quarterly", "annual"]
+    ) -> list[FinancialReport]:
+        import yfinance as yf
+
+        t = yf.Ticker(ticker)
+        df = t.quarterly_income_stmt if period == "quarterly" else t.income_stmt
+        if df is None or df.empty:
+            raise StockNotFound(ticker)
+        limit = 8 if period == "quarterly" else 5
+        cols = list(df.columns)[:limit]
+
+        def cell(col, row: str) -> float | None:
+            if row not in df.index:
+                return None
+            v = df.at[row, col]
+            if v != v:  # NaN check
+                return None
+            return float(v)
+
+        reports = [
+            FinancialReport(
+                period_end=col.strftime("%Y-%m-%d") if hasattr(col, "strftime") else str(col),
+                total_revenue=cell(col, "Total Revenue"),
+                gross_profit=cell(col, "Gross Profit"),
+                operating_income=cell(col, "Operating Income"),
+                pretax_income=cell(col, "Pretax Income"),
+                net_income=cell(col, "Net Income"),
+            )
+            for col in cols
+        ]
+        reports.sort(key=lambda r: r.period_end)
+        return reports
 
 
 _RANGE_TO_DAYS = {"3m": 65, "6m": 130, "1y": 260, "3y": 780, "5y": 1300}
