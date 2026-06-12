@@ -1,0 +1,39 @@
+name: stance-radar-sandbox
+
+services:
+  claude:
+    build: .
+    # Share dind's network namespace so the project's published ports
+    # (3000/8000/5432) are reachable as localhost from inside the sandbox
+    network_mode: "service:dind"
+    environment:
+      DOCKER_HOST: tcp://127.0.0.1:2375
+    volumes:
+      - ..:/workspace
+      - claude-home:/home/node
+    stdin_open: true
+    tty: true
+    depends_on:
+      dind:
+        condition: service_healthy
+
+  dind:
+    image: docker:27-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    volumes:
+      - dind-data:/var/lib/docker
+    ports:
+      - "3000:3000"
+      - "8000:8000"
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  claude-home:
+  dind-data:
