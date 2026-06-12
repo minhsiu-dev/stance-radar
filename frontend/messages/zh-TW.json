@@ -130,6 +130,7 @@
       "skipSelected": "略過選取",
       "analyze": "分析",
       "retry": "重試",
+      "reanalyze": "重新分析",
       "skip": "略過",
       "empty": "沒有影片。",
       "actionFailed": "操作失敗:{message}",

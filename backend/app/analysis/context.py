@@ -10,6 +10,62 @@ def _normalize(text: str) -> str:
     return re.sub(r"[^\w]", "", text, flags=re.UNICODE).lower()
 
 
+# 裁切門檻:單一主題詞在句界自然重複(「…we mention Duolingo.」+ quote
+# 「Duolingo is down…」)不該被砍,所以拉丁文字要求片語等級的重疊;
+# CJK 沒有空格、單字資訊量高,門檻較低(如「我會買」)。
+_MIN_OVERLAP_LATIN = 10
+_MIN_OVERLAP_CJK = 3
+
+
+def _overlap_long_enough(overlap: str) -> bool:
+    has_cjk = any("一" <= ch <= "鿿" for ch in overlap)
+    return len(overlap) >= (_MIN_OVERLAP_CJK if has_cjk else _MIN_OVERLAP_LATIN)
+
+
+def _normalize_with_map(text: str) -> tuple[str, list[int]]:
+    """回傳 (正規化字串, 各字元在原文的 index),供重疊裁切換算位置。"""
+    chars: list[str] = []
+    index_map: list[int] = []
+    for i, ch in enumerate(text):
+        if re.match(r"\w", ch, flags=re.UNICODE):
+            chars.append(ch.lower())
+            index_map.append(i)
+    return "".join(chars), index_map
+
+
+def _trim_quote_overlap(
+    before: str | None, after: str | None, quote: str
+) -> tuple[str | None, str | None]:
+    """auto-caption 的 segment 邊界常與 quote 對不齊,造成 quote 開頭重複出現在
+    before 結尾、或 quote 結尾重複出現在 after 開頭;把重疊部分裁掉。"""
+    normalized_quote = _normalize(quote)
+    if not normalized_quote:
+        return before, after
+
+    if before:
+        nb, bmap = _normalize_with_map(before)
+        max_k = min(len(nb), len(normalized_quote))
+        for k in range(max_k, 0, -1):  # 只看「最長」的重疊,短的視為巧合
+            if normalized_quote[:k] == nb[len(nb) - k:]:
+                if _overlap_long_enough(normalized_quote[:k]):
+                    before = (
+                        before[: bmap[len(nb) - k]].rstrip(" ,.;:!?、,。;:!?")
+                        or None
+                    )
+                break
+
+    if after:
+        na, amap = _normalize_with_map(after)
+        max_k = min(len(na), len(normalized_quote))
+        for k in range(max_k, 0, -1):
+            if normalized_quote[-k:] == na[:k]:
+                if _overlap_long_enough(normalized_quote[-k:]):
+                    after = after[amap[k - 1] + 1:].lstrip(" ,.;:!?、,。;:!?") or None
+                break
+
+    return before, after
+
+
 def _collect(
     segments: tuple[TranscriptSegment, ...],
     indices: range,
@@ -70,4 +126,6 @@ def surrounding_segments(
     end_idx = _quote_end_index(segments, anchor_idx, quote) if quote else anchor_idx
     before = _collect(segments, range(anchor_idx - 1, -1, -1), max_chars)
     after = _collect(segments, range(end_idx + 1, len(segments)), max_chars)
+    if quote:
+        before, after = _trim_quote_overlap(before, after, quote)
     return before, after

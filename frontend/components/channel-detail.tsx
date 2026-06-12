@@ -53,9 +53,13 @@ const BADGE_VARIANT: Record<
   skipped: "outline",
 };
 
-function rowActionKey(status: VideoStatus): "analyze" | "retry" | null {
+function rowActionKey(
+  status: VideoStatus,
+): "analyze" | "retry" | "reanalyze" | null {
   if (status === "discovered" || status === "skipped") return "analyze";
   if (status === "failed" || status === "no_transcript") return "retry";
+  // prompt 升級後可重跑舊影片(冪等:會先清掉舊的 mentions/stances)
+  if (status === "analyzed") return "reanalyze";
   return null;
 }
 

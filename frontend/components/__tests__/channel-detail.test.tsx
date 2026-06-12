@@ -38,6 +38,7 @@ const messages = {
       skipSelected: "Skip selected",
       analyze: "Analyze",
       retry: "Retry",
+      reanalyze: "Re-analyze",
       skip: "Skip",
       empty: "No videos.",
       actionFailed: "Action failed: {message}",

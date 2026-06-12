@@ -186,21 +186,30 @@ class YFinanceMarketClient:
         import yfinance as yf
 
         try:
-            quotes = yf.Search(q, max_results=10).quotes
+            quotes = yf.Search(q, max_results=20).quotes
         except Exception:
             logger.warning("search failed for %s", q, exc_info=True)
             return []
         out: list[SearchHit] = []
+        seen: set[str] = set()
         for row in quotes or []:
             symbol = row.get("symbol")
             if not symbol:
                 continue
+            symbol = symbol.upper()
+            # 本產品只追美股:帶「.」的是外國交易所掛牌(AAPL.MX / AAPL.TO…),
+            # 一律排除;美股股別在 Yahoo 用「-」(BRK-B)不受影響。
+            if "." in symbol or symbol in seen:
+                continue
+            if row.get("quoteType") not in (None, "EQUITY", "ETF"):
+                continue
+            seen.add(symbol)
             out.append(SearchHit(
-                ticker=symbol.upper(),
+                ticker=symbol,
                 name=row.get("shortname") or row.get("longname") or symbol,
                 exchange=row.get("exchange"),
             ))
-        return out
+        return out[:10]
 
     async def get_financials(
         self, ticker: str, period: Literal["quarterly", "annual"]

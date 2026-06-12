@@ -85,3 +85,65 @@ def test_anchor_between_segments_uses_nearest_preceding():
 
 def test_empty_segments_returns_pair_of_nones():
     assert surrounding_segments((), start_seconds=0.0) == (None, None)
+
+
+def test_trims_quote_tail_repeated_at_start_of_after():
+    # auto-caption 邊界沒對齊:quote 結尾跨進下一個 segment
+    segs = (
+        _seg(0.0, "Of course, we got to mention Duolingo."),
+        _seg(4.0, "Duolingo is down a staggering 69.3%"),
+        _seg(8.0, "over the trailing one year. Investors believe AI replaces it"),
+    )
+    quote = "Duolingo is down a staggering 69.3% over the trailing one year."
+    before, after = surrounding_segments(segs, start_seconds=4.0, quote=quote)
+    assert before == "Of course, we got to mention Duolingo."
+    assert after == "Investors believe AI replaces it"
+
+
+def test_trims_quote_head_repeated_at_end_of_before():
+    segs = (
+        _seg(0.0, "Previous thought ends here. Apple earnings"),
+        _seg(4.0, "Apple earnings were very strong this quarter"),
+        _seg(8.0, "And the next topic."),
+    )
+    quote = "Apple earnings were very strong this quarter"
+    before, after = surrounding_segments(segs, start_seconds=4.0, quote=quote)
+    assert before == "Previous thought ends here"
+    assert after == "And the next topic."
+
+
+def test_trims_overlap_for_cjk_text():
+    segs = (
+        _seg(0.0, "我們來聊聊蘋果"),
+        _seg(4.0, "蘋果這季財報很強"),
+        _seg(8.0, "我會買,然後下一檔股票"),
+    )
+    quote = "蘋果這季財報很強,我會買"
+    before, after = surrounding_segments(segs, start_seconds=4.0, quote=quote)
+    assert before == "我們來聊聊蘋果"
+    assert after == "然後下一檔股票"
+
+
+def test_short_coincidental_overlap_is_kept():
+    # 拉丁文字重疊不足片語長度視為巧合,不裁切
+    segs = (
+        _seg(0.0, "Intro"),
+        _seg(4.0, "We like NVDA here"),
+        _seg(8.0, "a lot of people disagree"),
+    )
+    quote = "We like NVDA here a"
+    before, after = surrounding_segments(segs, start_seconds=4.0, quote=quote)
+    assert after == "a lot of people disagree"
+
+
+def test_single_topic_word_at_boundary_is_kept():
+    # 「…we got to mention Duolingo.」+ quote「Duolingo is down…」:
+    # 句界共用一個主題詞是自然重複,不是 caption 沒對齊,不該裁掉
+    segs = (
+        _seg(0.0, "Of course, we got to mention Duolingo."),
+        _seg(4.0, "Duolingo is down 69.3% over the trailing year."),
+        _seg(8.0, "And the next topic."),
+    )
+    quote = "Duolingo is down 69.3% over the trailing year."
+    before, _ = surrounding_segments(segs, start_seconds=4.0, quote=quote)
+    assert before == "Of course, we got to mention Duolingo."
