@@ -43,6 +43,37 @@ async def stock_search(
     return ok([asdict(h) for h in hits])
 
 
+@router.get("/trending")
+async def stocks_trending(
+    limit: int = Query(12, ge=1, le=50),
+    session: AsyncSession = Depends(get_session),
+):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    rows = (await session.execute(
+        select(
+            Mention.ticker,
+            func.count(Mention.id).label("cnt"),
+            func.max(Video.published_at).label("last_mentioned_at"),
+        )
+        .join(Video, Mention.video_id == Video.id)
+        .where(Video.published_at >= cutoff)
+        .group_by(Mention.ticker)
+        .order_by(
+            func.max(Video.published_at).desc(),
+            func.count(Mention.id).desc(),
+        )
+        .limit(limit)
+    )).all()
+    return ok([
+        {
+            "ticker": ticker,
+            "mention_count": cnt,
+            "last_mentioned_at": last.isoformat(),
+        }
+        for ticker, cnt, last in rows
+    ])
+
+
 @router.get("/{ticker}")
 async def stock_summary(ticker: str, market: MarketClient = Depends(get_market)):
     try:

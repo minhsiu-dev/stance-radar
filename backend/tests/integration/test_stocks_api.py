@@ -186,3 +186,34 @@ async def test_mentions_endpoint_returns_context_columns(api, sessionmaker):
     row = next(r for r in rows if r["video_id"] == "v_ctx")
     assert row["context_before"] == "先前一句"
     assert row["context_after"] == "後續一句"
+
+
+@pytest.mark.asyncio
+async def test_trending_returns_recently_mentioned_first(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    _, client = api
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch_t", title="ch_t", thumbnail_url="", uploads_playlist_id="UU_t"))
+        now = datetime.now(timezone.utc)
+        # Older video, lots of mentions on AAPL.
+        s.add(Video(id="v_old", channel_id="ch_t", title="old",
+                    published_at=now - timedelta(days=10), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        for i in range(5):
+            s.add(Mention(video_id="v_old", ticker="AAPL", start_seconds=float(i),
+                          quote="q", stance=Stance.buy, reasoning="r"))
+        # Newer video, single mention on NVDA.
+        s.add(Video(id="v_new", channel_id="ch_t", title="new",
+                    published_at=now - timedelta(hours=1), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="v_new", ticker="NVDA", start_seconds=1.0,
+                      quote="q", stance=Stance.buy, reasoning="r"))
+        await s.commit()
+
+    response = await client.get("/api/stocks/trending?limit=5")
+    assert response.status_code == 200
+    tickers = [row["ticker"] for row in response.json()["data"]]
+    # Newer mention timestamp wins despite lower count
+    assert tickers.index("NVDA") < tickers.index("AAPL")
