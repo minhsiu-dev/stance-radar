@@ -111,11 +111,14 @@ export function CommandSearch() {
         variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
+        aria-label={t("trigger")}
         className="gap-2"
       >
         <Search className="h-4 w-4" />
-        {t("trigger")}
-        <kbd className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs">⌘K</kbd>
+        <span className="hidden sm:inline">{t("trigger")}</span>
+        <kbd className="ml-2 hidden rounded bg-muted px-1.5 py-0.5 text-xs sm:inline">
+          ⌘K
+        </kbd>
       </Button>
       <CommandDialog open={open} onOpenChange={setOpen}>
         <Command>

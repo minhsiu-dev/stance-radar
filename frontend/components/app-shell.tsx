@@ -9,30 +9,30 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <nav className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
-          <Link href="/" className="font-semibold">
+        <nav className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-3 sm:gap-6 sm:px-4">
+          <Link href="/" className="shrink-0 font-semibold">
             {t("brand")}
           </Link>
           <Link
             href="/"
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="hidden text-sm text-muted-foreground hover:text-foreground sm:block"
           >
             {t("dashboard")}
           </Link>
           <Link
             href="/channels"
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
           >
             {t("channels")}
           </Link>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <CommandSearch />
             <LanguageSwitcher />
             <ThemeToggle />
           </div>
         </nav>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-6xl px-3 py-5 sm:px-4 sm:py-6">{children}</main>
     </>
   );
 }

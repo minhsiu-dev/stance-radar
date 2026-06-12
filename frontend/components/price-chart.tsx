@@ -167,7 +167,7 @@ export function PriceChart({
   return (
     <div className="space-y-3">
       <div className="flex items-baseline gap-3">
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto">
           {RANGES.map((r) => (
             <Button
               key={r}
