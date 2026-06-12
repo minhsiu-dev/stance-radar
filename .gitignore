@@ -1,0 +1,20 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# node
+node_modules/
+.next/
+out/
+
+# env / local
+.env
+.DS_Store
+
+# e2e
+e2e/test-results/
+e2e/playwright-report/
