@@ -14,6 +14,10 @@ function num(v: number | null, digits = 2): string {
   });
 }
 
+function shares(v: number): string {
+  return v.toLocaleString("en-US", { maximumFractionDigits: 6 });
+}
+
 function plClass(v: number | null): string {
   if (v == null) return "";
   return v >= 0
@@ -62,7 +66,7 @@ export function PortfolioHoldingsTable() {
                       </Link>
                     </td>
                     <td className="py-2 pr-3 text-right font-mono tabular-nums">
-                      {num(h.shares, 0)}
+                      {shares(h.shares)}
                     </td>
                     <td className="py-2 pr-3 text-right font-mono tabular-nums">
                       {num(h.avg_cost)}

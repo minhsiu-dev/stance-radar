@@ -54,6 +54,7 @@ describe("PortfolioTransactions", () => {
     await userEvent.type(screen.getByPlaceholderText("Ticker, e.g. AAPL"), "aapl");
     await userEvent.type(screen.getByLabelText("Shares"), "10");
     await userEvent.type(screen.getByLabelText("Price"), "100");
+    await userEvent.type(screen.getByLabelText("Note (optional)"), "first buy");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     await vi.waitFor(() => {
       const call = fetchSpy.mock.calls.find(
@@ -63,6 +64,7 @@ describe("PortfolioTransactions", () => {
       const body = JSON.parse(String(call![1]!.body));
       expect(body.ticker).toBe("AAPL");
       expect(body.shares).toBe(10);
+      expect(body.note).toBe("first buy");
     });
   });
 });

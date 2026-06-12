@@ -38,6 +38,9 @@ export function PortfolioTransactions() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const shares = Number(form.shares);
+    const price = Number(form.price);
+    if (!form.ticker.trim() || !(shares > 0) || !(price > 0)) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -46,8 +49,8 @@ export function PortfolioTransactions() {
         body: JSON.stringify({
           ticker: form.ticker.trim().toUpperCase(),
           side: form.side,
-          shares: Number(form.shares),
-          price: Number(form.price),
+          shares,
+          price,
           executed_on: form.executed_on,
           note: form.note.trim() || null,
         }),
@@ -86,7 +89,7 @@ export function PortfolioTransactions() {
       <CardContent className="space-y-4">
         <form
           onSubmit={submit}
-          className="grid grid-cols-2 items-end gap-2 sm:grid-cols-7"
+          className="grid grid-cols-2 items-end gap-2 sm:grid-cols-8"
         >
           <Input
             required
@@ -126,6 +129,12 @@ export function PortfolioTransactions() {
             required type="date" aria-label={t("dateLabel")}
             value={form.executed_on}
             onChange={(e) => setForm({ ...form, executed_on: e.target.value })}
+          />
+          <Input
+            placeholder={t("note")}
+            aria-label={t("note")}
+            value={form.note}
+            onChange={(e) => setForm({ ...form, note: e.target.value })}
           />
           <Button type="submit" disabled={busy}>
             {t("add")}
