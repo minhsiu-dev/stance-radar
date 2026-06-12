@@ -15,10 +15,17 @@ def utcnow() -> datetime:
 
 
 class VideoStatus(str, enum.Enum):
+    discovered = "discovered"
     pending = "pending"
     analyzed = "analyzed"
     no_transcript = "no_transcript"
     failed = "failed"
+    skipped = "skipped"
+
+
+class JobKind(str, enum.Enum):
+    discover = "discover"
+    analyze = "analyze"
 
 
 class Stance(str, enum.Enum):
@@ -119,6 +126,7 @@ class Job(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     status: Mapped[JobStatus] = mapped_column(_enum(JobStatus, "job_status"))
+    kind: Mapped[str] = mapped_column(String(16), default=JobKind.discover.value)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
