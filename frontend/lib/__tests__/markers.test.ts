@@ -51,3 +51,19 @@ describe("buildMarkers", () => {
     });
   });
 });
+
+describe("marker palette", () => {
+  const candles = DAYS.map(candle);
+
+  it("buy is sky-500", () => {
+    expect(buildMarkers([stance("v-buy", "2026-06-04T00:00:00+00:00", "buy")], candles)[0].color).toBe("#0ea5e9");
+  });
+
+  it("sell is orange-500", () => {
+    expect(buildMarkers([stance("v-sell", "2026-06-04T00:00:00+00:00", "sell")], candles)[0].color).toBe("#f97316");
+  });
+
+  it("neutral is zinc-400", () => {
+    expect(buildMarkers([stance("v-neutral", "2026-06-04T00:00:00+00:00", "neutral")], candles)[0].color).toBe("#a1a1aa");
+  });
+});

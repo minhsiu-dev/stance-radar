@@ -1,0 +1,128 @@
+{
+  "Nav": {
+    "brand": "Stance Radar",
+    "dashboard": "首頁",
+    "channels": "頻道管理"
+  },
+  "Search": {
+    "trigger": "搜尋…",
+    "placeholder": "搜尋股票代號或公司名…",
+    "mentioned": "已被你的頻道提及",
+    "all": "全部股票",
+    "recent": "最近瀏覽",
+    "empty": "查無結果，試試輸入 AAPL 之類的代號。",
+    "fallback": "搜尋暫時無法使用,僅顯示已提及"
+  },
+  "Dashboard": {
+    "latest": "最新影片",
+    "refresh": {
+      "label": "更新",
+      "running": "更新中… {stage}",
+      "lastFailed": "上次更新失敗:{message}",
+      "triggerFailed": "更新失敗",
+      "stages": {
+        "listing": "頻道 {done}/{total}",
+        "analyzing": "影片 {done}/{total}",
+        "preparing": "準備中…"
+      }
+    },
+    "empty": {
+      "prompt": "還沒有任何影片。先到",
+      "linkLabel": "頻道管理",
+      "hint": "貼上 YouTube channel ID(例:UCbta0n8i6Rljh0obO7HzG9A),系統會自動抓取最新影片並分析。"
+    },
+    "feed": {
+      "statusNoTranscript": "無字幕",
+      "statusFailed": "分析失敗",
+      "statusPending": "待分析",
+      "statusNoMentions": "未提及美股",
+      "loadError": "讀取失敗:{message}"
+    }
+  },
+  "Channels": {
+    "title": "頻道管理",
+    "add": {
+      "title": "新增頻道",
+      "placeholder": "貼上一個或多個 channel ID(換行或逗號分隔)\n例:UCbta0n8i6Rljh0obO7HzG9A",
+      "submit": "新增",
+      "submitting": "新增中…",
+      "addSuccess": "新增成功",
+      "alreadyExists": "已存在",
+      "autoFetch": "已自動開始抓取影片",
+      "failedGeneric": "新增失敗",
+      "added": "已加入 {names}",
+      "skipped": "已存在:{names}"
+    },
+    "list": {
+      "empty": "尚未加入任何頻道。",
+      "lastUpdated": "最後更新:{date}",
+      "neverUpdated": "尚未更新",
+      "remove": "移除",
+      "removeFailed": "刪除失敗",
+      "removePrompt": "移除「{name}」?其影片與分析資料將一併刪除。"
+    }
+  },
+  "Stock": {
+    "header": {
+      "marketCap": "市值",
+      "peRatio": "本益比 (TTM)",
+      "eps": "EPS (TTM)",
+      "week52Range": "52 週區間",
+      "volume": "成交量",
+      "dividendYield": "殖利率",
+      "loadError": "行情讀取失敗:{message}"
+    },
+    "tabs": {
+      "overview": "總覽",
+      "mentions": "逐筆提及",
+      "financials": "財報"
+    },
+    "overview": {
+      "latestQuarter": "最近一季",
+      "ytStance": "YouTube 立場 (近 {days} 天)",
+      "revenue": "營收",
+      "netIncome": "淨利",
+      "eps": "EPS"
+    },
+    "financials": {
+      "quarterly": "季報",
+      "annual": "年報",
+      "totalRevenue": "總營收",
+      "grossProfit": "毛利",
+      "operatingIncome": "營業利益",
+      "pretaxIncome": "稅前淨利",
+      "netIncome": "淨利"
+    },
+    "stance": { "buy": "Buy", "sell": "Sell", "neutral": "Neutral" }
+  },
+  "Mentions": {
+    "title": "逐筆提及",
+    "columns": {
+      "date": "日期",
+      "channel": "頻道",
+      "video": "影片",
+      "timestamp": "時間點",
+      "quote": "原句",
+      "stance": "立場",
+      "reasoning": "理由"
+    },
+    "filter": {
+      "stance": "立場",
+      "channel": "頻道",
+      "all": "全部",
+      "allStances": "全部立場",
+      "allChannels": "全部頻道"
+    },
+    "openHint": "點擊在 YouTube 開啟此秒數",
+    "empty": "尚無此股票的提及紀錄。",
+    "loadError": "提及讀取失敗:{message}"
+  },
+  "Errors": {
+    "priceLoad": "行情讀取失敗:{message}",
+    "mentionsLoad": "提及讀取失敗:{message}",
+    "candlesLoad": "K 線讀取失敗:{message}",
+    "summaryLoad": "摘要讀取失敗:{message}",
+    "financialsLoad": "財報讀取失敗:{message}",
+    "searchUnavailable": "搜尋暫時無法使用"
+  }
+}

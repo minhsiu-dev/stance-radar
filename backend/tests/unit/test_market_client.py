@@ -1,9 +1,13 @@
 import pytest
+from unittest.mock import patch
+import pandas as pd
 
 from app.market.client import (
     RANGE_TO_PERIOD,
     Candle,
     FakeMarketClient,
+    FinancialReport,
+    SearchHit,
     StockNotFound,
     StockSummary,
     YFinanceMarketClient,
@@ -57,3 +61,147 @@ async def test_yfinance_summary_uses_cache(monkeypatch):
     await client.get_summary("AAPL")
     await client.get_summary("AAPL")
     assert calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_fake_search_matches_ticker_substring():
+    client = FakeMarketClient()
+    hits = await client.search("AAP")
+    assert any(h.ticker == "AAPL" for h in hits)
+
+
+@pytest.mark.asyncio
+async def test_fake_search_matches_name_substring():
+    client = FakeMarketClient()
+    hits = await client.search("Tesla")
+    assert any(h.ticker == "TSLA" for h in hits)
+
+
+@pytest.mark.asyncio
+async def test_fake_search_empty_returns_empty_list():
+    client = FakeMarketClient()
+    assert await client.search("ZZZZZ") == []
+
+
+def test_search_hit_is_frozen():
+    hit = SearchHit(ticker="AAPL", name="Apple Inc.", exchange="NASDAQ")
+    with pytest.raises(Exception):
+        hit.ticker = "X"  # type: ignore[misc]
+
+
+@pytest.mark.asyncio
+async def test_yfinance_search_maps_quotes():
+    client = YFinanceMarketClient()
+    fake = type("S", (), {"quotes": [
+        {"symbol": "AAPL", "shortname": "Apple Inc.", "exchange": "NMS"},
+        {"symbol": None, "shortname": "garbage"},
+    ]})
+    with patch("yfinance.Search", return_value=fake):
+        hits = await client.search("apple")
+    assert len(hits) == 1
+    assert hits[0].ticker == "AAPL"
+    assert hits[0].name == "Apple Inc."
+
+
+@pytest.mark.asyncio
+async def test_yfinance_search_handles_upstream_exception():
+    client = YFinanceMarketClient()
+    with patch("yfinance.Search", side_effect=RuntimeError("rate limit")):
+        hits = await client.search("apple")
+    assert hits == []
+
+
+@pytest.mark.asyncio
+async def test_fake_financials_quarterly_returns_8():
+    client = FakeMarketClient()
+    reports = await client.get_financials("AAPL", "quarterly")
+    assert len(reports) == 8
+    assert reports[0].period_end < reports[-1].period_end
+
+
+@pytest.mark.asyncio
+async def test_fake_financials_annual_returns_5():
+    client = FakeMarketClient()
+    reports = await client.get_financials("AAPL", "annual")
+    assert len(reports) == 5
+
+
+@pytest.mark.asyncio
+async def test_fake_financials_metrics_present():
+    client = FakeMarketClient()
+    reports = await client.get_financials("AAPL", "quarterly")
+    sample = reports[-1]
+    assert sample.total_revenue is not None
+    assert sample.net_income is not None
+    assert sample.gross_profit is not None
+    assert sample.operating_income is not None
+    assert sample.pretax_income is not None
+
+
+@pytest.mark.asyncio
+async def test_fake_financials_unknown_ticker():
+    client = FakeMarketClient()
+    with pytest.raises(StockNotFound):
+        await client.get_financials("ZZZZ", "quarterly")
+
+
+@pytest.mark.asyncio
+async def test_yfinance_financials_quarterly_takes_up_to_8():
+    client = YFinanceMarketClient()
+    cols = pd.to_datetime([f"2024-{m:02d}-30" for m in (3, 6, 9, 12)])
+    df = pd.DataFrame(
+        {
+            cols[0]: [100, 40, 25, 24, 20],
+            cols[1]: [110, 44, 27, 26, 22],
+            cols[2]: [120, 48, 29, 28, 24],
+            cols[3]: [130, 52, 31, 30, 26],
+        },
+        index=[
+            "Total Revenue",
+            "Gross Profit",
+            "Operating Income",
+            "Pretax Income",
+            "Net Income",
+        ],
+    )
+
+    class T:
+        quarterly_income_stmt = df
+        income_stmt = df
+
+    with patch("yfinance.Ticker", return_value=T()):
+        reports = await client.get_financials("AAPL", "quarterly")
+    assert len(reports) == 4
+    assert reports[0].period_end == "2024-03-30"
+    assert reports[-1].total_revenue == 130
+
+
+@pytest.mark.asyncio
+async def test_yfinance_financials_handles_missing_row():
+    client = YFinanceMarketClient()
+    df = pd.DataFrame(
+        {pd.Timestamp("2024-12-31"): [100, 22]},
+        index=["Total Revenue", "Net Income"],
+    )
+
+    class T:
+        quarterly_income_stmt = df
+        income_stmt = df
+
+    with patch("yfinance.Ticker", return_value=T()):
+        reports = await client.get_financials("AAPL", "annual")
+    assert reports[0].total_revenue == 100
+    assert reports[0].gross_profit is None
+
+
+@pytest.mark.asyncio
+async def test_yfinance_financials_empty_raises_not_found():
+    client = YFinanceMarketClient()
+
+    class T:
+        quarterly_income_stmt = pd.DataFrame()
+        income_stmt = pd.DataFrame()
+
+    with patch("yfinance.Ticker", return_value=T()):
+        with pytest.raises(StockNotFound):
+            await client.get_financials("AAPL", "quarterly")

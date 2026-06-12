@@ -12,9 +12,9 @@ const STANCE_MARKER: Record<
   StanceValue,
   Pick<ChartMarker, "position" | "color" | "shape">
 > = {
-  buy: { position: "belowBar", color: "#22c55e", shape: "arrowUp" },
-  sell: { position: "aboveBar", color: "#ef4444", shape: "arrowDown" },
-  neutral: { position: "aboveBar", color: "#9ca3af", shape: "circle" },
+  buy: { position: "belowBar", color: "#0ea5e9", shape: "arrowUp" },
+  sell: { position: "aboveBar", color: "#f97316", shape: "arrowDown" },
+  neutral: { position: "aboveBar", color: "#a1a1aa", shape: "circle" },
 };
 
 /** 發布日貼齊「當天或下一個交易日」;早於圖表範圍回 null,晚於最後一根貼最後一根。 */

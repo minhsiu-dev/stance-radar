@@ -1,3 +1,5 @@
+import pytest
+
 from tests.conftest import wait_refresh
 
 
@@ -72,3 +74,84 @@ async def test_stock_mentions_descending_with_deep_links(api):
     assert first["youtube_url"] == "https://www.youtube.com/watch?v=alpha_vid_3&t=12s"
     assert first["stance"] == "buy"
     assert first["quote"] == "蘋果這季財報很強,我會買"
+
+
+async def test_search_returns_results(api):
+    app, client = api
+    resp = await client.get("/api/stocks/search?q=apple")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert any(hit["ticker"] == "AAPL" for hit in body["data"])
+
+
+async def test_search_rejects_empty_query(api):
+    app, client = api
+    resp = await client.get("/api/stocks/search?q=")
+    assert resp.status_code == 422
+
+
+async def test_search_rejects_whitespace_query(api):
+    app, client = api
+    resp = await client.get("/api/stocks/search?q=%20%20")
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_financials_quarterly_returns_8(api):
+    _, client = api
+    res = await client.get("/api/stocks/AAPL/financials?period=quarterly")
+    assert res.status_code == 200
+    assert len(res.json()["data"]) == 8
+
+
+@pytest.mark.asyncio
+async def test_financials_annual_returns_5(api):
+    _, client = api
+    res = await client.get("/api/stocks/AAPL/financials?period=annual")
+    assert res.status_code == 200
+    assert len(res.json()["data"]) == 5
+
+
+@pytest.mark.asyncio
+async def test_financials_rejects_bad_period(api):
+    _, client = api
+    res = await client.get("/api/stocks/AAPL/financials?period=monthly")
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_financials_unknown_ticker(api):
+    _, client = api
+    res = await client.get("/api/stocks/ZZZZ/financials?period=annual")
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_stance_summary_shape(api):
+    _, client = await seed(api)
+    res = await client.get("/api/stocks/AAPL/stance-summary")
+    assert res.status_code == 200
+    body = res.json()["data"]
+    assert set(body.keys()) == {"buy", "neutral", "sell", "window_days"}
+    assert body["window_days"] == 90
+    assert isinstance(body["buy"], int)
+    assert isinstance(body["neutral"], int)
+    assert isinstance(body["sell"], int)
+
+
+@pytest.mark.asyncio
+async def test_stance_summary_unknown_ticker_returns_zero_counts(api):
+    _, client = api
+    res = await client.get("/api/stocks/ZZZZ/stance-summary")
+    assert res.status_code == 200
+    body = res.json()["data"]
+    assert body == {"buy": 0, "neutral": 0, "sell": 0, "window_days": 90}
+
+
+@pytest.mark.asyncio
+async def test_stance_summary_aapl_has_at_least_one_stance(api):
+    _, client = await seed(api)
+    res = await client.get("/api/stocks/AAPL/stance-summary")
+    body = res.json()["data"]
+    assert body["buy"] + body["neutral"] + body["sell"] >= 1

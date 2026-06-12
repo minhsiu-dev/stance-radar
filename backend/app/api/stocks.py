@@ -1,5 +1,6 @@
 import logging
 from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/stocks")
 
+_FINANCIAL_PERIODS = {"quarterly", "annual"}
+
 
 @router.get("")
 async def list_stocks(session: AsyncSession = Depends(get_session)):
@@ -23,6 +26,21 @@ async def list_stocks(session: AsyncSession = Depends(get_session)):
         .order_by(func.count(Mention.id).desc(), Mention.ticker)
     )).all()
     return ok([{"ticker": t, "mention_count": c} for t, c in rows])
+
+
+@router.get("/search")
+async def stock_search(
+    q: str = Query("", description="ticker or company name fragment"),
+    market: MarketClient = Depends(get_market),
+):
+    if not q.strip():
+        return fail("q must be non-empty", status_code=422)
+    try:
+        hits = await market.search(q.strip())
+    except Exception:
+        logger.exception("search failed for %s", q)
+        return fail("搜尋暫時無法使用,稍後再試", status_code=502)
+    return ok([asdict(h) for h in hits])
 
 
 @router.get("/{ticker}")
@@ -35,6 +53,27 @@ async def stock_summary(ticker: str, market: MarketClient = Depends(get_market))
         logger.exception("summary fetch failed for %s", ticker)
         return fail("行情資料暫時無法取得,稍後再試", status_code=502)
     return ok(asdict(summary))
+
+
+@router.get("/{ticker}/financials")
+async def stock_financials(
+    ticker: str,
+    period: str = Query("quarterly"),
+    market: MarketClient = Depends(get_market),
+):
+    if period not in _FINANCIAL_PERIODS:
+        return fail(
+            f"period 必須是 {', '.join(sorted(_FINANCIAL_PERIODS))}",
+            status_code=422,
+        )
+    try:
+        reports = await market.get_financials(ticker.upper(), period)  # type: ignore[arg-type]
+    except StockNotFound:
+        return fail(f"查無股票 {ticker.upper()}", status_code=404)
+    except Exception:
+        logger.exception("financials fetch failed for %s", ticker)
+        return fail("財報資料暫時無法取得,稍後再試", status_code=502)
+    return ok([asdict(r) for r in reports])
 
 
 @router.get("/{ticker}/candles")
@@ -55,6 +94,25 @@ async def stock_candles(
         logger.exception("candles fetch failed for %s", ticker)
         return fail("行情資料暫時無法取得,稍後再試", status_code=502)
     return ok([asdict(c) for c in candles])
+
+
+@router.get("/{ticker}/stance-summary")
+async def stance_summary(
+    ticker: str,
+    session: AsyncSession = Depends(get_session),
+):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    rows = (await session.execute(
+        select(VideoStance.stance, func.count(VideoStance.video_id))
+        .join(Video, VideoStance.video_id == Video.id)
+        .where(VideoStance.ticker == ticker.upper())
+        .where(Video.published_at >= cutoff)
+        .group_by(VideoStance.stance)
+    )).all()
+    counts = {"buy": 0, "neutral": 0, "sell": 0}
+    for stance, c in rows:
+        counts[stance.value] = c
+    return ok({**counts, "window_days": 90})
 
 
 @router.get("/{ticker}/stances")

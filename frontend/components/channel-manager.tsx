@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +11,7 @@ import { formatDate } from "@/lib/format";
 import type { AddChannelsResult, ChannelItem } from "@/lib/types";
 
 export function ChannelManager() {
+  const t = useTranslations("Channels");
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -29,37 +31,39 @@ export function ChannelManager() {
       });
       const data = body.data;
       if (!data) {
-        setMessage(body.error ?? "新增失敗");
+        setMessage(body.error ?? t("add.failedGeneric"));
         return;
       }
       const parts: string[] = [];
       if (data.added.length) {
-        parts.push(`已加入 ${data.added.map((c) => c.title).join("、")}`);
+        parts.push(t("add.added", { names: data.added.map((c) => c.title).join("、") }));
       }
-      if (data.skipped.length) parts.push(`已存在:${data.skipped.join("、")}`);
+      if (data.skipped.length) {
+        parts.push(t("add.skipped", { names: data.skipped.join("、") }));
+      }
       for (const f of data.failed) parts.push(`${f.id}:${f.reason}`);
-      if (data.job_id != null) parts.push("已自動開始抓取影片");
+      if (data.job_id != null) parts.push(t("add.autoFetch"));
       setMessage(parts.join(";"));
       if (data.added.length) {
         setInput("");
         await mutate();
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "新增失敗");
+      setMessage(error instanceof Error ? error.message : t("add.failedGeneric"));
     } finally {
       setSubmitting(false);
     }
   }
 
   async function remove(channel: ChannelItem) {
-    if (!window.confirm(`移除「${channel.title}」?其影片與分析資料將一併刪除。`)) {
+    if (!window.confirm(t("list.removePrompt", { name: channel.title }))) {
       return;
     }
     try {
       await apiFetch(`/api/channels/${channel.id}`, { method: "DELETE" });
       await mutate();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "刪除失敗");
+      setMessage(error instanceof Error ? error.message : t("list.removeFailed"));
     }
   }
 
@@ -67,17 +71,17 @@ export function ChannelManager() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">新增頻道</CardTitle>
+          <CardTitle className="text-base">{t("add.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={"貼上一個或多個 channel ID(換行或逗號分隔)\n例:UCbta0n8i6Rljh0obO7HzG9A"}
+            placeholder={t("add.placeholder")}
             rows={3}
           />
           <Button onClick={submit} disabled={submitting || !input.trim()}>
-            {submitting ? "新增中…" : "新增"}
+            {submitting ? t("add.submitting") : t("add.submit")}
           </Button>
           {message && <p className="text-sm text-muted-foreground">{message}</p>}
         </CardContent>
@@ -98,20 +102,20 @@ export function ChannelManager() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{channel.title}</p>
                 <p className="text-xs text-muted-foreground">
-                  {channel.id} · 最後更新:
+                  {channel.id} ·{" "}
                   {channel.last_refreshed_at
-                    ? formatDate(channel.last_refreshed_at)
-                    : "尚未更新"}
+                    ? t("list.lastUpdated", { date: formatDate(channel.last_refreshed_at) })
+                    : t("list.neverUpdated")}
                 </p>
               </div>
               <Button variant="destructive" size="sm" onClick={() => remove(channel)}>
-                移除
+                {t("list.remove")}
               </Button>
             </CardContent>
           </Card>
         ))}
         {channels && channels.length === 0 && (
-          <p className="text-sm text-muted-foreground">尚未加入任何頻道。</p>
+          <p className="text-sm text-muted-foreground">{t("list.empty")}</p>
         )}
       </div>
     </div>

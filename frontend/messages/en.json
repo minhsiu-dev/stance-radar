@@ -1,0 +1,128 @@
+{
+  "Nav": {
+    "brand": "Stance Radar",
+    "dashboard": "Dashboard",
+    "channels": "Channels"
+  },
+  "Search": {
+    "trigger": "Search…",
+    "placeholder": "Search ticker or company…",
+    "mentioned": "Mentioned by your channels",
+    "all": "All stocks",
+    "recent": "Recent",
+    "empty": "No results. Try a ticker like AAPL.",
+    "fallback": "Network error, showing mentioned only"
+  },
+  "Dashboard": {
+    "latest": "Latest videos",
+    "refresh": {
+      "label": "Refresh",
+      "running": "Updating… {stage}",
+      "lastFailed": "Last update failed: {message}",
+      "triggerFailed": "Update failed",
+      "stages": {
+        "listing": "Channels {done}/{total}",
+        "analyzing": "Videos {done}/{total}",
+        "preparing": "Preparing…"
+      }
+    },
+    "empty": {
+      "prompt": "No videos yet. Go to",
+      "linkLabel": "Channels",
+      "hint": "and paste a YouTube channel ID (e.g. UCbta0n8i6Rljh0obO7HzG9A). The system will automatically fetch the latest videos and analyse them."
+    },
+    "feed": {
+      "statusNoTranscript": "No transcript",
+      "statusFailed": "Analysis failed",
+      "statusPending": "Pending analysis",
+      "statusNoMentions": "No US stock mentions",
+      "loadError": "Failed to load: {message}"
+    }
+  },
+  "Channels": {
+    "title": "Channel management",
+    "add": {
+      "title": "Add channel",
+      "placeholder": "Paste one or more channel IDs (newline- or comma-separated)\ne.g. UCbta0n8i6Rljh0obO7HzG9A",
+      "submit": "Add",
+      "submitting": "Adding…",
+      "addSuccess": "Added successfully",
+      "alreadyExists": "Already exists",
+      "autoFetch": "Auto-fetch started",
+      "failedGeneric": "Add failed",
+      "added": "Added {names}",
+      "skipped": "Already exists: {names}"
+    },
+    "list": {
+      "empty": "No channels added yet.",
+      "lastUpdated": "Last updated: {date}",
+      "neverUpdated": "Never updated",
+      "remove": "Remove",
+      "removeFailed": "Delete failed",
+      "removePrompt": "Remove \"{name}\"? Its videos and analysis will also be deleted."
+    }
+  },
+  "Stock": {
+    "header": {
+      "marketCap": "Market cap",
+      "peRatio": "P/E (TTM)",
+      "eps": "EPS (TTM)",
+      "week52Range": "52w range",
+      "volume": "Volume",
+      "dividendYield": "Dividend yield",
+      "loadError": "Failed to load price data: {message}"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "mentions": "Mentions",
+      "financials": "Financials"
+    },
+    "overview": {
+      "latestQuarter": "Latest quarter",
+      "ytStance": "YouTube stance (last {days}d)",
+      "revenue": "Revenue",
+      "netIncome": "Net income",
+      "eps": "EPS"
+    },
+    "financials": {
+      "quarterly": "Quarterly",
+      "annual": "Annual",
+      "totalRevenue": "Total revenue",
+      "grossProfit": "Gross profit",
+      "operatingIncome": "Operating income",
+      "pretaxIncome": "Pretax income",
+      "netIncome": "Net income"
+    },
+    "stance": { "buy": "Buy", "sell": "Sell", "neutral": "Neutral" }
+  },
+  "Mentions": {
+    "title": "All mentions",
+    "columns": {
+      "date": "Date",
+      "channel": "Channel",
+      "video": "Video",
+      "timestamp": "Timestamp",
+      "quote": "Quote",
+      "stance": "Stance",
+      "reasoning": "Reasoning"
+    },
+    "filter": {
+      "stance": "Stance",
+      "channel": "Channel",
+      "all": "All",
+      "allStances": "All stances",
+      "allChannels": "All channels"
+    },
+    "openHint": "Click to open at this timestamp on YouTube",
+    "empty": "No mentions recorded for this stock yet.",
+    "loadError": "Failed to load mentions: {message}"
+  },
+  "Errors": {
+    "priceLoad": "Failed to load price data: {message}",
+    "mentionsLoad": "Failed to load mentions: {message}",
+    "candlesLoad": "Failed to load candles: {message}",
+    "summaryLoad": "Failed to load summary: {message}",
+    "financialsLoad": "Failed to load financials: {message}",
+    "searchUnavailable": "Search is temporarily unavailable"
+  }
+}

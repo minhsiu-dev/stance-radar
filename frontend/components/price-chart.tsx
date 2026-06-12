@@ -7,7 +7,10 @@ import {
   ColorType,
   createChart,
   createSeriesMarkers,
+  type IChartApi,
+  type ISeriesApi,
 } from "lightweight-charts";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
@@ -25,13 +28,20 @@ interface Tooltip {
 
 export function PriceChart({
   ticker,
+  hoveredVideoId,
   onSelectVideo,
 }: {
   ticker: string;
+  hoveredVideoId?: string | null;
   onSelectVideo?: (videoId: string) => void;
 }) {
+  const tErr = useTranslations("Errors");
   const [range, setRange] = useState<RangeKey>("1y");
   const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const markersByVideoId = useRef<Map<string, ChartMarker>>(new Map());
+  const candleByTime = useRef<Map<string, CandleDto>>(new Map());
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
 
   const { data: candles, error, isLoading } = useSWR<CandleDto[]>(
@@ -81,9 +91,16 @@ export function PriceChart({
     chart.timeScale().fitContent();
 
     const markersByTime = new Map<string, ChartMarker[]>();
+    const byVideo = new Map<string, ChartMarker>();
     for (const m of markers) {
       markersByTime.set(m.time, [...(markersByTime.get(m.time) ?? []), m]);
+      byVideo.set(m.id, m);
     }
+    markersByVideoId.current = byVideo;
+    const byTime = new Map<string, CandleDto>();
+    for (const c of candles) byTime.set(c.date, c);
+    candleByTime.current = byTime;
+
     const stanceById = new Map((stances ?? []).map((s) => [s.video_id, s]));
 
     chart.subscribeCrosshairMove((param) => {
@@ -110,8 +127,30 @@ export function PriceChart({
       if (hits?.length && onSelectVideo) onSelectVideo(hits[0].id);
     });
 
-    return () => chart.remove();
+    chartRef.current = chart;
+    seriesRef.current = series;
+
+    return () => {
+      chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+    };
   }, [candles, stances, onSelectVideo]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    const series = seriesRef.current;
+    if (!chart || !series) return;
+    if (!hoveredVideoId) {
+      chart.clearCrosshairPosition();
+      return;
+    }
+    const hit = markersByVideoId.current.get(hoveredVideoId);
+    if (!hit) return;
+    const candle = candleByTime.current.get(hit.time);
+    if (!candle) return;
+    chart.setCrosshairPosition(candle.close, hit.time, series);
+  }, [hoveredVideoId]);
 
   return (
     <div className="space-y-3">
@@ -128,7 +167,9 @@ export function PriceChart({
         ))}
       </div>
       {error && (
-        <p className="text-sm text-red-500">K 線讀取失敗:{error.message}</p>
+        <p className="text-sm text-red-500">
+          {tErr("candlesLoad", { message: error.message })}
+        </p>
       )}
       {isLoading && <Skeleton className="h-[380px] w-full" />}
       <div className="relative">

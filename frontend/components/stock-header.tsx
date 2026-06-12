@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { useTranslations } from "next-intl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
 import {
@@ -13,6 +14,7 @@ import type { StockSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function StockHeader({ ticker }: { ticker: string }) {
+  const t = useTranslations("Stock.header");
   const { data, error, isLoading } = useSWR<StockSummary>(
     `/api/stocks/${ticker}`,
     apiFetch,
@@ -20,22 +22,26 @@ export function StockHeader({ ticker }: { ticker: string }) {
 
   if (isLoading) return <Skeleton className="h-28 w-full" />;
   if (error) {
-    return <p className="text-sm text-red-500">行情讀取失敗:{error.message}</p>;
+    return (
+      <p className="text-sm text-red-500">
+        {t("loadError", { message: error.message })}
+      </p>
+    );
   }
   if (!data) return null;
 
   const up = (data.change ?? 0) >= 0;
   const stats: [string, string][] = [
-    ["市值", formatMarketCap(data.market_cap)],
-    ["本益比 (TTM)", formatNumber(data.pe_ratio)],
-    ["EPS (TTM)", formatNumber(data.eps)],
+    [t("marketCap"), formatMarketCap(data.market_cap)],
+    [t("peRatio"), formatNumber(data.pe_ratio)],
+    [t("eps"), formatNumber(data.eps)],
     [
-      "52 週區間",
+      t("week52Range"),
       `${formatNumber(data.week52_low)} – ${formatNumber(data.week52_high)}`,
     ],
-    ["成交量", formatVolume(data.volume)],
+    [t("volume"), formatVolume(data.volume)],
     [
-      "殖利率",
+      t("dividendYield"),
       data.dividend_yield == null ? "—" : `${formatNumber(data.dividend_yield)}%`,
     ],
   ];
@@ -48,7 +54,14 @@ export function StockHeader({ ticker }: { ticker: string }) {
       </div>
       <div className="flex items-baseline gap-3">
         <span className="text-3xl font-semibold">{formatNumber(data.price)}</span>
-        <span className={cn("text-sm", up ? "text-green-500" : "text-red-500")}>
+        <span
+          className={cn(
+            "text-sm",
+            up
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-rose-600 dark:text-rose-400",
+          )}
+        >
           {up ? "+" : ""}
           {formatNumber(data.change)} ({formatPercent(data.change_percent)})
         </span>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
+import { useTranslations } from "next-intl";
 import { StanceBadge } from "@/components/stance-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -27,10 +28,14 @@ import { cn } from "@/lib/utils";
 export function MentionsTable({
   ticker,
   selectedVideoId,
+  onRowHover,
 }: {
   ticker: string;
   selectedVideoId: string | null;
+  onRowHover?: (videoId: string | null) => void;
 }) {
+  const t = useTranslations("Mentions");
+  const tStance = useTranslations("Stock.stance");
   const { data, error, isLoading } = useSWR<MentionRow[]>(
     `/api/stocks/${ticker}/mentions`,
     apiFetch,
@@ -67,36 +72,40 @@ export function MentionsTable({
 
   if (isLoading) return <Skeleton className="h-48 w-full" />;
   if (error) {
-    return <p className="text-sm text-red-500">提及讀取失敗:{error.message}</p>;
+    return (
+      <p className="text-sm text-red-500">
+        {t("loadError", { message: error.message })}
+      </p>
+    );
   }
   if (!data || data.length === 0) {
-    return <p className="text-sm text-muted-foreground">尚無此股票的提及紀錄。</p>;
+    return <p className="text-sm text-muted-foreground">{t("empty")}</p>;
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <h2 className="mr-auto text-lg font-semibold">逐筆提及</h2>
+        <h2 className="mr-auto text-lg font-semibold">{t("title")}</h2>
         <Select
           value={stanceFilter}
           onValueChange={(v) => setStanceFilter(v as StanceValue | "all")}
         >
           <SelectTrigger className="w-32">
-            <SelectValue placeholder="立場" />
+            <SelectValue placeholder={t("filter.stance")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">全部立場</SelectItem>
-            <SelectItem value="buy">Buy</SelectItem>
-            <SelectItem value="neutral">Neutral</SelectItem>
-            <SelectItem value="sell">Sell</SelectItem>
+            <SelectItem value="all">{t("filter.allStances")}</SelectItem>
+            <SelectItem value="buy">{tStance("buy")}</SelectItem>
+            <SelectItem value="neutral">{tStance("neutral")}</SelectItem>
+            <SelectItem value="sell">{tStance("sell")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={channelFilter} onValueChange={(v) => setChannelFilter(v ?? "all")}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="頻道" />
+            <SelectValue placeholder={t("filter.channel")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">全部頻道</SelectItem>
+            <SelectItem value="all">{t("filter.allChannels")}</SelectItem>
             {channels.map(([id, title]) => (
               <SelectItem key={id} value={id}>
                 {title}
@@ -109,13 +118,13 @@ export function MentionsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>日期</TableHead>
-            <TableHead>頻道</TableHead>
-            <TableHead>影片</TableHead>
-            <TableHead>時間點</TableHead>
-            <TableHead>原句</TableHead>
-            <TableHead>立場</TableHead>
-            <TableHead>理由</TableHead>
+            <TableHead>{t("columns.date")}</TableHead>
+            <TableHead>{t("columns.channel")}</TableHead>
+            <TableHead>{t("columns.video")}</TableHead>
+            <TableHead>{t("columns.timestamp")}</TableHead>
+            <TableHead>{t("columns.quote")}</TableHead>
+            <TableHead>{t("columns.stance")}</TableHead>
+            <TableHead>{t("columns.reasoning")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody ref={bodyRef}>
@@ -128,7 +137,9 @@ export function MentionsTable({
                 selectedVideoId === m.video_id && "bg-accent",
               )}
               onClick={() => window.open(m.youtube_url, "_blank", "noreferrer")}
-              title="點擊在 YouTube 開啟此秒數"
+              onMouseEnter={() => onRowHover?.(m.video_id)}
+              onMouseLeave={() => onRowHover?.(null)}
+              title={t("openHint")}
             >
               <TableCell className="whitespace-nowrap">
                 {formatDate(m.published_at)}
