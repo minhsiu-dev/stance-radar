@@ -37,7 +37,7 @@ const getKey = (pageIndex: number, previous: FeedResponse | null) => {
 
 export function FeedList() {
   const t = useTranslations("Dashboard");
-  const { data, error, isLoading, size, setSize, isValidating } =
+  const { data, error, isLoading, setSize, isValidating } =
     useSWRInfinite<FeedResponse>(getKey);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
