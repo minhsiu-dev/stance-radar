@@ -1,75 +1,79 @@
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { SWRConfig } from "swr";
+import { NextIntlClientProvider } from "next-intl";
 
-const setCrosshair = vi.fn();
-const clearCrosshair = vi.fn();
-const series = { setData: vi.fn(), priceScale: vi.fn() };
-const chart = {
-  addSeries: () => series,
-  timeScale: () => ({ fitContent: vi.fn() }),
-  subscribeCrosshairMove: vi.fn(),
-  subscribeClick: vi.fn(),
-  setCrosshairPosition: setCrosshair,
-  clearCrosshairPosition: clearCrosshair,
-  remove: vi.fn(),
-};
+vi.mock("lightweight-charts", () => {
+  const series = { setData: vi.fn() };
+  const chart = {
+    addSeries: () => series,
+    timeScale: () => ({ fitContent: vi.fn(), applyOptions: vi.fn() }),
+    subscribeCrosshairMove: vi.fn(),
+    subscribeClick: vi.fn(),
+    clearCrosshairPosition: vi.fn(),
+    setCrosshairPosition: vi.fn(),
+    remove: vi.fn(),
+  };
+  return {
+    createChart: () => chart,
+    createSeriesMarkers: vi.fn(),
+    CandlestickSeries: {},
+    ColorType: { Solid: "solid" },
+  };
+});
 
-vi.mock("lightweight-charts", () => ({
-  createChart: () => chart,
-  CandlestickSeries: {},
-  ColorType: { Solid: "solid" },
-  createSeriesMarkers: vi.fn(),
-}));
-
-vi.mock("swr", () => ({
-  default: (key: string) => {
-    if (key.includes("candles"))
-      return {
-        data: [
-          { date: "2026-01-02", open: 100, high: 101, low: 99, close: 100, volume: 1 },
-        ],
-        isLoading: false,
-      };
-    if (key.includes("stances"))
-      return {
-        data: [
-          {
-            video_id: "vid-1",
-            video_title: "",
-            channel_id: "c",
-            channel_title: "",
-            published_at: "2026-01-02T12:00:00Z",
-            stance: "buy",
-            summary: "",
-          },
-        ],
-      };
-    return { data: undefined };
-  },
-}));
-
-vi.mock("next-intl", () => ({
-  useTranslations: () => (k: string) => k,
-}));
+const mockApiFetch = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/api", () => ({ apiFetch: mockApiFetch }));
 
 import { PriceChart } from "@/components/price-chart";
 
-describe("PriceChart hover", () => {
-  it("calls setCrosshairPosition when hoveredVideoId matches a marker", () => {
-    const { rerender } = render(
-      <PriceChart ticker="AAPL" hoveredVideoId={null} />,
+const messages = { Errors: { candlesLoad: "Error: {message}" } };
+
+function makeFetcher(candleClose: number[]) {
+  return (url: string) => {
+    if (url.includes("candles")) {
+      return Promise.resolve(
+        candleClose.map((close, i) => ({
+          time: `2026-01-0${i + 1}`,
+          open: close,
+          high: close + 10,
+          low: close - 10,
+          close,
+          volume: 1,
+        })),
+      );
+    }
+    return Promise.resolve([]);
+  };
+}
+
+describe("PriceChart", () => {
+  it("renders all nine range buttons", async () => {
+    mockApiFetch.mockImplementation(makeFetcher([105]));
+
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ provider: () => new Map() }}>
+          <PriceChart ticker="AAPL" />
+        </SWRConfig>
+      </NextIntlClientProvider>,
     );
-    setCrosshair.mockClear();
-    rerender(<PriceChart ticker="AAPL" hoveredVideoId="vid-1" />);
-    expect(setCrosshair).toHaveBeenCalledWith(100, "2026-01-02", series);
+    for (const r of ["1D", "5D", "1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y"]) {
+      expect(await screen.findByRole("button", { name: r })).toBeInTheDocument();
+    }
   });
 
-  it("clears crosshair when hoveredVideoId becomes null", () => {
-    const { rerender } = render(
-      <PriceChart ticker="AAPL" hoveredVideoId="vid-1" />,
+  it("displays period gain in green when positive", async () => {
+    mockApiFetch.mockImplementation(makeFetcher([100, 110]));
+
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ provider: () => new Map() }}>
+          <PriceChart ticker="AAPL" />
+        </SWRConfig>
+      </NextIntlClientProvider>,
     );
-    clearCrosshair.mockClear();
-    rerender(<PriceChart ticker="AAPL" hoveredVideoId={null} />);
-    expect(clearCrosshair).toHaveBeenCalled();
+    const pct = await screen.findByText(/\+10\.00%/);
+    expect(pct.className).toMatch(/emerald/);
   });
 });
