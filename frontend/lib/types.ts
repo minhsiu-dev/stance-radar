@@ -120,3 +120,21 @@ export interface SearchHit {
   name: string;
   exchange: string | null;
 }
+
+export interface FinancialReport {
+  period_end: string;
+  total_revenue: number | null;
+  gross_profit: number | null;
+  operating_income: number | null;
+  pretax_income: number | null;
+  net_income: number | null;
+}
+
+export interface StanceSummary {
+  buy: number;
+  neutral: number;
+  sell: number;
+  window_days: number;
+}
+
+export type FinancialsPeriod = "quarterly" | "annual";
