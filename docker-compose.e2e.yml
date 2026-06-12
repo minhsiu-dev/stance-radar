@@ -2,7 +2,3 @@ services:
   api:
     environment:
       USE_FAKE_ADAPTERS: "true"
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.e2e
