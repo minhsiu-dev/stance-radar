@@ -1,15 +1,39 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
+import { Play } from "lucide-react";
 import { StanceBadge } from "@/components/stance-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/format";
 import type { FeedItem, FeedResponse } from "@/lib/types";
+
+function VideoThumb({ url, title }: { url: string; title: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) {
+    return (
+      <div
+        aria-hidden
+        className="flex h-20 w-36 shrink-0 items-center justify-center rounded bg-gradient-to-br from-muted to-muted/40 text-muted-foreground/60"
+      >
+        <Play className="h-6 w-6" />
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={title}
+      onError={() => setFailed(true)}
+      className="h-20 w-36 shrink-0 rounded object-cover"
+    />
+  );
+}
 
 const PAGE_SIZE = 20;
 
@@ -89,35 +113,39 @@ export function FeedList() {
   return (
     <div className="space-y-3">
       {items.map((item) => (
-        <Card key={item.video_id}>
+        <Card
+          key={item.video_id}
+          className="overflow-hidden transition-colors hover:bg-muted/30"
+        >
           <CardContent className="flex gap-4 p-4">
-            {item.thumbnail_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={item.thumbnail_url}
-                alt=""
-                className="h-20 w-36 shrink-0 rounded object-cover"
-              />
-            )}
-            <div className="min-w-0 space-y-2">
+            <VideoThumb url={item.thumbnail_url} title={item.title} />
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
               <a
                 href={`https://www.youtube.com/watch?v=${item.video_id}`}
                 target="_blank"
                 rel="noreferrer"
-                className="line-clamp-2 font-medium hover:underline"
+                className="line-clamp-2 text-base font-medium leading-snug hover:underline"
               >
                 {item.title}
               </a>
               <p className="text-xs text-muted-foreground">
-                {item.channel.title} · {formatDate(item.published_at)}
+                <Link
+                  href={`/channels/${item.channel.id}`}
+                  className="font-medium text-foreground/70 hover:text-foreground hover:underline"
+                >
+                  {item.channel.title}
+                </Link>
+                <span className="mx-1.5 opacity-60">·</span>
+                {formatDate(item.published_at)}
               </p>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="mt-auto flex flex-wrap items-center gap-1.5">
                 <StatusTag item={item} />
                 {item.stances.map((s) => (
                   <Link
                     key={s.ticker}
                     href={`/stocks/${s.ticker}`}
                     title={s.summary}
+                    className="transition-transform hover:-translate-y-px"
                   >
                     <StanceBadge stance={s.stance} ticker={s.ticker} />
                   </Link>

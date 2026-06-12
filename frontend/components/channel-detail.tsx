@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
+import { ExternalLink, Play } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,15 +28,23 @@ import type {
 const STAT_ORDER: VideoStatus[] = [
   "analyzed", "discovered", "pending", "failed", "no_transcript", "skipped",
 ];
+// 永遠顯示的核心三格;其餘只在 >0 時才顯示
+const ALWAYS_SHOW: ReadonlySet<VideoStatus> = new Set([
+  "analyzed", "discovered", "skipped",
+]);
 // 可勾選/可操作的狀態(analyzed、pending 不提供批次操作)
 const ACTIONABLE: ReadonlySet<VideoStatus> = new Set([
   "discovered", "failed", "no_transcript", "skipped",
+]);
+// skipped 不能被略過(已 skipped 再 skip 無意義),analyzed 後端也會拒絕
+const SKIPPABLE: ReadonlySet<VideoStatus> = new Set([
+  "discovered", "failed", "no_transcript",
 ]);
 const BADGE_VARIANT: Record<
   VideoStatus,
   "default" | "secondary" | "destructive" | "outline"
 > = {
-  analyzed: "default",
+  analyzed: "outline",
   discovered: "secondary",
   pending: "secondary",
   failed: "destructive",
@@ -118,6 +127,10 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
 
   const selectedIds = [...selected];
 
+  const visibleStats = STAT_ORDER.filter(
+    (s) => ALWAYS_SHOW.has(s) || (detail.status_counts[s] ?? 0) > 0,
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -126,13 +139,16 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
           <img
             src={detail.thumbnail_url}
             alt=""
-            className="h-16 w-16 rounded-full object-cover"
+            className="h-16 w-16 shrink-0 rounded-full object-cover ring-1 ring-border"
           />
         )}
-        <div>
-          <h1 className="text-xl font-semibold">{detail.title}</h1>
-          <p className="text-xs text-muted-foreground">
-            {t("added", { date: formatDate(detail.added_at) })} ·{" "}
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-2xl font-semibold tracking-tight">
+            {detail.title}
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("added", { date: formatDate(detail.added_at) })}
+            <span className="mx-2 opacity-60">·</span>
             {detail.last_refreshed_at
               ? tChannels("list.lastUpdated", {
                   date: formatDate(detail.last_refreshed_at),
@@ -140,16 +156,30 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
               : tChannels("list.neverUpdated")}
           </p>
         </div>
+        <a
+          href={`https://www.youtube.com/channel/${detail.id}`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          YouTube
+        </a>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {STAT_ORDER.map((status) => (
-          <Card key={status}>
+      <div
+        className="grid gap-3"
+        style={{
+          gridTemplateColumns: `repeat(${Math.min(visibleStats.length, 6)}, minmax(0, 1fr))`,
+        }}
+      >
+        {visibleStats.map((status) => (
+          <Card key={status} className="bg-card/50">
             <CardContent className="p-4">
-              <p className="text-2xl font-semibold">
+              <p className="font-mono text-3xl font-semibold tabular-nums">
                 {detail.status_counts[status] ?? 0}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {t(`stats.${status}`)}
               </p>
             </CardContent>
@@ -257,6 +287,31 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
   );
 }
 
+const MAX_INLINE_STANCES = 6;
+
+function VideoRowThumb({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) {
+    return (
+      <div
+        aria-hidden
+        className="flex h-14 w-24 shrink-0 items-center justify-center rounded bg-gradient-to-br from-muted to-muted/40 text-muted-foreground/60"
+      >
+        <Play className="h-5 w-5" />
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt=""
+      onError={() => setFailed(true)}
+      className="h-14 w-24 shrink-0 rounded object-cover"
+    />
+  );
+}
+
 function VideoRow({
   video,
   checked,
@@ -273,47 +328,65 @@ function VideoRow({
   const t = useTranslations("ChannelDetail");
   const actionable = ACTIONABLE.has(video.status);
   const action = rowActionKey(video.status);
+  const visibleStances = video.stances.slice(0, MAX_INLINE_STANCES);
+  const overflowStances = video.stances.length - visibleStances.length;
 
   return (
-    <div className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/50">
+    <div className="group grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-start gap-3 rounded-md px-2 py-3 transition-colors hover:bg-muted/40">
       <input
         type="checkbox"
-        className="h-4 w-4 accent-primary disabled:opacity-30"
+        className="mt-3 h-4 w-4 accent-primary disabled:opacity-30"
         checked={checked}
         onChange={onToggle}
         disabled={!actionable}
+        aria-label={video.title}
       />
-      {video.thumbnail_url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={video.thumbnail_url}
-          alt=""
-          className="h-12 w-20 shrink-0 rounded object-cover"
-        />
-      )}
-      <div className="min-w-0 flex-1">
+      <VideoRowThumb url={video.thumbnail_url} />
+
+      {/* 主資訊欄:標題 → 時間/狀態徽章 → stance chips */}
+      <div className="min-w-0 space-y-1.5">
         <a
           href={`https://www.youtube.com/watch?v=${video.id}`}
           target="_blank"
           rel="noreferrer"
-          className="line-clamp-1 text-sm font-medium hover:underline"
+          className="line-clamp-1 text-sm font-medium leading-snug hover:underline"
+          title={video.title}
         >
           {video.title}
         </a>
-        <p className="text-xs text-muted-foreground">
-          {formatDate(video.published_at)}
-        </p>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="tabular-nums">{formatDate(video.published_at)}</span>
+          <span className="opacity-60">·</span>
+          <Badge
+            variant={BADGE_VARIANT[video.status]}
+            className="h-5 px-1.5 text-[11px]"
+            title={video.error_message ?? undefined}
+          >
+            {t(`videos.status.${video.status}`)}
+          </Badge>
+        </div>
+        {visibleStances.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            {visibleStances.map((s) => (
+              <StanceBadge key={s.ticker} stance={s.stance} ticker={s.ticker} />
+            ))}
+            {overflowStances > 0 && (
+              <span
+                className="text-[11px] text-muted-foreground"
+                title={video.stances
+                  .slice(MAX_INLINE_STANCES)
+                  .map((s) => s.ticker)
+                  .join(", ")}
+              >
+                +{overflowStances}
+              </span>
+            )}
+          </div>
+        )}
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {video.stances.map((s) => (
-          <StanceBadge key={s.ticker} stance={s.stance} ticker={s.ticker} />
-        ))}
-        <Badge
-          variant={BADGE_VARIANT[video.status]}
-          title={video.error_message ?? undefined}
-        >
-          {t(`videos.status.${video.status}`)}
-        </Badge>
+
+      {/* 操作欄:hover 才顯示,減少預設視覺噪音 */}
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         {action && (
           <Button
             size="sm"
@@ -324,7 +397,7 @@ function VideoRow({
             {t(`videos.${action}`)}
           </Button>
         )}
-        {actionable && video.status !== "skipped" && (
+        {SKIPPABLE.has(video.status) && (
           <Button
             size="sm"
             variant="ghost"

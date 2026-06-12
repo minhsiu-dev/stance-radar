@@ -20,10 +20,12 @@ export const metadata: Metadata = {
   description: "Track US-stock stances across YouTube channels you follow.",
 };
 
+export const fontVariables = `${geistSans.variable} ${notoTC.variable}`;
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <div className={`${geistSans.variable} ${notoTC.variable}`}>{children}</div>
-  );
+  // 字型 CSS 變數必須掛在 <html> 上,不能被外層 div 包住,否則 [locale]/layout.tsx
+  // 渲染的 <html> 拿不到變數 → fallback 到 Times。透過 fontVariables 由 locale layout 套用。
+  return <>{children}</>;
 }

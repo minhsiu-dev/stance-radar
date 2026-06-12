@@ -133,10 +133,7 @@
   }
   html {
     @apply font-sans;
-    font-feature-settings: "tnum" 1, "ss01" 1;
-  }
-  /* CJK 用 Noto TC 預設字寬,不套用 Geist 的 ss01 */
-  :lang(zh-TW) {
-    font-feature-settings: normal;
+    /* tabular figures 對齊數字欄;保留 Geist 預設的字形(不啟用 ss01 的 single-story a) */
+    font-feature-settings: "tnum" 1;
   }
 }
