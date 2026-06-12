@@ -35,6 +35,7 @@ export function MentionsTable({
   onRowHover?: (videoId: string | null) => void;
 }) {
   const t = useTranslations("Mentions");
+  const tStance = useTranslations("Stock.stance");
   const { data, error, isLoading } = useSWR<MentionRow[]>(
     `/api/stocks/${ticker}/mentions`,
     apiFetch,
@@ -94,9 +95,9 @@ export function MentionsTable({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("filter.allStances")}</SelectItem>
-            <SelectItem value="buy">Buy</SelectItem>
-            <SelectItem value="neutral">Neutral</SelectItem>
-            <SelectItem value="sell">Sell</SelectItem>
+            <SelectItem value="buy">{tStance("buy")}</SelectItem>
+            <SelectItem value="neutral">{tStance("neutral")}</SelectItem>
+            <SelectItem value="sell">{tStance("sell")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={channelFilter} onValueChange={(v) => setChannelFilter(v ?? "all")}>

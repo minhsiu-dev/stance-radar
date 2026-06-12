@@ -26,6 +26,7 @@ function yoy(latest: number | null, prior: number | null): number | null {
 export function OverviewTab({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.overview");
   const tErr = useTranslations("Errors");
+  const tStance = useTranslations("Stock.stance");
   const { data: financials, error: financialsError } = useSWR<FinancialReport[]>(
     `/api/stocks/${ticker}/financials?period=quarterly`,
     apiFetch,
@@ -87,9 +88,9 @@ export function OverviewTab({ ticker }: { ticker: string }) {
           <CardTitle>{t("ytStance", { days: summary.window_days })}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <Bar label="Buy" count={summary.buy} max={maxStance} color="bg-sky-500" />
-          <Bar label="Neutral" count={summary.neutral} max={maxStance} color="bg-zinc-400" />
-          <Bar label="Sell" count={summary.sell} max={maxStance} color="bg-orange-500" />
+          <Bar label={tStance("buy")} count={summary.buy} max={maxStance} color="bg-sky-500" />
+          <Bar label={tStance("neutral")} count={summary.neutral} max={maxStance} color="bg-zinc-400" />
+          <Bar label={tStance("sell")} count={summary.sell} max={maxStance} color="bg-orange-500" />
         </CardContent>
       </Card>
     </div>
