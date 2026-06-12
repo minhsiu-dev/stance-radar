@@ -15,6 +15,7 @@
   },
   "Dashboard": {
     "latest": "最新影片",
+    "trending": { "title": "最新被提及" },
     "refresh": {
       "label": "更新",
       "running": "更新中… {stage}",

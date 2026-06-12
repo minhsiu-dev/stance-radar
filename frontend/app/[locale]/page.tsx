@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { FeedList } from "@/components/feed-list";
 import { RefreshButton } from "@/components/refresh-button";
+import { TrendingStocks } from "@/components/trending-stocks";
 
 export default async function DashboardPage() {
   const t = await getTranslations("Dashboard");
@@ -11,6 +12,7 @@ export default async function DashboardPage() {
         <h1 className="text-xl font-semibold">{t("latest")}</h1>
         <RefreshButton />
       </div>
+      <TrendingStocks />
       <FeedList />
     </div>
   );

@@ -15,6 +15,7 @@
   },
   "Dashboard": {
     "latest": "Latest videos",
+    "trending": { "title": "Recently mentioned" },
     "refresh": {
       "label": "Refresh",
       "running": "Updating… {stage}",
