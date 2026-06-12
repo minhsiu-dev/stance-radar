@@ -6,7 +6,7 @@ export default async function ReviewPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">{t("title")}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
       <ReviewList />
     </div>
   );

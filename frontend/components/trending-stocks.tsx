@@ -31,7 +31,7 @@ export function TrendingStocks() {
 
   return (
     <section>
-      <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <h2 className="mb-2 text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
         {t("title")}
       </h2>
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -40,10 +40,12 @@ export function TrendingStocks() {
             key={s.ticker}
             href={`/stocks/${s.ticker}`}
             data-testid="trending-pill"
-            className="flex shrink-0 items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm hover:bg-accent"
+            className="flex shrink-0 items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm transition-all hover:-translate-y-px hover:border-foreground/40 hover:bg-accent hover:shadow-sm"
           >
-            <span className="font-mono font-medium">{s.ticker}</span>
-            <span className="tabular-nums text-xs text-muted-foreground">
+            <span className="font-mono font-semibold tracking-tight">
+              {s.ticker}
+            </span>
+            <span className="tabular-nums text-xs font-medium text-muted-foreground">
               {s.mention_count}
             </span>
           </Link>
