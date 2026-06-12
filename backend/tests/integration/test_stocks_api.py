@@ -72,3 +72,24 @@ async def test_stock_mentions_descending_with_deep_links(api):
     assert first["youtube_url"] == "https://www.youtube.com/watch?v=alpha_vid_3&t=12s"
     assert first["stance"] == "buy"
     assert first["quote"] == "蘋果這季財報很強,我會買"
+
+
+async def test_search_returns_results(api):
+    app, client = api
+    resp = await client.get("/api/stocks/search?q=apple")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert any(hit["ticker"] == "AAPL" for hit in body["data"])
+
+
+async def test_search_rejects_empty_query(api):
+    app, client = api
+    resp = await client.get("/api/stocks/search?q=")
+    assert resp.status_code == 422
+
+
+async def test_search_rejects_whitespace_query(api):
+    app, client = api
+    resp = await client.get("/api/stocks/search?q=%20%20")
+    assert resp.status_code == 422

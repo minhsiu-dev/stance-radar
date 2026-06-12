@@ -25,6 +25,21 @@ async def list_stocks(session: AsyncSession = Depends(get_session)):
     return ok([{"ticker": t, "mention_count": c} for t, c in rows])
 
 
+@router.get("/search")
+async def stock_search(
+    q: str = Query("", description="ticker or company name fragment"),
+    market: MarketClient = Depends(get_market),
+):
+    if not q.strip():
+        return fail("q must be non-empty", status_code=422)
+    try:
+        hits = await market.search(q.strip())
+    except Exception:
+        logger.exception("search failed for %s", q)
+        return fail("搜尋暫時無法使用,稍後再試", status_code=502)
+    return ok([asdict(h) for h in hits])
+
+
 @router.get("/{ticker}")
 async def stock_summary(ticker: str, market: MarketClient = Depends(get_market)):
     try:
