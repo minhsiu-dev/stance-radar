@@ -178,6 +178,7 @@ async def test_fake_llm_returns_seeded_results():
     assert result.mentions[0] == MentionResult(
         ticker="AAPL", start_seconds=12.5, quote="蘋果這季財報很強,我會買",
         stance="buy", reasoning="財報優於預期,明確看多",
+        confidence="high", time_horizon="long", is_conditional=False,
     )
     assert result.stances[0].stance == "buy"
     empty = await fake.analyze(

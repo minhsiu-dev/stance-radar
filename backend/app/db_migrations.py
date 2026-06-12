@@ -17,6 +17,14 @@ _STATEMENTS = (
     "ALTER TYPE video_status ADD VALUE IF NOT EXISTS 'skipped'",
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS kind"
     " VARCHAR(16) NOT NULL DEFAULT 'discover'",
+    "ALTER TABLE channels ADD COLUMN IF NOT EXISTS auto_analyze"
+    " BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE videos ADD COLUMN IF NOT EXISTS dropped_tickers JSONB",
+    "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS confidence VARCHAR(8)",
+    "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS time_horizon VARCHAR(16)",
+    "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS is_conditional BOOLEAN",
+    "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS condition TEXT",
+    "ALTER TABLE video_stances ADD COLUMN IF NOT EXISTS confidence VARCHAR(8)",
 )
 
 

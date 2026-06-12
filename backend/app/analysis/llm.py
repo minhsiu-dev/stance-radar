@@ -6,6 +6,8 @@ from typing import Awaitable, Callable, Protocol
 
 from app.analysis.prompts import ANALYSIS_TOOL, SYSTEM_PROMPT, build_user_prompt
 from app.analysis.types import (
+    VALID_CONFIDENCE,
+    VALID_HORIZONS,
     VALID_STANCES,
     AnalysisResult,
     MentionResult,
@@ -30,6 +32,14 @@ class LLMClient(Protocol):
     ) -> AnalysisResult: ...
 
 
+def _parse_enum_field(item: dict, key: str, valid: frozenset[str]) -> str | None:
+    """新欄位採容錯解析:缺漏或值不合法 → None,不讓整部影片分析失敗。"""
+    value = item.get(key)
+    if isinstance(value, str) and value in valid:
+        return value
+    return None
+
+
 def _parse_mention(item: dict) -> MentionResult:
     try:
         ticker = str(item["ticker"]).strip().upper()
@@ -41,7 +51,18 @@ def _parse_mention(item: dict) -> MentionResult:
         raise AnalysisError(f"malformed mention: {item!r}") from exc
     if not ticker or stance not in VALID_STANCES or start_seconds < 0:
         raise AnalysisError(f"invalid mention values: {item!r}")
-    return MentionResult(ticker, start_seconds, quote, stance, reasoning)
+    is_conditional = item.get("is_conditional")
+    if not isinstance(is_conditional, bool):
+        is_conditional = None
+    condition = item.get("condition")
+    condition = str(condition) if isinstance(condition, str) and condition else None
+    return MentionResult(
+        ticker, start_seconds, quote, stance, reasoning,
+        confidence=_parse_enum_field(item, "confidence", VALID_CONFIDENCE),
+        time_horizon=_parse_enum_field(item, "time_horizon", VALID_HORIZONS),
+        is_conditional=is_conditional,
+        condition=condition if is_conditional else None,
+    )
 
 
 def _parse_stance(item: dict) -> StanceResult:
@@ -53,7 +74,10 @@ def _parse_stance(item: dict) -> StanceResult:
         raise AnalysisError(f"malformed stance: {item!r}") from exc
     if not ticker or stance not in VALID_STANCES:
         raise AnalysisError(f"invalid stance values: {item!r}")
-    return StanceResult(ticker, stance, summary)
+    return StanceResult(
+        ticker, stance, summary,
+        confidence=_parse_enum_field(item, "confidence", VALID_CONFIDENCE),
+    )
 
 
 def _fill_missing_stances(
@@ -205,31 +229,47 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
     "alpha_vid_3": AnalysisResult(
         mentions=(MentionResult(
             "AAPL", 12.5, "蘋果這季財報很強,我會買", "buy", "財報優於預期,明確看多",
+            confidence="high", time_horizon="long", is_conditional=False,
         ),),
-        stances=(StanceResult("AAPL", "buy", "財報強勁,整體看多 AAPL"),),
+        stances=(StanceResult(
+            "AAPL", "buy", "財報強勁,整體看多 AAPL", confidence="high",
+        ),),
     ),
     "alpha_vid_2": AnalysisResult(
         mentions=(MentionResult(
             "NVDA", 33.0, "估值太貴,我會先獲利了結輝達", "sell", "估值疑慮,建議減碼",
+            confidence="medium", time_horizon="short", is_conditional=False,
         ),),
-        stances=(StanceResult("NVDA", "sell", "估值偏高,看空 NVDA"),),
+        stances=(StanceResult(
+            "NVDA", "sell", "估值偏高,看空 NVDA", confidence="medium",
+        ),),
     ),
     "alpha_vid_1": AnalysisResult.empty(),
     "beta_vid_3": AnalysisResult(
         mentions=(MentionResult(
             "TSLA", 45.0, "Tesla delivery numbers look just okay", "neutral",
             "數據中性,無方向性",
+            confidence="low", time_horizon="unspecified", is_conditional=False,
         ),),
-        stances=(StanceResult("TSLA", "neutral", "交車數據中性,觀望 TSLA"),),
+        stances=(StanceResult(
+            "TSLA", "neutral", "交車數據中性,觀望 TSLA", confidence="low",
+        ),),
     ),
     "beta_vid_2": AnalysisResult(
         mentions=(
-            MentionResult("AAPL", 10.0, "蘋果我持續加碼", "buy", "持續加碼,看多"),
-            MentionResult("NVDA", 200.0, "輝達就觀望,等回檔", "neutral", "明確觀望"),
+            MentionResult(
+                "AAPL", 10.0, "蘋果我持續加碼", "buy", "持續加碼,看多",
+                confidence="high", time_horizon="long", is_conditional=False,
+            ),
+            MentionResult(
+                "NVDA", 200.0, "輝達就觀望,等回檔", "neutral", "明確觀望",
+                confidence="medium", time_horizon="short",
+                is_conditional=True, condition="等回檔再進場",
+            ),
         ),
         stances=(
-            StanceResult("AAPL", "buy", "持續加碼,看多 AAPL"),
-            StanceResult("NVDA", "neutral", "等回檔,觀望 NVDA"),
+            StanceResult("AAPL", "buy", "持續加碼,看多 AAPL", confidence="high"),
+            StanceResult("NVDA", "neutral", "等回檔,觀望 NVDA", confidence="medium"),
         ),
     ),
 }

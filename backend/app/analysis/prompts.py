@@ -17,11 +17,19 @@ SYSTEM_PROMPT = """\
    - neutral:提及但無方向性,或明確觀望
 4. 每一次提及都要記錄一筆 mention:start_seconds 用該句的起始秒數,
    quote 摘錄原句(可截斷至約 100 字),reasoning 用一句話解釋判斷。
-5. 另外為每一檔被提及的股票,給出這部影片的「整體立場」(stances):
-   綜合所有提及後,說話者對它的總體態度,加一句總結。
-6. 完全沒有美股提及時,mentions 與 stances 都回報空陣列。
-7. 語言規則:reasoning 與 summary 一律用「英文」撰寫,不論 transcript 是什麼語言;
-   quote 維持 transcript 原文,不要翻譯。
+5. 每筆 mention 另外標注:
+   - confidence:說話者的信心強度。high(重倉/all-in/非常篤定)、
+     medium(一般建議)、low(輕倉試單/不太確定/僅隨口提到)。
+   - time_horizon:short(數日到數週的交易)、long(數月以上/長期投資)、
+     unspecified(聽不出時間框架)。
+   - is_conditional:立場是否附帶條件(例:「回踩 200 日線我會接」「跌破支撐就出」)。
+     是 → is_conditional=true 並把觸發條件原文摘要進 condition(維持原文語言);
+     否 → is_conditional=false、condition=null。
+6. 另外為每一檔被提及的股票,給出這部影片的「整體立場」(stances):
+   綜合所有提及後,說話者對它的總體態度,加一句總結,並給整體 confidence。
+7. 完全沒有美股提及時,mentions 與 stances 都回報空陣列。
+8. 語言規則:reasoning 與 summary 一律用「英文」撰寫,不論 transcript 是什麼語言;
+   quote 與 condition 維持 transcript 原文,不要翻譯。
 """
 
 ANALYSIS_TOOL = {
@@ -43,8 +51,24 @@ ANALYSIS_TOOL = {
                             "type": "string",
                             "description": "One sentence in English explaining the stance",
                         },
+                        "confidence": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"],
+                        },
+                        "time_horizon": {
+                            "type": "string",
+                            "enum": ["short", "long", "unspecified"],
+                        },
+                        "is_conditional": {"type": "boolean"},
+                        "condition": {
+                            "type": ["string", "null"],
+                            "description": "Trigger condition in the transcript's original language; null when unconditional",
+                        },
                     },
-                    "required": ["ticker", "start_seconds", "quote", "stance", "reasoning"],
+                    "required": [
+                        "ticker", "start_seconds", "quote", "stance", "reasoning",
+                        "confidence", "time_horizon", "is_conditional", "condition",
+                    ],
                 },
             },
             "stances": {
@@ -58,8 +82,12 @@ ANALYSIS_TOOL = {
                             "type": "string",
                             "description": "One sentence in English summarizing the overall stance",
                         },
+                        "confidence": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"],
+                        },
                     },
-                    "required": ["ticker", "stance", "summary"],
+                    "required": ["ticker", "stance", "summary", "confidence"],
                 },
             },
         },

@@ -3,7 +3,9 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,6 +53,8 @@ class Channel(Base):
     title: Mapped[str] = mapped_column(String(200))
     thumbnail_url: Mapped[str] = mapped_column(Text, default="")
     uploads_playlist_id: Mapped[str] = mapped_column(String(34))
+    # 開啟後,discover 抓到的「新發布」影片直接進分析,不需手動挑選
+    auto_analyze: Mapped[bool] = mapped_column(Boolean, default=False)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_refreshed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -77,6 +81,8 @@ class Video(Base):
     )
     transcript_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # LLM 回報但 ticker 驗證不過而被丟棄的代號(讓使用者知道有東西被略過)
+    dropped_tickers: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     analyzed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -104,6 +110,11 @@ class Mention(Base):
     reasoning: Mapped[str] = mapped_column(Text)
     context_before: Mapped[str | None] = mapped_column(Text, nullable=True)
     context_after: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 立場細節(舊資料為 NULL):high|medium|low / short|long|unspecified
+    confidence: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    time_horizon: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    is_conditional: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    condition: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     video: Mapped[Video] = relationship(back_populates="mentions")
 
@@ -117,6 +128,7 @@ class VideoStance(Base):
     ticker: Mapped[str] = mapped_column(String(10), primary_key=True, index=True)
     stance: Mapped[Stance] = mapped_column(_enum(Stance, "stance"))
     summary: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
     video: Mapped[Video] = relationship(back_populates="stances")
 

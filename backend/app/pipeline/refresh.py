@@ -124,13 +124,18 @@ class RefreshRunner:
         await asyncio.gather(*(process(video_id) for video_id in pending))
 
     async def _ingest_channel_videos(self, channel: Channel) -> int:
-        """匯入該頻道的新影片(status=discovered),回傳新增數。"""
+        """匯入該頻道的新影片(status=discovered),回傳新增數。
+
+        頻道開啟 auto_analyze 時,「後續新發布」的影片直接進 pending;
+        初次加入的 backfill(known_ids 為空)仍走 discovered 讓使用者挑選。
+        """
         deps = self._deps
         async with deps.sessionmaker() as session:
             known_ids = set((await session.execute(
                 select(Video.id).where(Video.channel_id == channel.id)
             )).scalars().all())
-            limit = deps.settings.backfill_limit if not known_ids else None
+            is_backfill = not known_ids
+            limit = deps.settings.backfill_limit if is_backfill else None
             new_videos = await deps.youtube.list_new_uploads(
                 channel.uploads_playlist_id, known_video_ids=known_ids, limit=limit
             )
@@ -138,12 +143,17 @@ class RefreshRunner:
                 await deps.youtube.get_durations([v.id for v in new_videos])
                 if new_videos else {}
             )
+            ingest_status = (
+                VideoStatus.pending
+                if channel.auto_analyze and not is_backfill
+                else VideoStatus.discovered
+            )
             for info in new_videos:
                 session.add(Video(
                     id=info.id, channel_id=channel.id, title=info.title,
                     published_at=info.published_at, thumbnail_url=info.thumbnail_url,
                     duration_seconds=durations.get(info.id),
-                    status=VideoStatus.discovered,
+                    status=ingest_status,
                 ))
             row = await session.get(Channel, channel.id)
             row.last_refreshed_at = utcnow()
@@ -180,10 +190,12 @@ class RefreshRunner:
                 s.ticker for s in result.stances
             }
             valid: set[str] = set()
+            dropped: list[str] = []
             for ticker in tickers:
                 if await deps.ticker_validator.is_valid(ticker):
                     valid.add(ticker)
                 else:
+                    dropped.append(ticker)
                     logger.warning(
                         "dropping unknown ticker %s from video %s", ticker, video_id
                     )
@@ -199,13 +211,17 @@ class RefreshRunner:
                         start_seconds=m.start_seconds, quote=m.quote,
                         stance=Stance(m.stance), reasoning=m.reasoning,
                         context_before=before, context_after=after,
+                        confidence=m.confidence, time_horizon=m.time_horizon,
+                        is_conditional=m.is_conditional, condition=m.condition,
                     ))
             for s in result.stances:
                 if s.ticker in valid:
                     session.add(VideoStance(
                         video_id=video_id, ticker=s.ticker,
                         stance=Stance(s.stance), summary=s.summary,
+                        confidence=s.confidence,
                     ))
+            video.dropped_tickers = sorted(dropped) or None
             video.transcript_language = transcript.language
             video.status = VideoStatus.analyzed
             video.error_message = None
