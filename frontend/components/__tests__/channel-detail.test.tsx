@@ -15,6 +15,11 @@ const messages = {
   ChannelDetail: {
     loadError: "Failed: {message}",
     added: "Added: {date}",
+    autoAnalyze: {
+      on: "Auto-analyze: on",
+      off: "Auto-analyze: off",
+      hint: "auto analyze hint",
+    },
     stats: {
       analyzed: "Analyzed",
       discovered: "Awaiting review",
@@ -50,12 +55,31 @@ const messages = {
   Channels: {
     list: { lastUpdated: "Last updated: {date}", neverUpdated: "Never updated" },
   },
+  Scorecard: {
+    title: "Scorecard",
+    description: "vs {benchmark}",
+    loading: "Computing…",
+    loadError: "Failed: {message}",
+    empty: "No calls yet.",
+    afterDays: "{days}d after call",
+    vsBenchmark: "excess {value}",
+    winRate: "win rate {value}",
+    sampleCount: "{count} calls",
+    noData: "no data",
+    columns: {
+      date: "Date",
+      ticker: "Ticker",
+      stance: "Stance",
+      horizon: "{days}d",
+    },
+  },
 };
 
 const detail = {
   id: "UC_a",
   title: "Alpha",
   thumbnail_url: "",
+  auto_analyze: false,
   added_at: "2026-06-01T00:00:00Z",
   last_refreshed_at: "2026-06-10T00:00:00Z",
   status_counts: { analyzed: 2, skipped: 1 },
@@ -71,24 +95,39 @@ const videos = {
       id: "v1", title: "Analyzed video", thumbnail_url: "",
       published_at: "2026-06-08T12:00:00Z", duration_seconds: 600,
       status: "analyzed", error_message: null,
-      analyzed_at: "2026-06-09T00:00:00Z",
-      stances: [{ ticker: "AAPL", stance: "buy", summary: "bullish" }],
+      analyzed_at: "2026-06-09T00:00:00Z", dropped_tickers: [],
+      stances: [
+        { ticker: "AAPL", stance: "buy", summary: "bullish", confidence: "high" },
+      ],
     },
     {
       id: "v2", title: "Skipped video", thumbnail_url: "",
       published_at: "2026-06-07T12:00:00Z", duration_seconds: null,
       status: "skipped", error_message: null, analyzed_at: null,
-      stances: [],
+      dropped_tickers: [], stances: [],
     },
   ],
 };
 
+const emptyHorizon = {
+  count: 0, avg_return: null, avg_alpha: null, win_rate: null,
+};
+const scorecard = {
+  horizons: [7, 30, 90],
+  benchmark: "SPY",
+  aggregates: {
+    buy: { total: 0, horizons: { 7: emptyHorizon, 30: emptyHorizon, 90: emptyHorizon } },
+    sell: { total: 0, horizons: { 7: emptyHorizon, 30: emptyHorizon, 90: emptyHorizon } },
+  },
+  calls: [],
+};
+
 function renderDetail() {
-  const fetcher = vi.fn().mockImplementation((key: string) =>
-    key.includes("/videos")
-      ? Promise.resolve(videos)
-      : Promise.resolve(detail),
-  );
+  const fetcher = vi.fn().mockImplementation((key: string) => {
+    if (key.includes("/videos")) return Promise.resolve(videos);
+    if (key.includes("/scorecard")) return Promise.resolve(scorecard);
+    return Promise.resolve(detail);
+  });
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <SWRConfig value={{ fetcher, provider: () => new Map() }}>

@@ -34,7 +34,8 @@ export function TrendingStocks() {
       <h2 className="mb-2 text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
         {t("title")}
       </h2>
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      {/* py/-my + px/-mx:給 hover 的位移與陰影留空間,否則會被 overflow 容器切掉 */}
+      <div className="-mx-1 -my-2 flex gap-2 overflow-x-auto px-1 py-2">
         {data.map((s) => (
           <Link
             key={s.ticker}

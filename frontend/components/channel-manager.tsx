@@ -119,6 +119,14 @@ export function ChannelManager() {
                       : t("list.neverUpdated")}
                   </p>
                 </div>
+                {channel.auto_analyze && (
+                  <Badge
+                    variant="outline"
+                    className="border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                  >
+                    {t("list.autoBadge")}
+                  </Badge>
+                )}
                 {pending > 0 && (
                   <Link href="/review">
                     <Badge variant="secondary">

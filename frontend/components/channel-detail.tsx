@@ -3,7 +3,8 @@
 import { useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
-import { ExternalLink, Play } from "lucide-react";
+import { ExternalLink, Play, Zap, ZapOff } from "lucide-react";
+import { ChannelScorecard } from "@/components/channel-scorecard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,6 +86,30 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
     });
   }
 
+  async function toggleAutoAnalyze() {
+    if (!detail) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      await apiFetch(`/api/channels/${channelId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ auto_analyze: !detail.auto_analyze }),
+      });
+      await mutate(
+        (key) =>
+          typeof key === "string" && key.startsWith("/api/channels"),
+      );
+    } catch (err) {
+      setMessage(
+        t("videos.actionFailed", {
+          message: err instanceof Error ? err.message : "?",
+        }),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function act(path: "analyze" | "skip", ids: string[]) {
     if (!ids.length) return;
     setBusy(true);
@@ -133,7 +158,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
         {detail.thumbnail_url && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -156,23 +181,42 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
               : tChannels("list.neverUpdated")}
           </p>
         </div>
-        <a
-          href={`https://www.youtube.com/channel/${detail.id}`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          YouTube
-        </a>
+        <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={toggleAutoAnalyze}
+            disabled={busy}
+            aria-pressed={detail.auto_analyze}
+            title={t("autoAnalyze.hint")}
+            data-testid="auto-analyze-toggle"
+            className={
+              detail.auto_analyze
+                ? "inline-flex items-center gap-1.5 rounded-md border border-sky-500/40 bg-sky-500/15 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-500/25 dark:text-sky-300"
+                : "inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            }
+          >
+            {detail.auto_analyze ? (
+              <Zap className="h-3.5 w-3.5" />
+            ) : (
+              <ZapOff className="h-3.5 w-3.5" />
+            )}
+            {detail.auto_analyze
+              ? t("autoAnalyze.on")
+              : t("autoAnalyze.off")}
+          </button>
+          <a
+            href={`https://www.youtube.com/channel/${detail.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            YouTube
+          </a>
+        </div>
       </div>
 
-      <div
-        className="grid gap-3"
-        style={{
-          gridTemplateColumns: `repeat(${Math.min(visibleStats.length, 6)}, minmax(0, 1fr))`,
-        }}
-      >
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 md:grid-cols-6">
         {visibleStats.map((status) => (
           <Card key={status} className="bg-card/50">
             <CardContent className="p-4">
@@ -213,10 +257,12 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         </CardContent>
       </Card>
 
+      <ChannelScorecard channelId={channelId} />
+
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-y-2 space-y-0">
           <CardTitle className="text-base">{t("videos.title")}</CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {selectedIds.length > 0 && (
               <>
                 <span className="text-xs text-muted-foreground">
@@ -368,7 +414,12 @@ function VideoRow({
         {visibleStances.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
             {visibleStances.map((s) => (
-              <StanceBadge key={s.ticker} stance={s.stance} ticker={s.ticker} />
+              <StanceBadge
+                key={s.ticker}
+                stance={s.stance}
+                ticker={s.ticker}
+                confidence={s.confidence}
+              />
             ))}
             {overflowStances > 0 && (
               <span
@@ -385,8 +436,8 @@ function VideoRow({
         )}
       </div>
 
-      {/* 操作欄:hover 才顯示,減少預設視覺噪音 */}
-      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      {/* 操作欄:桌面 hover 才顯示;觸控裝置沒有 hover,直接常駐 */}
+      <div className="flex shrink-0 items-center gap-0.5 transition-opacity focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
         {action && (
           <Button
             size="sm"

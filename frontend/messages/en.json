@@ -15,12 +15,28 @@
   },
   "Dashboard": {
     "latest": "Latest videos",
-    "trending": { "title": "Recently mentioned" },
+    "trending": { "title": "Trending" },
+    "flips": {
+      "title": "Stance flips",
+      "window": "last {days} days",
+      "reversal": "Reversal",
+      "reversalHint": "Same channel flipped between buy and sell on the same stock"
+    },
+    "leaderboard": {
+      "title": "Channel accuracy leaderboard",
+      "subtitle": "{days}d after each call · vs {benchmark}",
+      "channel": "Channel",
+      "avgAlpha": "Avg excess return",
+      "buyWinRate": "Buy win rate",
+      "sellWinRate": "Sell win rate",
+      "calls": "Calls (realized/total)"
+    },
     "refresh": {
       "label": "Check new videos",
       "running": "Working… {stage}",
       "lastFailed": "Last update failed: {message}",
       "triggerFailed": "Update failed",
+      "autoEvery": "Auto-refresh every {minutes} min",
       "stages": {
         "listing": "Checking channels {done}/{total}",
         "analyzing": "Analyzing videos {done}/{total}",
@@ -39,7 +55,15 @@
       "statusPending": "Pending analysis",
       "statusNoMentions": "No US stock mentions",
       "loadError": "Failed to load: {message}",
-      "noMore": "No more results"
+      "noMore": "No more results",
+      "noMatch": "No videos match the current filters",
+      "dropped": "Ignored: {tickers}",
+      "droppedHint": "The model reported tickers that could not be validated against market data; they were skipped",
+      "filter": {
+        "allChannels": "All channels",
+        "allTickers": "All stocks",
+        "allStances": "All stances"
+      }
     }
   },
   "Channels": {
@@ -63,7 +87,8 @@
       "remove": "Remove",
       "removeFailed": "Delete failed",
       "removePrompt": "Remove \"{name}\"? Its videos and analysis will also be deleted.",
-      "pendingBadge": "{count} awaiting review"
+      "pendingBadge": "{count} awaiting review",
+      "autoBadge": "Auto-analyze"
     }
   },
   "Review": {
@@ -82,6 +107,11 @@
   "ChannelDetail": {
     "loadError": "Failed to load: {message}",
     "added": "Added: {date}",
+    "autoAnalyze": {
+      "on": "Auto-analyze: on",
+      "off": "Auto-analyze: off",
+      "hint": "When on, newly published videos from this channel are analyzed automatically (the initial backfill still goes through manual review)"
+    },
     "stats": {
       "analyzed": "Analyzed",
       "discovered": "Awaiting review",
@@ -167,7 +197,27 @@
       "allChannels": "All channels"
     },
     "empty": "No mentions recorded for this stock yet.",
-    "loadError": "Failed to load mentions: {message}"
+    "loadError": "Failed to load mentions: {message}",
+    "horizon": { "short": "Short-term", "long": "Long-term" },
+    "conditional": "Conditional: {condition}"
+  },
+  "Scorecard": {
+    "title": "Scorecard",
+    "description": "Price change after each buy/sell call, vs {benchmark}. For reference only — not investment advice.",
+    "loading": "Computing — fetching price history…",
+    "loadError": "Failed to load scorecard: {message}",
+    "empty": "No buy/sell stances to score yet.",
+    "afterDays": "{days}d after call",
+    "vsBenchmark": "excess {value}",
+    "winRate": "win rate {value}",
+    "sampleCount": "{count} calls",
+    "noData": "no data",
+    "columns": {
+      "date": "Date",
+      "ticker": "Ticker",
+      "stance": "Stance",
+      "horizon": "{days}d"
+    }
   },
   "Errors": {
     "priceLoad": "Failed to load price data: {message}",

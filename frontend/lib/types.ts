@@ -1,4 +1,6 @@
 export type StanceValue = "buy" | "neutral" | "sell";
+export type ConfidenceValue = "high" | "medium" | "low";
+export type TimeHorizonValue = "short" | "long" | "unspecified";
 export type VideoStatus =
   | "discovered"
   | "pending"
@@ -18,6 +20,7 @@ export interface ChannelItem {
   id: string;
   title: string;
   thumbnail_url: string;
+  auto_analyze: boolean;
   added_at: string;
   last_refreshed_at: string | null;
   video_counts?: Partial<Record<VideoStatus, number>>;
@@ -34,6 +37,7 @@ export interface FeedStance {
   ticker: string;
   stance: StanceValue;
   summary: string;
+  confidence: ConfidenceValue | null;
 }
 
 export interface FeedItem {
@@ -43,6 +47,7 @@ export interface FeedItem {
   published_at: string;
   status: VideoStatus;
   error_message: string | null;
+  dropped_tickers: string[];
   channel: { id: string; title: string };
   stances: FeedStance[];
 }
@@ -106,11 +111,17 @@ export interface StanceRow {
   published_at: string;
   stance: StanceValue;
   summary: string;
+  confidence: ConfidenceValue | null;
 }
 
 export interface MentionDetail {
   start_seconds: number;
   quote: string;
+  stance: StanceValue;
+  confidence: ConfidenceValue | null;
+  time_horizon: TimeHorizonValue | null;
+  is_conditional: boolean | null;
+  condition: string | null;
   context_before: string | null;
   context_after: string | null;
   youtube_url: string;
@@ -125,6 +136,7 @@ export interface MentionRow {
   published_at: string;
   stance: StanceValue;
   summary: string | null;
+  confidence: ConfidenceValue | null;
   youtube_url: string;
   mentions: MentionDetail[];
 }
@@ -137,6 +149,7 @@ export interface StockListItem {
 export interface TrendingStock {
   ticker: string;
   mention_count: number;
+  score: number;
   last_mentioned_at: string;
 }
 
@@ -199,6 +212,7 @@ export interface ChannelDetailDto extends ChannelItem {
 export interface ChannelVideoItem extends DiscoveredVideo {
   error_message: string | null;
   analyzed_at: string | null;
+  dropped_tickers: string[];
   stances: FeedStance[];
 }
 
@@ -207,4 +221,83 @@ export interface ChannelVideosResponse {
   total: number;
   page: number;
   page_size: number;
+}
+
+export interface AppSettings {
+  auto_refresh_minutes: number;
+}
+
+export interface FlipPoint {
+  video_id: string;
+  video_title: string;
+  stance: StanceValue;
+  summary: string;
+  published_at: string;
+}
+
+export interface FlipItem {
+  channel_id: string;
+  channel_title: string;
+  channel_thumbnail: string;
+  ticker: string;
+  direction: "bullish" | "bearish";
+  is_reversal: boolean;
+  prev: FlipPoint;
+  curr: FlipPoint;
+}
+
+export interface FlipsResponse {
+  window_days: number;
+  items: FlipItem[];
+}
+
+export interface ScorecardHorizonStats {
+  count: number;
+  avg_return: number | null;
+  avg_alpha: number | null;
+  win_rate: number | null;
+}
+
+export interface ScorecardStanceAggregate {
+  total: number;
+  horizons: Record<string, ScorecardHorizonStats>;
+}
+
+export interface ScorecardCall {
+  video_id: string;
+  video_title: string;
+  ticker: string;
+  stance: "buy" | "sell";
+  confidence: ConfidenceValue | null;
+  summary: string;
+  published_at: string;
+  entry_date: string | null;
+  entry_price: number | null;
+  returns: Record<string, number | null>;
+  alpha: Record<string, number | null>;
+  has_data: boolean;
+}
+
+export interface Scorecard {
+  horizons: number[];
+  benchmark: string;
+  aggregates: { buy: ScorecardStanceAggregate; sell: ScorecardStanceAggregate };
+  calls: ScorecardCall[];
+}
+
+export interface LeaderboardItem {
+  channel_id: string;
+  channel_title: string;
+  channel_thumbnail: string;
+  calls_total: number;
+  realized_30d: number;
+  avg_call_alpha_30d: number | null;
+  buy: ScorecardHorizonStats;
+  sell: ScorecardHorizonStats;
+}
+
+export interface LeaderboardResponse {
+  horizon_days: number;
+  benchmark: string;
+  items: LeaderboardItem[];
 }

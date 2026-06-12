@@ -15,12 +15,28 @@
   },
   "Dashboard": {
     "latest": "最新影片",
-    "trending": { "title": "最新被提及" },
+    "trending": { "title": "熱門提及" },
+    "flips": {
+      "title": "立場轉變",
+      "window": "近 {days} 天",
+      "reversal": "多空反轉",
+      "reversalHint": "同一頻道對同一檔股票,從買進直接翻到賣出(或反向)"
+    },
+    "leaderboard": {
+      "title": "頻道準確度排行",
+      "subtitle": "call 後 {days} 天 · 對比 {benchmark}",
+      "channel": "頻道",
+      "avgAlpha": "平均超額報酬",
+      "buyWinRate": "Buy 勝率",
+      "sellWinRate": "Sell 勝率",
+      "calls": "樣本(已實現/全部)"
+    },
     "refresh": {
       "label": "檢查新影片",
       "running": "處理中… {stage}",
       "lastFailed": "上次更新失敗:{message}",
       "triggerFailed": "更新失敗",
+      "autoEvery": "每 {minutes} 分鐘自動更新",
       "stages": {
         "listing": "檢查頻道 {done}/{total}",
         "analyzing": "分析影片 {done}/{total}",
@@ -39,7 +55,15 @@
       "statusPending": "待分析",
       "statusNoMentions": "未提及美股",
       "loadError": "讀取失敗:{message}",
-      "noMore": "已無更多影片"
+      "noMore": "已無更多影片",
+      "noMatch": "沒有符合篩選條件的影片",
+      "dropped": "已忽略:{tickers}",
+      "droppedHint": "模型回報了無法在市場資料中驗證的代號,已自動略過",
+      "filter": {
+        "allChannels": "全部頻道",
+        "allTickers": "全部股票",
+        "allStances": "全部立場"
+      }
     }
   },
   "Channels": {
@@ -63,7 +87,8 @@
       "remove": "移除",
       "removeFailed": "刪除失敗",
       "removePrompt": "移除「{name}」?其影片與分析資料將一併刪除。",
-      "pendingBadge": "{count} 部待挑選"
+      "pendingBadge": "{count} 部待挑選",
+      "autoBadge": "自動分析"
     }
   },
   "Review": {
@@ -82,6 +107,11 @@
   "ChannelDetail": {
     "loadError": "讀取失敗:{message}",
     "added": "加入時間:{date}",
+    "autoAnalyze": {
+      "on": "自動分析:開",
+      "off": "自動分析:關",
+      "hint": "開啟後,這個頻道新發布的影片會自動進入分析,不需手動挑選(初次加入的舊片仍由你挑選)"
+    },
     "stats": {
       "analyzed": "已分析",
       "discovered": "待挑選",
@@ -167,7 +197,27 @@
       "allChannels": "全部頻道"
     },
     "empty": "尚無此股票的提及紀錄。",
-    "loadError": "提及讀取失敗:{message}"
+    "loadError": "提及讀取失敗:{message}",
+    "horizon": { "short": "短線", "long": "長線" },
+    "conditional": "條件單:{condition}"
+  },
+  "Scorecard": {
+    "title": "記分板",
+    "description": "每個 buy/sell call 之後的股價變化,對比 {benchmark}。僅供參考,不構成投資建議。",
+    "loading": "計算中,需抓取歷史股價…",
+    "loadError": "記分板讀取失敗:{message}",
+    "empty": "尚無 buy/sell 立場可評分。",
+    "afterDays": "call 後 {days} 天",
+    "vsBenchmark": "超額 {value}",
+    "winRate": "勝率 {value}",
+    "sampleCount": "{count} 筆",
+    "noData": "無資料",
+    "columns": {
+      "date": "日期",
+      "ticker": "股票",
+      "stance": "立場",
+      "horizon": "{days} 天"
+    }
   },
   "Errors": {
     "priceLoad": "行情讀取失敗:{message}",

@@ -115,7 +115,7 @@ export function MentionsTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-lg font-semibold">{t("title")}</h2>
         <Select
           value={stanceFilter}
@@ -211,12 +211,26 @@ export function MentionsTable({
                       </span>
                     }
                   />
-                  <HoverCardContent className="max-h-96 w-[480px] space-y-4 overflow-y-auto text-sm leading-relaxed">
+                  <HoverCardContent className="max-h-96 w-[min(480px,90vw)] space-y-4 overflow-y-auto text-sm leading-relaxed">
                     {m.mentions.map((d) => (
                       <div key={d.start_seconds}>
-                        <p className="mb-1 font-mono text-xs text-muted-foreground">
+                        <p className="mb-1 flex flex-wrap items-center gap-1.5 font-mono text-xs text-muted-foreground">
                           {formatSeconds(d.start_seconds)}
+                          <StanceBadge
+                            stance={d.stance}
+                            confidence={d.confidence}
+                          />
+                          {d.time_horizon && d.time_horizon !== "unspecified" && (
+                            <span className="rounded border px-1 py-0.5 text-[10px] uppercase">
+                              {t(`horizon.${d.time_horizon}`)}
+                            </span>
+                          )}
                         </p>
+                        {d.is_conditional && d.condition && (
+                          <p className="mb-2 text-xs text-amber-600 dark:text-amber-400">
+                            {t("conditional", { condition: d.condition })}
+                          </p>
+                        )}
                         {d.context_before && (
                           <p className="mb-2 text-muted-foreground">
                             {d.context_before}
@@ -234,7 +248,7 @@ export function MentionsTable({
                 </HoverCard>
               </TableCell>
               <TableCell>
-                <StanceBadge stance={m.stance} />
+                <StanceBadge stance={m.stance} confidence={m.confidence} />
               </TableCell>
               <TableCell className="text-right">
                 <a

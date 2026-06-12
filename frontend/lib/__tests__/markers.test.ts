@@ -12,7 +12,7 @@ function stance(videoId: string, publishedAt: string, s: StanceRow["stance"]): S
   return {
     video_id: videoId, video_title: `title-${videoId}`,
     channel_id: "UC_x", channel_title: "頻道 X",
-    published_at: publishedAt, stance: s, summary: "s",
+    published_at: publishedAt, stance: s, summary: "s", confidence: null,
   };
 }
 
