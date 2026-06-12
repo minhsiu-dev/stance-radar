@@ -61,6 +61,7 @@ class YFinanceMarketClient:
         self._summary_cache = TTLCache(ttl_seconds=900)     # 15 分鐘
         self._candles_cache = TTLCache(ttl_seconds=3600)    # 1 小時
         self._exists_cache = TTLCache(ttl_seconds=86400)    # 1 天
+        self._search_cache = TTLCache(ttl_seconds=300)      # 5 分鐘
 
     async def get_summary(self, ticker: str) -> StockSummary:
         cached = self._summary_cache.get(ticker)
@@ -144,6 +145,34 @@ class YFinanceMarketClient:
         except Exception:  # yfinance 例外型別不穩定,一律視為不存在並留 log
             logger.warning("ticker_exists check failed for %s", ticker, exc_info=True)
             return False
+
+    async def search(self, q: str) -> list[SearchHit]:
+        cached = self._search_cache.get(q)
+        if cached is not None:
+            return cached
+        hits = await asyncio.to_thread(self._fetch_search, q)
+        self._search_cache.set(q, hits)
+        return hits
+
+    def _fetch_search(self, q: str) -> list[SearchHit]:
+        import yfinance as yf
+
+        try:
+            quotes = yf.Search(q, max_results=10).quotes
+        except Exception:
+            logger.warning("search failed for %s", q, exc_info=True)
+            return []
+        out: list[SearchHit] = []
+        for row in quotes or []:
+            symbol = row.get("symbol")
+            if not symbol:
+                continue
+            out.append(SearchHit(
+                ticker=symbol.upper(),
+                name=row.get("shortname") or row.get("longname") or symbol,
+                exchange=row.get("exchange"),
+            ))
+        return out
 
 
 _RANGE_TO_DAYS = {"3m": 65, "6m": 130, "1y": 260, "3y": 780, "5y": 1300}

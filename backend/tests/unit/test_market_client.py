@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 
 from app.market.client import (
     RANGE_TO_PERIOD,
@@ -84,3 +85,25 @@ def test_search_hit_is_frozen():
     hit = SearchHit(ticker="AAPL", name="Apple Inc.", exchange="NASDAQ")
     with pytest.raises(Exception):
         hit.ticker = "X"  # type: ignore[misc]
+
+
+@pytest.mark.asyncio
+async def test_yfinance_search_maps_quotes():
+    client = YFinanceMarketClient()
+    fake = type("S", (), {"quotes": [
+        {"symbol": "AAPL", "shortname": "Apple Inc.", "exchange": "NMS"},
+        {"symbol": None, "shortname": "garbage"},
+    ]})
+    with patch("yfinance.Search", return_value=fake):
+        hits = await client.search("apple")
+    assert len(hits) == 1
+    assert hits[0].ticker == "AAPL"
+    assert hits[0].name == "Apple Inc."
+
+
+@pytest.mark.asyncio
+async def test_yfinance_search_handles_upstream_exception():
+    client = YFinanceMarketClient()
+    with patch("yfinance.Search", side_effect=RuntimeError("rate limit")):
+        hits = await client.search("apple")
+    assert hits == []
