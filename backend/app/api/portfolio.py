@@ -14,7 +14,7 @@ from app.api.deps import get_market, get_price_store, get_session
 from app.envelope import fail, ok
 from app.market.client import MarketClient
 from app.market.store import PriceStore
-from app.models import PortfolioTransaction, TransactionSide
+from app.models import PortfolioTransaction, TransactionSide, utcnow
 from app.portfolio.holdings import Holding, InvalidTransaction, replay
 from app.portfolio.performance import (
     PERFORMANCE_RANGES, change_percent, normalize, portfolio_values,
@@ -84,6 +84,9 @@ async def add_transaction(
         ticker=ticker, side=TransactionSide(body.side),
         shares=body.shares, price=body.price,
         executed_on=body.executed_on, note=body.note,
+        # column default 要到 INSERT 才生效;驗證階段的 replay 排序需要實值,
+        # 否則與同日既有交易比較會 TypeError(None < datetime)
+        created_at=utcnow(),
     )
     existing = await _all_transactions(session)
     try:

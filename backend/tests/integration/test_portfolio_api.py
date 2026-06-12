@@ -121,3 +121,17 @@ async def test_one_day_change_treats_missing_change_as_flat(api):
     data = resp.json()["data"]
     # change=None 視為 0 → 組合 1d 變化 0%
     assert data["portfolio"]["change_percent"] == 0.0
+
+
+async def test_same_day_transactions_do_not_crash_validation(api):
+    """回歸:候選交易的 created_at 在驗證時還是 None(column default 要到
+    INSERT 才生效),與既有同日交易排序比較會 TypeError → 500。"""
+    app, client = api
+    assert (await add_tx(client, ticker="QQQ", executed_on="2026-01-01")).status_code == 200
+    resp = await add_tx(client, ticker="VOO", executed_on="2026-01-01")
+    assert resp.status_code == 200 and resp.json()["success"]
+    # 同日買後賣(依 created_at 排序在後)也要能過驗證
+    resp = await add_tx(
+        client, ticker="VOO", side="sell", shares=5, executed_on="2026-01-01"
+    )
+    assert resp.status_code == 200 and resp.json()["success"]
