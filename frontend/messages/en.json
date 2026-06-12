@@ -104,11 +104,10 @@
     "columns": {
       "date": "Date",
       "channel": "Channel",
-      "video": "Video",
       "timestamp": "Timestamp",
       "quote": "Quote",
       "stance": "Stance",
-      "reasoning": "Reasoning"
+      "open": "Open"
     },
     "filter": {
       "stance": "Stance",
@@ -117,7 +116,6 @@
       "allStances": "All stances",
       "allChannels": "All channels"
     },
-    "openHint": "Click to open at this timestamp on YouTube",
     "empty": "No mentions recorded for this stock yet.",
     "loadError": "Failed to load mentions: {message}"
   },
