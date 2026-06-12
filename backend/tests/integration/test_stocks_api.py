@@ -1,3 +1,5 @@
+import pytest
+
 from tests.conftest import wait_refresh
 
 
@@ -93,3 +95,33 @@ async def test_search_rejects_whitespace_query(api):
     app, client = api
     resp = await client.get("/api/stocks/search?q=%20%20")
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_financials_quarterly_returns_8(api):
+    _, client = api
+    res = await client.get("/api/stocks/AAPL/financials?period=quarterly")
+    assert res.status_code == 200
+    assert len(res.json()["data"]) == 8
+
+
+@pytest.mark.asyncio
+async def test_financials_annual_returns_5(api):
+    _, client = api
+    res = await client.get("/api/stocks/AAPL/financials?period=annual")
+    assert res.status_code == 200
+    assert len(res.json()["data"]) == 5
+
+
+@pytest.mark.asyncio
+async def test_financials_rejects_bad_period(api):
+    _, client = api
+    res = await client.get("/api/stocks/AAPL/financials?period=monthly")
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_financials_unknown_ticker(api):
+    _, client = api
+    res = await client.get("/api/stocks/ZZZZ/financials?period=annual")
+    assert res.status_code == 404
