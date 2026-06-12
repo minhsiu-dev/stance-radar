@@ -68,3 +68,26 @@ async def test_delete_channel_cascades(session):
     for model in (Video, Mention, VideoStance):
         count = (await session.execute(select(func.count()).select_from(model))).scalar_one()
         assert count == 0, f"{model.__name__} 應被 DB-level cascade 刪除"
+
+
+async def test_mention_persists_context_columns(sessionmaker):
+    from sqlalchemy import select
+    from app.models import Channel, Mention, Stance, Video, VideoStatus, utcnow
+
+    async with sessionmaker() as s:
+        s.add(Channel(id="c1", title="ch", thumbnail_url="", uploads_playlist_id="UU"))
+        s.add(Video(
+            id="v1", channel_id="c1", title="t",
+            published_at=utcnow(), thumbnail_url="", duration_seconds=60,
+            status=VideoStatus.analyzed,
+        ))
+        s.add(Mention(
+            video_id="v1", ticker="AAPL", start_seconds=10.0,
+            quote="蘋果這季很強", stance=Stance.buy, reasoning="財報優於預期",
+            context_before="先講一下個股", context_after="總之我會繼續持有",
+        ))
+        await s.commit()
+    async with sessionmaker() as s:
+        row = (await s.execute(select(Mention))).scalar_one()
+        assert row.context_before == "先講一下個股"
+        assert row.context_after == "總之我會繼續持有"
