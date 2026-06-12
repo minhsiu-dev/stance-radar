@@ -17,15 +17,16 @@
     "latest": "最新影片",
     "trending": { "title": "最新被提及" },
     "refresh": {
-      "label": "更新",
-      "running": "更新中… {stage}",
+      "label": "檢查新影片",
+      "running": "處理中… {stage}",
       "lastFailed": "上次更新失敗:{message}",
       "triggerFailed": "更新失敗",
       "stages": {
-        "listing": "頻道 {done}/{total}",
-        "analyzing": "影片 {done}/{total}",
+        "listing": "檢查頻道 {done}/{total}",
+        "analyzing": "分析影片 {done}/{total}",
         "preparing": "準備中…"
-      }
+      },
+      "noNew": "沒有發現新影片"
     },
     "empty": {
       "prompt": "還沒有任何影片。先到",
@@ -50,7 +51,7 @@
       "submitting": "新增中…",
       "addSuccess": "新增成功",
       "alreadyExists": "已存在",
-      "autoFetch": "已自動開始抓取影片",
+      "autoFetch": "已開始檢查新影片…",
       "failedGeneric": "新增失敗",
       "added": "已加入 {names}",
       "skipped": "已存在:{names}"
@@ -61,7 +62,56 @@
       "neverUpdated": "尚未更新",
       "remove": "移除",
       "removeFailed": "刪除失敗",
-      "removePrompt": "移除「{name}」?其影片與分析資料將一併刪除。"
+      "removePrompt": "移除「{name}」?其影片與分析資料將一併刪除。",
+      "pendingBadge": "{count} 部待挑選"
+    }
+  },
+  "Review": {
+    "title": "挑選要分析的影片",
+    "description": "勾選的影片會進行分析;未勾選的會標為略過,之後隨時可在頻道頁反悔重新分析。",
+    "selectAll": "全選",
+    "deselectAll": "全不選",
+    "confirm": "開始分析 ({count})",
+    "confirming": "送出中…",
+    "confirmFailed": "送出失敗",
+    "empty": "沒有待挑選的影片。",
+    "loadError": "讀取失敗:{message}",
+    "banner": "{count} 部影片待挑選",
+    "bannerCta": "前往挑選"
+  },
+  "ChannelDetail": {
+    "loadError": "讀取失敗:{message}",
+    "added": "加入時間:{date}",
+    "stats": {
+      "analyzed": "已分析",
+      "discovered": "待挑選",
+      "skipped": "已略過",
+      "failed": "分析失敗",
+      "no_transcript": "無字幕",
+      "pending": "排隊中",
+      "topTickers": "最常提及股票",
+      "noTickers": "尚無提及紀錄"
+    },
+    "videos": {
+      "title": "影片",
+      "filterAll": "全部狀態",
+      "selectedCount": "已選 {count} 部",
+      "analyzeSelected": "分析選取",
+      "skipSelected": "略過選取",
+      "analyze": "分析",
+      "retry": "重試",
+      "skip": "略過",
+      "empty": "沒有影片。",
+      "actionFailed": "操作失敗:{message}",
+      "queued": "已排入分析佇列",
+      "status": {
+        "discovered": "待挑選",
+        "pending": "排隊中",
+        "analyzed": "已分析",
+        "no_transcript": "無字幕",
+        "failed": "分析失敗",
+        "skipped": "已略過"
+      }
     }
   },
   "Stock": {
