@@ -78,6 +78,9 @@ class MarketClient(Protocol):
     async def get_financials(
         self, ticker: str, period: Literal["quarterly", "annual"]
     ) -> list[FinancialReport]: ...
+    async def get_daily_history(
+        self, tickers: list[str], start: date, end: date
+    ) -> dict[str, list[Candle]]: ...
 
 
 class YFinanceMarketClient:
@@ -86,7 +89,7 @@ class YFinanceMarketClient:
         self._candles_cache = TTLCache(ttl_seconds=3600)    # 1 小時
         self._exists_cache = TTLCache(ttl_seconds=86400)    # 1 天
         self._search_cache = TTLCache(ttl_seconds=300)      # 5 分鐘
-        self._financials_cache = TTLCache(ttl_seconds=3600) # 1 小時
+        self._financials_cache = TTLCache(ttl_seconds=86400) # 24 小時,財報一季才變一次
 
     async def get_summary(self, ticker: str) -> StockSummary:
         cached = self._summary_cache.get(ticker)
@@ -256,6 +259,50 @@ class YFinanceMarketClient:
         reports.sort(key=lambda r: r.period_end)
         return reports
 
+    async def get_daily_history(
+        self, tickers: list[str], start: date, end: date
+    ) -> dict[str, list[Candle]]:
+        """多檔日 K 一次 HTTP 抓回(PriceStore 增量補抓用),不走 cache——
+        呼叫端(PriceStore)自己以 DB 為準。"""
+        return await asyncio.to_thread(self._fetch_daily_history, tickers, start, end)
+
+    def _fetch_daily_history(
+        self, tickers: list[str], start: date, end: date
+    ) -> dict[str, list[Candle]]:
+        import yfinance as yf
+
+        out: dict[str, list[Candle]] = {t: [] for t in tickers}
+        df = yf.download(
+            tickers=" ".join(tickers),
+            start=start.isoformat(),
+            end=(end + timedelta(days=1)).isoformat(),  # yf 的 end 是開區間
+            interval="1d",
+            auto_adjust=True,
+            group_by="ticker",
+            progress=False,
+            threads=False,
+        )
+        if df is None or df.empty:
+            return out
+        for t in tickers:
+            try:
+                sub = df[t] if len(tickers) > 1 else df
+            except KeyError:
+                continue
+            sub = sub.dropna(subset=["Close"])
+            out[t] = [
+                Candle(
+                    time=idx.strftime("%Y-%m-%d"),
+                    open=round(float(row.Open), 4),
+                    high=round(float(row.High), 4),
+                    low=round(float(row.Low), 4),
+                    close=round(float(row.Close), 4),
+                    volume=int(row.Volume),
+                )
+                for idx, row in zip(sub.index, sub.itertuples())
+            ]
+        return out
+
 
 _RANGE_TO_DAYS = {"1m": 22, "3m": 65, "6m": 130, "ytd": 110, "1y": 260, "3y": 780, "5y": 1300}
 _FAKE_END_DATE = date(2026, 6, 10)
@@ -265,7 +312,14 @@ _FAKE_END_EPOCH = 1_780_000_000  # arbitrary deterministic epoch for fake intrad
 class FakeMarketClient:
     """確定性假資料,測試與 USE_FAKE_ADAPTERS=true 模式使用。"""
 
-    KNOWN = {"AAPL": "Apple Inc.", "NVDA": "NVIDIA Corporation", "TSLA": "Tesla, Inc."}
+    KNOWN = {
+        "AAPL": "Apple Inc.",
+        "NVDA": "NVIDIA Corporation",
+        "TSLA": "Tesla, Inc.",
+        "VOO": "Vanguard S&P 500 ETF",
+        "QQQ": "Invesco QQQ Trust",
+        "SPY": "SPDR S&P 500 ETF Trust",
+    }
 
     async def ticker_exists(self, ticker: str) -> bool:
         return ticker in self.KNOWN
@@ -363,4 +417,29 @@ class FakeMarketClient:
                 pretax_income=pretax,
                 net_income=net,
             ))
+        return out
+
+    async def get_daily_history(
+        self, tickers: list[str], start: date, end: date
+    ) -> dict[str, list[Candle]]:
+        out: dict[str, list[Candle]] = {}
+        for ticker in tickers:
+            if ticker not in self.KNOWN:
+                out[ticker] = []
+                continue
+            base = float(100 + sum(ord(c) for c in ticker) % 150)
+            candles: list[Candle] = []
+            d = start
+            while d <= end:
+                if d.weekday() < 5:
+                    # 以 toordinal 為相位:同一天的價格與抓取視窗無關 → 增量補抓可比對
+                    close = round(base + 10 * math.sin(d.toordinal() / 10), 2)
+                    candles.append(Candle(
+                        time=d.isoformat(),
+                        open=round(close - 0.5, 2), high=round(close + 1.0, 2),
+                        low=round(close - 1.0, 2), close=close,
+                        volume=1_000_000 + d.toordinal() % 1000,
+                    ))
+                d += timedelta(days=1)
+            out[ticker] = candles
         return out
