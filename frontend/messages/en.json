@@ -1,0 +1,82 @@
+{
+  "Nav": {
+    "brand": "Stance Radar",
+    "dashboard": "Dashboard",
+    "channels": "Channels"
+  },
+  "Search": {
+    "trigger": "Search…",
+    "placeholder": "Search ticker or company…",
+    "mentioned": "Mentioned by your channels",
+    "all": "All stocks",
+    "recent": "Recent",
+    "empty": "No results. Try a ticker like AAPL.",
+    "fallback": "Network error, showing mentioned only"
+  },
+  "Dashboard": {
+    "latest": "Latest videos",
+    "refresh": "Refresh"
+  },
+  "Channels": {
+    "title": "Channel management"
+  },
+  "Stock": {
+    "header": {
+      "marketCap": "Market cap",
+      "peRatio": "P/E (TTM)",
+      "eps": "EPS (TTM)",
+      "week52Range": "52w range",
+      "volume": "Volume",
+      "dividendYield": "Dividend yield"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "mentions": "Mentions",
+      "financials": "Financials"
+    },
+    "overview": {
+      "latestQuarter": "Latest quarter",
+      "ytStance": "YouTube stance (last {days}d)",
+      "revenue": "Revenue",
+      "netIncome": "Net income",
+      "eps": "EPS"
+    },
+    "financials": {
+      "quarterly": "Quarterly",
+      "annual": "Annual",
+      "totalRevenue": "Total revenue",
+      "grossProfit": "Gross profit",
+      "operatingIncome": "Operating income",
+      "pretaxIncome": "Pretax income",
+      "netIncome": "Net income"
+    },
+    "stance": { "buy": "Buy", "sell": "Sell", "neutral": "Neutral" }
+  },
+  "Mentions": {
+    "title": "All mentions",
+    "columns": {
+      "date": "Date",
+      "channel": "Channel",
+      "video": "Video",
+      "timestamp": "Timestamp",
+      "quote": "Quote",
+      "stance": "Stance",
+      "reasoning": "Reasoning"
+    },
+    "filter": {
+      "stance": "Stance",
+      "channel": "Channel",
+      "all": "All"
+    },
+    "openHint": "Click to open at this timestamp on YouTube",
+    "empty": "No mentions recorded for this stock yet."
+  },
+  "Errors": {
+    "priceLoad": "Failed to load price data: {message}",
+    "mentionsLoad": "Failed to load mentions: {message}",
+    "candlesLoad": "Failed to load candles: {message}",
+    "summaryLoad": "Failed to load summary: {message}",
+    "financialsLoad": "Failed to load financials: {message}",
+    "searchUnavailable": "Search is temporarily unavailable"
+  }
+}

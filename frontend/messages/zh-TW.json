@@ -1,0 +1,82 @@
+{
+  "Nav": {
+    "brand": "Stance Radar",
+    "dashboard": "首頁",
+    "channels": "頻道管理"
+  },
+  "Search": {
+    "trigger": "搜尋…",
+    "placeholder": "搜尋股票代號或公司名…",
+    "mentioned": "已被你的頻道提及",
+    "all": "全部股票",
+    "recent": "最近瀏覽",
+    "empty": "查無結果，試試輸入 AAPL 之類的代號。",
+    "fallback": "搜尋暫時無法使用,僅顯示已提及"
+  },
+  "Dashboard": {
+    "latest": "最新影片",
+    "refresh": "重新整理"
+  },
+  "Channels": {
+    "title": "頻道管理"
+  },
+  "Stock": {
+    "header": {
+      "marketCap": "市值",
+      "peRatio": "本益比 (TTM)",
+      "eps": "EPS (TTM)",
+      "week52Range": "52 週區間",
+      "volume": "成交量",
+      "dividendYield": "殖利率"
+    },
+    "tabs": {
+      "overview": "總覽",
+      "mentions": "逐筆提及",
+      "financials": "財報"
+    },
+    "overview": {
+      "latestQuarter": "最近一季",
+      "ytStance": "YouTube 立場 (近 {days} 天)",
+      "revenue": "營收",
+      "netIncome": "淨利",
+      "eps": "EPS"
+    },
+    "financials": {
+      "quarterly": "季報",
+      "annual": "年報",
+      "totalRevenue": "總營收",
+      "grossProfit": "毛利",
+      "operatingIncome": "營業利益",
+      "pretaxIncome": "稅前淨利",
+      "netIncome": "淨利"
+    },
+    "stance": { "buy": "Buy", "sell": "Sell", "neutral": "Neutral" }
+  },
+  "Mentions": {
+    "title": "逐筆提及",
+    "columns": {
+      "date": "日期",
+      "channel": "頻道",
+      "video": "影片",
+      "timestamp": "時間點",
+      "quote": "原句",
+      "stance": "立場",
+      "reasoning": "理由"
+    },
+    "filter": {
+      "stance": "立場",
+      "channel": "頻道",
+      "all": "全部"
+    },
+    "openHint": "點擊在 YouTube 開啟此秒數",
+    "empty": "尚無此股票的提及紀錄。"
+  },
+  "Errors": {
+    "priceLoad": "行情讀取失敗:{message}",
+    "mentionsLoad": "提及讀取失敗:{message}",
+    "candlesLoad": "K 線讀取失敗:{message}",
+    "summaryLoad": "摘要讀取失敗:{message}",
+    "financialsLoad": "財報讀取失敗:{message}",
+    "searchUnavailable": "搜尋暫時無法使用"
+  }
+}
