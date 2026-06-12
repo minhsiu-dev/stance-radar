@@ -1,4 +1,6 @@
 import asyncio
+import json
+import logging
 from collections import Counter
 from typing import Awaitable, Callable, Protocol
 
@@ -10,6 +12,12 @@ from app.analysis.types import (
     StanceResult,
 )
 from app.transcripts.client import Transcript
+
+logger = logging.getLogger(__name__)
+
+SubprocessRunner = Callable[
+    [list[str], bytes], Awaitable[tuple[int, bytes, bytes]]
+]
 
 
 class AnalysisError(Exception):
@@ -57,7 +65,7 @@ def _fill_missing_stances(
         ticker_mentions = [m for m in mentions if m.ticker == ticker]
         counts = Counter(m.stance for m in ticker_mentions)
         top = counts.most_common()
-        # 多數決;平手 → neutral
+        # majority vote; tie → neutral
         stance = top[0][0] if len(top) == 1 or top[0][1] > top[1][1] else "neutral"
         filled.append(StanceResult(
             ticker=ticker, stance=stance, summary=ticker_mentions[0].reasoning
@@ -65,21 +73,22 @@ def _fill_missing_stances(
     return tuple(filled)
 
 
-def parse_analysis_response(response) -> AnalysisResult:
-    tool_block = next(
-        (
-            block
-            for block in response.content
-            if getattr(block, "type", None) == "tool_use"
-            and getattr(block, "name", None) == "record_analysis"
-        ),
-        None,
-    )
-    if tool_block is None:
-        raise AnalysisError("response has no record_analysis tool_use block")
-    payload = tool_block.input
+def _strip_code_fences(text: str) -> str:
+    """Some models wrap JSON in ```json ... ``` fences despite the instruction not to."""
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.splitlines()
+    if lines and lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
+
+
+def parse_analysis_payload(payload: dict) -> AnalysisResult:
     if not isinstance(payload, dict):
-        raise AnalysisError(f"tool input is not a dict: {payload!r}")
+        raise AnalysisError(f"payload is not a JSON object: {payload!r}")
     mentions = tuple(_parse_mention(m) for m in payload.get("mentions", []))
     stances = tuple(_parse_stance(s) for s in payload.get("stances", []))
     return AnalysisResult(
@@ -87,37 +96,101 @@ def parse_analysis_response(response) -> AnalysisResult:
     )
 
 
-class ClaudeLLMClient:
+def parse_cli_stdout(stdout: bytes) -> AnalysisResult:
+    """Parse `claude -p --output-format json` stdout into AnalysisResult.
+
+    The CLI wraps the model's text in `{"type": "result", "result": "..."}`. The
+    model's text is the JSON payload we asked for (possibly wrapped in code fences).
+    """
+    try:
+        wrapper = json.loads(stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AnalysisError(f"claude stdout is not JSON: {stdout[:300]!r}") from exc
+
+    if isinstance(wrapper, dict) and "result" in wrapper:
+        body = wrapper["result"]
+    else:
+        # Fallback: maybe the user passed --output-format text or piped raw.
+        body = wrapper if isinstance(wrapper, (dict, list)) else stdout.decode("utf-8")
+
+    if isinstance(body, str):
+        cleaned = _strip_code_fences(body)
+        try:
+            body = json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            raise AnalysisError(
+                f"claude result text is not valid JSON: {cleaned[:300]!r}"
+            ) from exc
+
+    return parse_analysis_payload(body)
+
+
+def _schema_hint() -> str:
+    schema = json.dumps(ANALYSIS_TOOL["input_schema"], ensure_ascii=False)
+    return (
+        "請只回一個 JSON 物件,符合下列 schema,不要任何 markdown 包裝、不要任何前後說明:\n"
+        f"{schema}\n"
+    )
+
+
+async def _default_runner(args: list[str], stdin_data: bytes) -> tuple[int, bytes, bytes]:
+    proc = await asyncio.create_subprocess_exec(
+        *args,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate(stdin_data)
+    return proc.returncode, stdout, stderr
+
+
+class ClaudeCLIClient:
+    """Wraps `claude -p` (Claude Code CLI in non-interactive mode).
+
+    Uses the user's local Claude Code authentication; no API key required.
+    """
+
     def __init__(
         self,
-        api_key: str,
+        *,
+        binary: str = "claude",
         model: str,
         max_retries: int = 3,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        runner: SubprocessRunner | None = None,
     ) -> None:
-        from anthropic import AsyncAnthropic
-
-        self._client = AsyncAnthropic(api_key=api_key, max_retries=0)
+        self._binary = binary
         self._model = model
         self._max_retries = max_retries
         self._sleep = sleep
+        self._run = runner or _default_runner
+
+    def _args(self) -> list[str]:
+        return [
+            self._binary,
+            "-p",
+            "--output-format", "json",
+            "--model", self._model,
+        ]
+
+    def _stdin_payload(self, video_title: str, transcript: Transcript) -> bytes:
+        user_prompt = build_user_prompt(video_title, transcript.segments)
+        full = f"{SYSTEM_PROMPT}\n\n{user_prompt}\n\n{_schema_hint()}"
+        return full.encode("utf-8")
 
     async def analyze(
         self, *, video_id: str, video_title: str, transcript: Transcript
     ) -> AnalysisResult:
-        prompt = build_user_prompt(video_title, transcript.segments)
+        stdin_payload = self._stdin_payload(video_title, transcript)
         last_error: Exception | None = None
         for attempt in range(self._max_retries):
             try:
-                response = await self._client.messages.create(
-                    model=self._model,
-                    max_tokens=4096,
-                    system=SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": prompt}],
-                    tools=[ANALYSIS_TOOL],
-                    tool_choice={"type": "tool", "name": "record_analysis"},
-                )
-                return parse_analysis_response(response)
+                code, stdout, stderr = await self._run(self._args(), stdin_payload)
+                if code != 0:
+                    raise AnalysisError(
+                        f"claude exited {code}: {stderr.decode('utf-8', 'replace')[:300]}"
+                    )
+                return parse_cli_stdout(stdout)
             except Exception as exc:
                 last_error = exc
                 if attempt < self._max_retries - 1:
@@ -163,7 +236,7 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
 
 
 class FakeLLMClient:
-    """確定性假資料,與 FakeTranscriptClient/FakeYouTubeClient 的影片 id 對齊。"""
+    """Deterministic seeded results aligned with FakeTranscriptClient / FakeYouTubeClient."""
 
     async def analyze(
         self, *, video_id: str, video_title: str, transcript: Transcript
