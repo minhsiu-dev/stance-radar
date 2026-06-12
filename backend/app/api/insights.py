@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_market, get_session
+from app.api.deps import get_price_store, get_session
 from app.envelope import fail, ok
 from app.insights.flips import StancePoint, detect_flips
 from app.insights.scorecard import build_scorecard
-from app.market.client import MarketClient
+from app.market.store import PriceStore
 from app.models import Channel, Stance, Video, VideoStance
 
 router = APIRouter(prefix="/api")
@@ -107,20 +107,20 @@ async def _channel_calls(session: AsyncSession, channel_id: str) -> list[dict]:
 async def channel_scorecard(
     channel_id: str,
     session: AsyncSession = Depends(get_session),
-    market: MarketClient = Depends(get_market),
+    store: PriceStore = Depends(get_price_store),
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
         return fail(f"頻道 {channel_id} 不存在", status_code=404)
     calls = await _channel_calls(session, channel_id)
-    scorecard = await build_scorecard(market, calls)
+    scorecard = await build_scorecard(store, calls)
     return ok(scorecard)
 
 
 @router.get("/insights/leaderboard")
 async def channel_leaderboard(
     session: AsyncSession = Depends(get_session),
-    market: MarketClient = Depends(get_market),
+    store: PriceStore = Depends(get_price_store),
 ):
     """所有頻道的 30 天 call 表現排行(已實現的 buy/sell call 加總)。"""
     channels = (await session.execute(select(Channel))).scalars().all()
@@ -130,7 +130,7 @@ async def channel_leaderboard(
         calls = await _channel_calls(session, channel.id)
         if not calls:
             continue
-        scorecard = await build_scorecard(market, calls)
+        scorecard = await build_scorecard(store, calls)
         aggregates = scorecard["aggregates"]
         # 單一排序指標:照他的話做(buy 做多、sell 視為避開),30 天平均 alpha
         signed: list[float] = []
