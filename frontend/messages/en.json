@@ -237,12 +237,52 @@
       "horizon": "{days}d"
     }
   },
+  "Portfolio": {
+    "title": "Portfolio",
+    "totals": {
+      "marketValue": "Market value",
+      "costBasis": "Cost basis",
+      "unrealizedPl": "Unrealized P/L"
+    },
+    "chart": {
+      "title": "Portfolio vs VOO / QQQ (start = 100)",
+      "portfolioSeries": "My portfolio",
+      "noData": "Not enough price data yet"
+    },
+    "holdings": {
+      "title": "Holdings",
+      "ticker": "Ticker",
+      "shares": "Shares",
+      "avgCost": "Avg cost",
+      "price": "Price",
+      "marketValue": "Value",
+      "pl": "P/L",
+      "weight": "Weight",
+      "empty": "No holdings yet — add a transaction below"
+    },
+    "transactions": {
+      "title": "Transactions",
+      "add": "Add",
+      "buy": "Buy",
+      "sell": "Sell",
+      "shares": "Shares",
+      "price": "Price",
+      "dateLabel": "Date",
+      "note": "Note (optional)",
+      "tickerPlaceholder": "Ticker, e.g. AAPL",
+      "delete": "Delete",
+      "empty": "No transactions yet",
+      "addFailed": "Add failed: {message}",
+      "deleteFailed": "Delete failed: {message}"
+    }
+  },
   "Errors": {
     "priceLoad": "Failed to load price data: {message}",
     "mentionsLoad": "Failed to load mentions: {message}",
     "candlesLoad": "Failed to load candles: {message}",
     "summaryLoad": "Failed to load summary: {message}",
     "financialsLoad": "Failed to load financials: {message}",
+    "performanceLoad": "Failed to load performance: {message}",
     "searchUnavailable": "Search is temporarily unavailable"
   }
 }
