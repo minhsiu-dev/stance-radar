@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import {
   Tabs,
@@ -12,7 +13,11 @@ import { PriceChart } from "@/components/price-chart";
 import { StockHeader } from "@/components/stock-header";
 import { OverviewTab } from "@/components/overview-tab";
 import { MentionsTab } from "@/components/mentions-tab";
-import { FinancialsTab } from "@/components/financials-tab";
+
+const FinancialsTab = dynamic(
+  () => import("@/components/financials-tab").then((m) => m.FinancialsTab),
+  { ssr: false },
+);
 
 export function StockView({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.tabs");
