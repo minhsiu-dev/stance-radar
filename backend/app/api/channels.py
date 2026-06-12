@@ -38,6 +38,7 @@ def channel_to_dict(channel: Channel) -> dict:
         "id": channel.id,
         "title": channel.title,
         "thumbnail_url": channel.thumbnail_url,
+        "auto_analyze": channel.auto_analyze,
         "added_at": channel.added_at.isoformat(),
         "last_refreshed_at": (
             channel.last_refreshed_at.isoformat() if channel.last_refreshed_at else None
@@ -200,14 +201,38 @@ async def channel_videos(
             "status": v.status.value,
             "error_message": v.error_message,
             "analyzed_at": v.analyzed_at.isoformat() if v.analyzed_at else None,
+            "dropped_tickers": v.dropped_tickers or [],
             "stances": [
-                {"ticker": s.ticker, "stance": s.stance.value, "summary": s.summary}
+                {
+                    "ticker": s.ticker,
+                    "stance": s.stance.value,
+                    "summary": s.summary,
+                    "confidence": s.confidence,
+                }
                 for s in sorted(v.stances, key=lambda s: s.ticker)
             ],
         }
         for v in videos
     ]
     return ok({"items": items, "total": total, "page": page, "page_size": page_size})
+
+
+class UpdateChannelRequest(BaseModel):
+    auto_analyze: bool
+
+
+@router.patch("/{channel_id}")
+async def update_channel(
+    channel_id: str,
+    body: UpdateChannelRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    channel = await session.get(Channel, channel_id)
+    if channel is None:
+        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+    channel.auto_analyze = body.auto_analyze
+    await session.commit()
+    return ok(channel_to_dict(channel))
 
 
 @router.delete("/{channel_id}")
