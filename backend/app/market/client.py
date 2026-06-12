@@ -3,7 +3,7 @@ import logging
 import math
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Protocol
+from typing import Literal, Protocol
 
 from app.market.cache import TTLCache
 
@@ -49,11 +49,24 @@ class SearchHit:
     exchange: str | None
 
 
+@dataclass(frozen=True)
+class FinancialReport:
+    period_end: str
+    total_revenue: float | None
+    gross_profit: float | None
+    operating_income: float | None
+    pretax_income: float | None
+    net_income: float | None
+
+
 class MarketClient(Protocol):
     async def get_summary(self, ticker: str) -> StockSummary: ...
     async def get_candles(self, ticker: str, range_key: str) -> list[Candle]: ...
     async def ticker_exists(self, ticker: str) -> bool: ...
     async def search(self, q: str) -> list[SearchHit]: ...
+    async def get_financials(
+        self, ticker: str, period: Literal["quarterly", "annual"]
+    ) -> list[FinancialReport]: ...
 
 
 class YFinanceMarketClient:
@@ -230,3 +243,34 @@ class FakeMarketClient:
             for t, n in self.KNOWN.items()
             if qu in t or qu in n.upper()
         ]
+
+    async def get_financials(
+        self, ticker: str, period: Literal["quarterly", "annual"]
+    ) -> list[FinancialReport]:
+        if ticker not in self.KNOWN:
+            raise StockNotFound(ticker)
+        n = 8 if period == "quarterly" else 5
+        base = float(50 + sum(ord(c) for c in ticker) % 100) * 1e9
+        out: list[FinancialReport] = []
+        for i in range(n):
+            scale = 1 + i * 0.05  # +5% per period
+            revenue = round(base * scale, 2)
+            gross = round(revenue * 0.42, 2)
+            op = round(revenue * 0.28, 2)
+            pretax = round(revenue * 0.26, 2)
+            net = round(revenue * 0.22, 2)
+            if period == "quarterly":
+                year = 2024 + i // 4
+                month = ((i % 4) + 1) * 3
+                period_end = f"{year}-{month:02d}-28"
+            else:
+                period_end = f"{2020 + i}-12-31"
+            out.append(FinancialReport(
+                period_end=period_end,
+                total_revenue=revenue,
+                gross_profit=gross,
+                operating_income=op,
+                pretax_income=pretax,
+                net_income=net,
+            ))
+        return out

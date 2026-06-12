@@ -5,6 +5,7 @@ from app.market.client import (
     RANGE_TO_PERIOD,
     Candle,
     FakeMarketClient,
+    FinancialReport,
     SearchHit,
     StockNotFound,
     StockSummary,
@@ -107,3 +108,37 @@ async def test_yfinance_search_handles_upstream_exception():
     with patch("yfinance.Search", side_effect=RuntimeError("rate limit")):
         hits = await client.search("apple")
     assert hits == []
+
+
+@pytest.mark.asyncio
+async def test_fake_financials_quarterly_returns_8():
+    client = FakeMarketClient()
+    reports = await client.get_financials("AAPL", "quarterly")
+    assert len(reports) == 8
+    assert reports[0].period_end < reports[-1].period_end
+
+
+@pytest.mark.asyncio
+async def test_fake_financials_annual_returns_5():
+    client = FakeMarketClient()
+    reports = await client.get_financials("AAPL", "annual")
+    assert len(reports) == 5
+
+
+@pytest.mark.asyncio
+async def test_fake_financials_metrics_present():
+    client = FakeMarketClient()
+    reports = await client.get_financials("AAPL", "quarterly")
+    sample = reports[-1]
+    assert sample.total_revenue is not None
+    assert sample.net_income is not None
+    assert sample.gross_profit is not None
+    assert sample.operating_income is not None
+    assert sample.pretax_income is not None
+
+
+@pytest.mark.asyncio
+async def test_fake_financials_unknown_ticker():
+    client = FakeMarketClient()
+    with pytest.raises(StockNotFound):
+        await client.get_financials("ZZZZ", "quarterly")
