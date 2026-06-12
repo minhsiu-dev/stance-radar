@@ -20,3 +20,6 @@ dist/
 # e2e
 e2e/test-results/
 e2e/playwright-report/
+
+# dev scripts
+backend/setup_dev.sh
