@@ -8,7 +8,13 @@ async def seed(api) -> tuple:
     await client.post(
         "/api/channels", json={"channel_ids": "UC_fake_alpha UC_fake_beta"}
     )
-    await wait_refresh(app)
+    await wait_refresh(app)  # discover
+    discovered = (await client.get(
+        "/api/videos", params={"status": "discovered"}
+    )).json()["data"]
+    video_ids = [v["id"] for g in discovered["groups"] for v in g["videos"]]
+    await client.post("/api/videos/analyze", json={"video_ids": video_ids})
+    await wait_refresh(app)  # analyze
     return app, client
 
 
