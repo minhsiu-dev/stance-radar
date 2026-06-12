@@ -42,10 +42,18 @@ class Candle:
     volume: int
 
 
+@dataclass(frozen=True)
+class SearchHit:
+    ticker: str
+    name: str
+    exchange: str | None
+
+
 class MarketClient(Protocol):
     async def get_summary(self, ticker: str) -> StockSummary: ...
     async def get_candles(self, ticker: str, range_key: str) -> list[Candle]: ...
     async def ticker_exists(self, ticker: str) -> bool: ...
+    async def search(self, q: str) -> list[SearchHit]: ...
 
 
 class YFinanceMarketClient:
@@ -185,3 +193,11 @@ class FakeMarketClient:
                 low=round(close - 1.0, 2), close=close, volume=1_000_000 + i,
             ))
         return candles
+
+    async def search(self, q: str) -> list[SearchHit]:
+        qu = q.upper()
+        return [
+            SearchHit(ticker=t, name=n, exchange="NASDAQ")
+            for t, n in self.KNOWN.items()
+            if qu in t or qu in n.upper()
+        ]

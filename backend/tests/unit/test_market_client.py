@@ -4,6 +4,7 @@ from app.market.client import (
     RANGE_TO_PERIOD,
     Candle,
     FakeMarketClient,
+    SearchHit,
     StockNotFound,
     StockSummary,
     YFinanceMarketClient,
@@ -57,3 +58,29 @@ async def test_yfinance_summary_uses_cache(monkeypatch):
     await client.get_summary("AAPL")
     await client.get_summary("AAPL")
     assert calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_fake_search_matches_ticker_substring():
+    client = FakeMarketClient()
+    hits = await client.search("AAP")
+    assert any(h.ticker == "AAPL" for h in hits)
+
+
+@pytest.mark.asyncio
+async def test_fake_search_matches_name_substring():
+    client = FakeMarketClient()
+    hits = await client.search("Tesla")
+    assert any(h.ticker == "TSLA" for h in hits)
+
+
+@pytest.mark.asyncio
+async def test_fake_search_empty_returns_empty_list():
+    client = FakeMarketClient()
+    assert await client.search("ZZZZZ") == []
+
+
+def test_search_hit_is_frozen():
+    hit = SearchHit(ticker="AAPL", name="Apple Inc.", exchange="NASDAQ")
+    with pytest.raises(Exception):
+        hit.ticker = "X"  # type: ignore[misc]
