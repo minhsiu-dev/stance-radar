@@ -125,3 +125,33 @@ async def test_financials_unknown_ticker(api):
     _, client = api
     res = await client.get("/api/stocks/ZZZZ/financials?period=annual")
     assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_stance_summary_shape(api):
+    _, client = await seed(api)
+    res = await client.get("/api/stocks/AAPL/stance-summary")
+    assert res.status_code == 200
+    body = res.json()["data"]
+    assert set(body.keys()) == {"buy", "neutral", "sell", "window_days"}
+    assert body["window_days"] == 90
+    assert isinstance(body["buy"], int)
+    assert isinstance(body["neutral"], int)
+    assert isinstance(body["sell"], int)
+
+
+@pytest.mark.asyncio
+async def test_stance_summary_unknown_ticker_returns_zero_counts(api):
+    _, client = api
+    res = await client.get("/api/stocks/ZZZZ/stance-summary")
+    assert res.status_code == 200
+    body = res.json()["data"]
+    assert body == {"buy": 0, "neutral": 0, "sell": 0, "window_days": 90}
+
+
+@pytest.mark.asyncio
+async def test_stance_summary_aapl_has_at_least_one_stance(api):
+    _, client = await seed(api)
+    res = await client.get("/api/stocks/AAPL/stance-summary")
+    body = res.json()["data"]
+    assert body["buy"] + body["neutral"] + body["sell"] >= 1

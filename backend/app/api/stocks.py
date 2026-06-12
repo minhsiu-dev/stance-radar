@@ -1,5 +1,6 @@
 import logging
 from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -93,6 +94,25 @@ async def stock_candles(
         logger.exception("candles fetch failed for %s", ticker)
         return fail("行情資料暫時無法取得,稍後再試", status_code=502)
     return ok([asdict(c) for c in candles])
+
+
+@router.get("/{ticker}/stance-summary")
+async def stance_summary(
+    ticker: str,
+    session: AsyncSession = Depends(get_session),
+):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    rows = (await session.execute(
+        select(VideoStance.stance, func.count(VideoStance.video_id))
+        .join(Video, VideoStance.video_id == Video.id)
+        .where(VideoStance.ticker == ticker.upper())
+        .where(Video.published_at >= cutoff)
+        .group_by(VideoStance.stance)
+    )).all()
+    counts = {"buy": 0, "neutral": 0, "sell": 0}
+    for stance, c in rows:
+        counts[stance.value] = c
+    return ok({**counts, "window_days": 90})
 
 
 @router.get("/{ticker}/stances")
