@@ -25,19 +25,29 @@ function yoy(latest: number | null, prior: number | null): number | null {
 
 export function OverviewTab({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.overview");
-  const { data: financials } = useSWR<FinancialReport[]>(
+  const tErr = useTranslations("Errors");
+  const { data: financials, error: financialsError } = useSWR<FinancialReport[]>(
     `/api/stocks/${ticker}/financials?period=quarterly`,
     apiFetch,
   );
-  const { data: summary } = useSWR<StanceSummary>(
+  const { data: summary, error: summaryError } = useSWR<StanceSummary>(
     `/api/stocks/${ticker}/stance-summary`,
     apiFetch,
   );
-  const { data: stock } = useSWR<StockSummary>(
+  const { data: stock, error: stockError } = useSWR<StockSummary>(
     `/api/stocks/${ticker}`,
     apiFetch,
   );
 
+  if (financialsError) {
+    return <p className="text-sm text-red-500">{tErr("financialsLoad", { message: financialsError.message })}</p>;
+  }
+  if (summaryError) {
+    return <p className="text-sm text-red-500">{tErr("summaryLoad", { message: summaryError.message })}</p>;
+  }
+  if (stockError) {
+    return <p className="text-sm text-red-500">{tErr("priceLoad", { message: stockError.message })}</p>;
+  }
   if (!financials || !summary || !stock)
     return <Skeleton className="h-48 w-full" />;
 
