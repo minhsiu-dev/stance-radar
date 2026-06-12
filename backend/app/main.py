@@ -58,10 +58,11 @@ async def lifespan(application: FastAPI):
 
 
 def create_app() -> FastAPI:
-    from app.api import channels
+    from app.api import channels, refresh
 
     app = FastAPI(title="Stance Radar API", lifespan=lifespan)
     app.include_router(channels.router)
+    app.include_router(refresh.router)
 
     @app.get("/api/health")
     async def health() -> dict:
