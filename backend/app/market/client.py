@@ -328,6 +328,8 @@ class YFinanceMarketClient:
         try:
             raw = yf.Ticker(ticker).news or []
         except Exception:
+            # 失敗回空並由呼叫端 cache 15 分鐘:新聞非核心,寧可暫時沒新聞
+            # 也不要每次頁面載入都重打掛掉的上游
             logger.warning("news fetch failed for %s", ticker, exc_info=True)
             return []
         out: list[NewsItem] = []
@@ -344,7 +346,7 @@ class YFinanceMarketClient:
                 or content.get("publisher")
             )
             published = content.get("pubDate")
-            if published is None and content.get("providerPublishTime"):
+            if published is None and content.get("providerPublishTime") is not None:
                 published = datetime.fromtimestamp(
                     content["providerPublishTime"], timezone.utc
                 ).isoformat()
@@ -352,7 +354,7 @@ class YFinanceMarketClient:
                 continue
             out.append(NewsItem(
                 ticker=ticker.upper(), title=title, url=url,
-                publisher=publisher, published_at=str(published),
+                publisher=publisher, published_at=str(published).replace("Z", "+00:00"),  # 統一 offset 寫法,讓字串排序可靠
             ))
         return out[:10]
 
