@@ -10,9 +10,11 @@ htmlcov/
 node_modules/
 .next/
 out/
+dist/
 
 # env / local
-.env
+.env*
+!.env.example
 .DS_Store
 
 # e2e
