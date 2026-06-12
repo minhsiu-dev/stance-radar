@@ -12,12 +12,14 @@ async def lifespan(application: FastAPI):
     settings = get_settings()
     settings.validate_required_keys()
     engine, sessionmaker = create_engine_and_sessionmaker(settings.database_url)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    application.state.engine = engine
-    application.state.sessionmaker = sessionmaker
-    yield
-    await engine.dispose()
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        application.state.engine = engine
+        application.state.sessionmaker = sessionmaker
+        yield
+    finally:
+        await engine.dispose()
 
 
 def create_app() -> FastAPI:
