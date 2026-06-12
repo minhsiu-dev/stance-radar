@@ -1,5 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { CommandSearch } from "@/components/command-search";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const t = await getTranslations("Nav");
@@ -22,7 +25,11 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           >
             {t("channels")}
           </Link>
-          {/* Search / Language / Theme slots filled in Phase B */}
+          <div className="ml-auto flex items-center gap-2">
+            <CommandSearch />
+            <LanguageSwitcher />
+            <ThemeToggle />
+          </div>
         </nav>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
