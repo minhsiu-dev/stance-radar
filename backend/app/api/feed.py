@@ -5,9 +5,12 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_session
 from app.envelope import ok
-from app.models import Video
+from app.models import Video, VideoStatus
 
 router = APIRouter(prefix="/api")
+
+# 未挑選(discovered)與已略過(skipped)不進 feed
+HIDDEN_STATUSES = (VideoStatus.discovered, VideoStatus.skipped)
 
 
 @router.get("/feed")
@@ -18,10 +21,12 @@ async def feed(
 ):
     total = (await session.execute(
         select(func.count()).select_from(Video)
+        .where(Video.status.not_in(HIDDEN_STATUSES))
     )).scalar_one()
     videos = (await session.execute(
         select(Video)
         .options(selectinload(Video.stances), selectinload(Video.channel))
+        .where(Video.status.not_in(HIDDEN_STATUSES))
         .order_by(Video.published_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
