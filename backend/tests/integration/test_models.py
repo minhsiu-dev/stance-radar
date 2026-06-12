@@ -122,3 +122,4 @@ async def test_portfolio_transaction_roundtrip(session):
     assert loaded.shares == Decimal("10.5")
     assert loaded.side is TransactionSide.buy
     assert loaded.note is None
+    assert loaded.created_at.tzinfo is not None

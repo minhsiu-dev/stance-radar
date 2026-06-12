@@ -157,7 +157,11 @@ class Job(Base):
 
 
 class PriceBar(Base):
-    """日 K 快取:歷史日 K 不可變,存過就不再向 yfinance 重抓。"""
+    """日 K 快取:歷史日 K 不可變,存過就不再向 yfinance 重抓。
+
+    OHLC 刻意用 Float(非 Numeric):這是可重抓的行情快取而非帳務資料,
+    全部下游計算(回推績效、記分板)都走 float,且與 Candle dataclass 一致。
+    """
 
     __tablename__ = "price_bars"
 
@@ -178,7 +182,7 @@ class PriceCoverage(Base):
     ticker: Mapped[str] = mapped_column(String(10), primary_key=True)
     start_date: Mapped[date_type] = mapped_column(Date)
     end_date: Mapped[date_type] = mapped_column(Date)
-    last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # 由 PriceStore 同步時寫入,建立時不給預設
 
 
 class PortfolioTransaction(Base):
