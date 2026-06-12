@@ -28,9 +28,11 @@ import { cn } from "@/lib/utils";
 export function MentionsTable({
   ticker,
   selectedVideoId,
+  onRowHover,
 }: {
   ticker: string;
   selectedVideoId: string | null;
+  onRowHover?: (videoId: string | null) => void;
 }) {
   const t = useTranslations("Mentions");
   const { data, error, isLoading } = useSWR<MentionRow[]>(
@@ -134,6 +136,8 @@ export function MentionsTable({
                 selectedVideoId === m.video_id && "bg-accent",
               )}
               onClick={() => window.open(m.youtube_url, "_blank", "noreferrer")}
+              onMouseEnter={() => onRowHover?.(m.video_id)}
+              onMouseLeave={() => onRowHover?.(null)}
               title={t("openHint")}
             >
               <TableCell className="whitespace-nowrap">
