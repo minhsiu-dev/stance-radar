@@ -1,6 +1,6 @@
-from sqlalchemy import func, select
+from sqlalchemy import select
 
-from app.models import Channel, Video
+from app.models import Channel, Video, VideoStatus
 from tests.conftest import wait_refresh
 
 
@@ -15,10 +15,9 @@ async def test_add_channels_resolves_and_triggers_refresh(api, session):
     assert data["job_id"] is not None
 
     await wait_refresh(app)
-    video_count = (await session.execute(
-        select(func.count()).select_from(Video)
-    )).scalar_one()
-    assert video_count == 6  # 自動觸發 refresh 撈進影片
+    statuses = (await session.execute(select(Video.status))).scalars().all()
+    assert len(statuses) == 6  # 自動觸發 discover 撈進影片
+    assert set(statuses) == {VideoStatus.discovered}  # 但不自動分析
 
     listed = await client.get("/api/channels")
     assert [c["id"] for c in listed.json()["data"]] == ["UC_fake_alpha", "UC_fake_beta"]

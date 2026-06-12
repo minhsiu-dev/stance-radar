@@ -1,14 +1,17 @@
 import re
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_runner, get_session, get_youtube
 from app.envelope import fail, ok
-from app.models import Channel, utcnow
+from app.models import (
+    Channel, JobKind, Stance, Video, VideoStance, VideoStatus, utcnow,
+)
 from app.pipeline.refresh import RefreshRunner
 from app.youtube.client import ChannelNotFound, QuotaExceededError, YouTubeClient
 
@@ -82,7 +85,7 @@ async def add_channels(
 
     job_id = None
     if added:
-        job_id, _ = await runner.start()
+        job_id, _ = await runner.start(JobKind.discover)
 
     data = {"added": added, "skipped": skipped, "failed": failed, "job_id": job_id}
     if failed:
@@ -99,7 +102,112 @@ async def list_channels(session: AsyncSession = Depends(get_session)):
     channels = (await session.execute(
         select(Channel).order_by(Channel.added_at)
     )).scalars().all()
-    return ok([channel_to_dict(c) for c in channels])
+    count_rows = (await session.execute(
+        select(Video.channel_id, Video.status, func.count())
+        .group_by(Video.channel_id, Video.status)
+    )).all()
+    counts: dict[str, dict[str, int]] = {}
+    for channel_id, status, n in count_rows:
+        counts.setdefault(channel_id, {})[status.value] = n
+    return ok([
+        {**channel_to_dict(c), "video_counts": counts.get(c.id, {})}
+        for c in channels
+    ])
+
+
+@router.get("/{channel_id}")
+async def channel_detail(
+    channel_id: str, session: AsyncSession = Depends(get_session)
+):
+    channel = await session.get(Channel, channel_id)
+    if channel is None:
+        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+
+    status_rows = (await session.execute(
+        select(Video.status, func.count())
+        .where(Video.channel_id == channel_id)
+        .group_by(Video.status)
+    )).all()
+    status_counts = {status.value: n for status, n in status_rows}
+
+    videos_count = func.count(VideoStance.video_id)
+    top_rows = (await session.execute(
+        select(
+            VideoStance.ticker,
+            videos_count.label("videos"),
+            videos_count.filter(VideoStance.stance == Stance.buy).label("buy"),
+            videos_count.filter(
+                VideoStance.stance == Stance.neutral
+            ).label("neutral"),
+            videos_count.filter(VideoStance.stance == Stance.sell).label("sell"),
+        )
+        .join(Video, Video.id == VideoStance.video_id)
+        .where(Video.channel_id == channel_id)
+        .group_by(VideoStance.ticker)
+        .order_by(videos_count.desc(), VideoStance.ticker)
+        .limit(5)
+    )).all()
+
+    return ok({
+        **channel_to_dict(channel),
+        "status_counts": status_counts,
+        "top_tickers": [
+            {
+                "ticker": row.ticker, "videos": row.videos,
+                "buy": row.buy, "neutral": row.neutral, "sell": row.sell,
+            }
+            for row in top_rows
+        ],
+    })
+
+
+@router.get("/{channel_id}/videos")
+async def channel_videos(
+    channel_id: str,
+    status: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+):
+    channel = await session.get(Channel, channel_id)
+    if channel is None:
+        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+    conditions = [Video.channel_id == channel_id]
+    if status is not None:
+        try:
+            conditions.append(Video.status == VideoStatus(status))
+        except ValueError:
+            return fail(f"未知的影片狀態:{status}", status_code=400)
+
+    total = (await session.execute(
+        select(func.count()).select_from(Video).where(*conditions)
+    )).scalar_one()
+    videos = (await session.execute(
+        select(Video)
+        .options(selectinload(Video.stances))
+        .where(*conditions)
+        .order_by(Video.published_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )).scalars().all()
+    items = [
+        {
+            "id": v.id,
+            "title": v.title,
+            "thumbnail_url": v.thumbnail_url,
+            "published_at": v.published_at.isoformat(),
+            "duration_seconds": v.duration_seconds,
+            "status": v.status.value,
+            "error_message": v.error_message,
+            "analyzed_at": v.analyzed_at.isoformat() if v.analyzed_at else None,
+            "stances": [
+                {"ticker": s.ticker, "stance": s.stance.value, "summary": s.summary}
+                for s in sorted(v.stances, key=lambda s: s.ticker)
+            ],
+        }
+        for v in videos
+    ]
+    return ok({"items": items, "total": total, "page": page, "page_size": page_size})
 
 
 @router.delete("/{channel_id}")

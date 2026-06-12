@@ -7,6 +7,7 @@ from app.analysis.llm import ClaudeCLIClient, FakeLLMClient
 from app.analysis.tickers import TickerValidator
 from app.config import Settings, get_settings
 from app.db import Base, create_engine_and_sessionmaker
+from app.db_migrations import run_startup_migrations
 from app.market.client import FakeMarketClient, YFinanceMarketClient
 from app.pipeline.jobs import fail_orphan_jobs
 from app.pipeline.refresh import RefreshDeps, RefreshRunner
@@ -38,6 +39,7 @@ async def lifespan(application: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        await run_startup_migrations(engine)
         await fail_orphan_jobs(sessionmaker)
         adapters = build_adapters(settings)
         application.state.engine = engine
@@ -58,13 +60,14 @@ async def lifespan(application: FastAPI):
 
 
 def create_app() -> FastAPI:
-    from app.api import channels, feed, refresh, stocks
+    from app.api import channels, feed, refresh, stocks, videos
 
     app = FastAPI(title="Stance Radar API", lifespan=lifespan)
     app.include_router(channels.router)
     app.include_router(refresh.router)
     app.include_router(feed.router)
     app.include_router(stocks.router)
+    app.include_router(videos.router)
 
     @app.get("/api/health")
     async def health() -> dict:

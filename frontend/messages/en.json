@@ -17,15 +17,16 @@
     "latest": "Latest videos",
     "trending": { "title": "Recently mentioned" },
     "refresh": {
-      "label": "Refresh",
-      "running": "Updating… {stage}",
+      "label": "Check new videos",
+      "running": "Working… {stage}",
       "lastFailed": "Last update failed: {message}",
       "triggerFailed": "Update failed",
       "stages": {
-        "listing": "Channels {done}/{total}",
-        "analyzing": "Videos {done}/{total}",
+        "listing": "Checking channels {done}/{total}",
+        "analyzing": "Analyzing videos {done}/{total}",
         "preparing": "Preparing…"
-      }
+      },
+      "noNew": "No new videos found"
     },
     "empty": {
       "prompt": "No videos yet. Go to",
@@ -50,7 +51,7 @@
       "submitting": "Adding…",
       "addSuccess": "Added successfully",
       "alreadyExists": "Already exists",
-      "autoFetch": "Auto-fetch started",
+      "autoFetch": "Checking for new videos…",
       "failedGeneric": "Add failed",
       "added": "Added {names}",
       "skipped": "Already exists: {names}"
@@ -61,7 +62,56 @@
       "neverUpdated": "Never updated",
       "remove": "Remove",
       "removeFailed": "Delete failed",
-      "removePrompt": "Remove \"{name}\"? Its videos and analysis will also be deleted."
+      "removePrompt": "Remove \"{name}\"? Its videos and analysis will also be deleted.",
+      "pendingBadge": "{count} awaiting review"
+    }
+  },
+  "Review": {
+    "title": "Pick videos to analyze",
+    "description": "Checked videos will be analyzed. Unchecked videos are skipped — you can recover them anytime from the channel page.",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "confirm": "Analyze selected ({count})",
+    "confirming": "Submitting…",
+    "confirmFailed": "Failed to submit selection",
+    "empty": "No videos awaiting review.",
+    "loadError": "Failed to load: {message}",
+    "banner": "{count} videos awaiting review",
+    "bannerCta": "Review now"
+  },
+  "ChannelDetail": {
+    "loadError": "Failed to load: {message}",
+    "added": "Added: {date}",
+    "stats": {
+      "analyzed": "Analyzed",
+      "discovered": "Awaiting review",
+      "skipped": "Skipped",
+      "failed": "Failed",
+      "no_transcript": "No transcript",
+      "pending": "Queued",
+      "topTickers": "Most mentioned stocks",
+      "noTickers": "No mentions yet"
+    },
+    "videos": {
+      "title": "Videos",
+      "filterAll": "All statuses",
+      "selectedCount": "{count} selected",
+      "analyzeSelected": "Analyze selected",
+      "skipSelected": "Skip selected",
+      "analyze": "Analyze",
+      "retry": "Retry",
+      "skip": "Skip",
+      "empty": "No videos.",
+      "actionFailed": "Action failed: {message}",
+      "queued": "Queued for analysis",
+      "status": {
+        "discovered": "Awaiting review",
+        "pending": "Queued",
+        "analyzed": "Analyzed",
+        "no_transcript": "No transcript",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      }
     }
   },
   "Stock": {

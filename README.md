@@ -17,7 +17,9 @@ docker compose up -d --build
 ```
 
 開 <http://localhost:3000> → 「頻道管理」→ 貼上 channel ID(可一次多個,
-換行或逗號分隔)→ 系統自動抓最近 30 部影片並分析(`BACKFILL_LIMIT` 可調)。
+換行或逗號分隔)→ 系統抓最近 30 部影片清單(`BACKFILL_LIMIT` 可調)讓你挑選,
+勾選要分析的影片後才開始分析。之後按「檢查新影片」會列出各頻道新發布的影片,
+同樣由你挑選;略過的影片隨時可在頻道頁反悔重新分析。
 
 容器透過 docker volume mount(`${HOME}/.claude:/root/.claude:ro`)讀本機的
 Claude Code 認證,所以一定要先在本機 `claude login` 過。

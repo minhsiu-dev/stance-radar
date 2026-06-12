@@ -1,5 +1,12 @@
 export type StanceValue = "buy" | "neutral" | "sell";
-export type VideoStatus = "pending" | "analyzed" | "no_transcript" | "failed";
+export type VideoStatus =
+  | "discovered"
+  | "pending"
+  | "analyzed"
+  | "no_transcript"
+  | "failed"
+  | "skipped";
+export type JobKind = "discover" | "analyze";
 
 export interface Envelope<T> {
   success: boolean;
@@ -13,6 +20,7 @@ export interface ChannelItem {
   thumbnail_url: string;
   added_at: string;
   last_refreshed_at: string | null;
+  video_counts?: Partial<Record<VideoStatus, number>>;
 }
 
 export interface AddChannelsResult {
@@ -52,10 +60,12 @@ export interface JobProgress {
   channels_total?: number;
   videos_done?: number;
   videos_total?: number;
+  discovered?: number;
 }
 
 export interface JobInfo {
   id: number;
+  kind: JobKind;
   status: "running" | "done" | "failed";
   progress: JobProgress;
   started_at: string;
@@ -147,3 +157,48 @@ export interface StanceSummary {
 }
 
 export type FinancialsPeriod = "quarterly" | "annual";
+
+export interface DiscoveredVideo {
+  id: string;
+  title: string;
+  thumbnail_url: string;
+  published_at: string;
+  duration_seconds: number | null;
+  status: VideoStatus;
+}
+
+export interface DiscoveredGroup {
+  channel: { id: string; title: string; thumbnail_url: string };
+  videos: DiscoveredVideo[];
+}
+
+export interface DiscoveredResponse {
+  groups: DiscoveredGroup[];
+  total: number;
+}
+
+export interface ChannelTickerStat {
+  ticker: string;
+  videos: number;
+  buy: number;
+  neutral: number;
+  sell: number;
+}
+
+export interface ChannelDetailDto extends ChannelItem {
+  status_counts: Partial<Record<VideoStatus, number>>;
+  top_tickers: ChannelTickerStat[];
+}
+
+export interface ChannelVideoItem extends DiscoveredVideo {
+  error_message: string | null;
+  analyzed_at: string | null;
+  stances: FeedStance[];
+}
+
+export interface ChannelVideosResponse {
+  items: ChannelVideoItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
