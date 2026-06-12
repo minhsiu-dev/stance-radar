@@ -114,3 +114,9 @@ export interface StockListItem {
   ticker: string;
   mention_count: number;
 }
+
+export interface SearchHit {
+  ticker: string;
+  name: string;
+  exchange: string | null;
+}
