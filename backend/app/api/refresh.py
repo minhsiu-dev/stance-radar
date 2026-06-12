@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_runner, get_session
 from app.envelope import ok
-from app.models import Job
+from app.models import Job, JobKind
 from app.pipeline.jobs import get_running_job
 from app.pipeline.refresh import RefreshRunner
 
@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api")
 def job_to_dict(job: Job) -> dict:
     return {
         "id": job.id,
+        "kind": job.kind,
         "status": job.status.value,
         "progress": job.progress,
         "started_at": job.started_at.isoformat(),
@@ -24,7 +25,7 @@ def job_to_dict(job: Job) -> dict:
 
 @router.post("/refresh")
 async def trigger_refresh(runner: RefreshRunner = Depends(get_runner)):
-    job_id, created = await runner.start()
+    job_id, created = await runner.start(JobKind.discover)
     return ok({"job_id": job_id, "created": created})
 
 

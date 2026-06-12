@@ -15,6 +15,7 @@ async def test_trigger_refresh_and_poll_until_done(api):
     assert resp.status_code == 200
     body = resp.json()["data"]
     assert body["status"] == "running"
+    assert body["kind"] == "discover"
 
     await wait_refresh(app)
     resp = await client.get("/api/jobs/current")
@@ -22,7 +23,7 @@ async def test_trigger_refresh_and_poll_until_done(api):
     body = resp.json()["data"]
     assert body["status"] == "done"
     assert body["finished_at"] is not None
-    assert body["progress"]["videos_total"] == 3
+    assert body["progress"]["discovered"] == 3  # 只探索,不分析
 
 
 async def test_double_trigger_returns_same_job(api):
