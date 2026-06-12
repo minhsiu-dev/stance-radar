@@ -84,8 +84,16 @@ class PriceStore:
                         sorted(plan.full), min(plan.full.values()), today
                     )
                     for t, fetch_start in plan.full.items():
-                        await self._upsert(session, t, data.get(t, []))
-                        await self._set_coverage(session, covs, t, fetch_start, today, now)
+                        candles = [c for c in data.get(t, []) if isinstance(c.time, str)]
+                        await self._upsert(session, t, candles)
+                        # 空結果(無效代號或上游暫時失敗):end_date 設在起點前一天,
+                        # 之後的尾段同步(每小時最多一次)會從頭重試 → 暫時性失敗可自癒
+                        end = today if candles else fetch_start - timedelta(days=1)
+                        cov_start = fetch_start
+                        if candles:
+                            first_bar = date.fromisoformat(candles[0].time)
+                            cov_start = min(cov_start, first_bar)
+                        await self._set_coverage(session, covs, t, cov_start, end, now)
                 if plan.trailing:
                     data = await self._market.get_daily_history(
                         sorted(plan.trailing), min(plan.trailing.values()), today
@@ -147,18 +155,18 @@ class PriceStore:
 
     async def _set_coverage(
         self, session, covs: dict, ticker: str,
-        start: date, today: date, now: datetime,
+        start: date, end: date, now: datetime,
     ) -> None:
         cov = covs.get(ticker)
         if cov is None:
             cov = PriceCoverage(
-                ticker=ticker, start_date=start, end_date=today, last_synced_at=now
+                ticker=ticker, start_date=start, end_date=end, last_synced_at=now
             )
             session.add(cov)
             covs[ticker] = cov
         else:
             cov.start_date = min(cov.start_date, start)
-            cov.end_date = today
+            cov.end_date = end
             cov.last_synced_at = now
 
     async def _has_rescaled(
@@ -172,14 +180,14 @@ class PriceStore:
         if not by_date:
             return False
         stored = (await session.execute(
-            select(PriceBar).where(
+            select(PriceBar.date, PriceBar.close).where(
                 PriceBar.ticker == ticker, PriceBar.date >= min(by_date)
             )
-        )).scalars().all()
-        for bar in stored:
-            new = by_date.get(bar.date)
-            if new is None or bar.close == 0:
+        )).all()
+        for bar_date, bar_close in stored:
+            new = by_date.get(bar_date)
+            if new is None or bar_close == 0:
                 continue
-            if abs(new - bar.close) / abs(bar.close) > _ADJUST_TOLERANCE:
+            if abs(new - bar_close) / abs(bar_close) > _ADJUST_TOLERANCE:
                 return True
         return False
