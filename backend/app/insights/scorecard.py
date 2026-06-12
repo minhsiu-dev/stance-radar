@@ -8,20 +8,18 @@
 
 neutral 立場無方向性,不參與記分。
 """
-import asyncio
 import logging
 from bisect import bisect_left
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
-from app.market.client import MarketClient
+from app.market.store import PriceStore
 
 logger = logging.getLogger(__name__)
 
 HORIZONS = (7, 30, 90)
 BENCHMARK = "SPY"
-CANDLE_RANGE = "5y"  # 日 K,夠涵蓋本工具的歷史 call
-_FETCH_CONCURRENCY = 4
+_HISTORY_DAYS = 1827  # 5 年,涵蓋本工具的歷史 call
 
 
 @dataclass(frozen=True)
@@ -69,21 +67,11 @@ def _to_series(candles) -> PriceSeries | None:
 
 
 async def fetch_price_series(
-    market: MarketClient, tickers: set[str]
+    store: PriceStore, tickers: set[str]
 ) -> dict[str, PriceSeries | None]:
-    semaphore = asyncio.Semaphore(_FETCH_CONCURRENCY)
-
-    async def fetch(ticker: str) -> tuple[str, PriceSeries | None]:
-        async with semaphore:
-            try:
-                candles = await market.get_candles(ticker, CANDLE_RANGE)
-            except Exception:
-                logger.warning("scorecard: no candles for %s", ticker)
-                return ticker, None
-        return ticker, _to_series(candles)
-
-    results = await asyncio.gather(*(fetch(t) for t in sorted(tickers)))
-    return dict(results)
+    start = datetime.now(timezone.utc).date() - timedelta(days=_HISTORY_DAYS)
+    data = await store.get_daily(sorted(tickers), start)
+    return {t: _to_series(data.get(t, [])) for t in tickers}
 
 
 def _window_return(series: PriceSeries, published: date, horizon: int) -> tuple:
@@ -155,13 +143,13 @@ def aggregate(calls: list[CallScore]) -> dict:
 
 
 async def build_scorecard(
-    market: MarketClient,
+    store: PriceStore,
     raw_calls: list[dict],
 ) -> dict:
     """raw_calls:[{video_id, video_title, ticker, stance, confidence, summary,
     published_at(datetime)}…],已含該頻道全部非 neutral 立場。"""
     tickers = {c["ticker"] for c in raw_calls}
-    series_map = await fetch_price_series(market, tickers | {BENCHMARK})
+    series_map = await fetch_price_series(store, tickers | {BENCHMARK})
     benchmark = series_map.get(BENCHMARK)
 
     calls: list[CallScore] = []

@@ -9,6 +9,7 @@ from app.config import Settings, get_settings
 from app.db import Base, create_engine_and_sessionmaker
 from app.db_migrations import run_startup_migrations
 from app.market.client import FakeMarketClient, YFinanceMarketClient
+from app.market.store import PriceStore
 from app.pipeline.jobs import fail_orphan_jobs
 from app.pipeline.refresh import RefreshDeps, RefreshRunner
 from app.pipeline.scheduler import AutoRefreshScheduler
@@ -47,6 +48,7 @@ async def lifespan(application: FastAPI):
         application.state.engine = engine
         application.state.sessionmaker = sessionmaker
         application.state.market = adapters["market"]
+        application.state.price_store = PriceStore(sessionmaker, adapters["market"])
         application.state.youtube = adapters["youtube"]
         application.state.runner = RefreshRunner(RefreshDeps(
             sessionmaker=sessionmaker,
@@ -71,7 +73,7 @@ async def lifespan(application: FastAPI):
 
 
 def create_app() -> FastAPI:
-    from app.api import channels, feed, insights, refresh, stocks, videos
+    from app.api import channels, feed, insights, news, portfolio, refresh, stocks, videos
 
     app = FastAPI(title="Stance Radar API", lifespan=lifespan)
     app.include_router(channels.router)
@@ -80,6 +82,8 @@ def create_app() -> FastAPI:
     app.include_router(stocks.router)
     app.include_router(videos.router)
     app.include_router(insights.router)
+    app.include_router(portfolio.router)
+    app.include_router(news.router)
 
     @app.get("/api/health")
     async def health() -> dict:

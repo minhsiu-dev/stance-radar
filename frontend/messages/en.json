@@ -1,8 +1,12 @@
 {
   "Nav": {
     "brand": "Stance Radar",
-    "dashboard": "Dashboard",
+    "portfolio": "Portfolio",
     "channels": "Channels"
+  },
+  "Footer": {
+    "disclaimer": "Stance Radar — for research only, not investment advice",
+    "sources": "Market data: Yahoo Finance (delayed) · Stance analysis: Claude"
   },
   "Search": {
     "trigger": "Search…",
@@ -22,6 +26,17 @@
       "window": "last {days} days",
       "reversal": "Reversal",
       "reversalHint": "Same channel flipped between buy and sell on the same stock"
+    },
+    "performance": {
+      "portfolio": "My portfolio",
+      "empty": "No holdings yet",
+      "emptyCta": "Add some on the portfolio page",
+      "loadError": "Failed to load performance: {message}"
+    },
+    "news": {
+      "title": "Holdings news",
+      "generalTitle": "Market news",
+      "empty": "No news right now"
     },
     "leaderboard": {
       "title": "Channel accuracy leaderboard",
@@ -63,7 +78,8 @@
       "filter": {
         "allChannels": "All channels",
         "allTickers": "All stocks",
-        "allStances": "All stances"
+        "allStances": "All stances",
+        "holdingsOnly": "Holdings only"
       }
     }
   },
@@ -221,12 +237,52 @@
       "horizon": "{days}d"
     }
   },
+  "Portfolio": {
+    "title": "Portfolio",
+    "totals": {
+      "marketValue": "Market value",
+      "costBasis": "Cost basis",
+      "unrealizedPl": "Unrealized P/L"
+    },
+    "chart": {
+      "title": "Portfolio vs VOO / QQQ (start = 100)",
+      "portfolioSeries": "My portfolio",
+      "noData": "Not enough price data yet"
+    },
+    "holdings": {
+      "title": "Holdings",
+      "ticker": "Ticker",
+      "shares": "Shares",
+      "avgCost": "Avg cost",
+      "price": "Price",
+      "marketValue": "Value",
+      "pl": "P/L",
+      "weight": "Weight",
+      "empty": "No holdings yet — add a transaction below"
+    },
+    "transactions": {
+      "title": "Transactions",
+      "add": "Add",
+      "buy": "Buy",
+      "sell": "Sell",
+      "shares": "Shares",
+      "price": "Price",
+      "dateLabel": "Date",
+      "note": "Note (optional)",
+      "tickerPlaceholder": "Ticker, e.g. AAPL",
+      "delete": "Delete",
+      "empty": "No transactions yet",
+      "addFailed": "Add failed: {message}",
+      "deleteFailed": "Delete failed: {message}"
+    }
+  },
   "Errors": {
     "priceLoad": "Failed to load price data: {message}",
     "mentionsLoad": "Failed to load mentions: {message}",
     "candlesLoad": "Failed to load candles: {message}",
     "summaryLoad": "Failed to load summary: {message}",
     "financialsLoad": "Failed to load financials: {message}",
+    "performanceLoad": "Failed to load performance: {message}",
     "searchUnavailable": "Search is temporarily unavailable"
   }
 }

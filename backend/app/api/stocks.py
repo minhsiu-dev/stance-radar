@@ -1,14 +1,15 @@
 import logging
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_market, get_session
+from app.api.deps import get_market, get_price_store, get_session
 from app.envelope import fail, ok
 from app.market.client import RANGE_TO_FETCH, MarketClient, StockNotFound
+from app.market.store import PriceStore
 from app.models import Channel, Mention, Video, VideoStance
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/stocks")
 
 _FINANCIAL_PERIODS = {"quarterly", "annual"}
+
+# 日 K 區間 → 往回的日曆天數(ytd 另計)
+_DAILY_RANGE_DAYS = {"1m": 31, "3m": 93, "6m": 186, "1y": 366, "3y": 1096, "5y": 1827}
+_INTRADAY_RANGES = {"1d", "5d"}
+
+
+def daily_range_start(range_key: str, today: date) -> date:
+    if range_key == "ytd":
+        return date(today.year, 1, 1)
+    return today - timedelta(days=_DAILY_RANGE_DAYS[range_key])
 
 
 @router.get("")
@@ -122,15 +133,23 @@ async def stock_candles(
     ticker: str,
     range_key: str = Query("1y", alias="range"),
     market: MarketClient = Depends(get_market),
+    store: PriceStore = Depends(get_price_store),
 ):
     if range_key not in RANGE_TO_FETCH:
         return fail(
             f"range 必須是 {', '.join(sorted(RANGE_TO_FETCH))}", status_code=422
         )
+    t = ticker.upper()
     try:
-        candles = await market.get_candles(ticker.upper(), range_key)
+        if range_key in _INTRADAY_RANGES:
+            candles = await market.get_candles(t, range_key)
+        else:
+            today = datetime.now(timezone.utc).date()
+            candles = (await store.get_daily([t], daily_range_start(range_key, today)))[t]
+            if not candles:
+                return fail(f"查無股票 {t}", status_code=404)
     except StockNotFound:
-        return fail(f"查無股票 {ticker.upper()}", status_code=404)
+        return fail(f"查無股票 {t}", status_code=404)
     except Exception:
         logger.exception("candles fetch failed for %s", ticker)
         return fail("行情資料暫時無法取得,稍後再試", status_code=502)

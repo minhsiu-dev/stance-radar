@@ -1,0 +1,11 @@
+# 選用:磁碟受限環境(如 CI 沙箱)用 — 直接打包本機已 build 好的
+# .next/standalone,跳過容器內 npm ci。需先在 frontend/ 跑過 npm run build。
+# 一般 E2E 流程用預設的 Dockerfile;要用本檔時以 compose override 指定 dockerfile。
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY .next/standalone ./
+COPY .next/static ./.next/static
+COPY public ./public
+EXPOSE 3000
+CMD ["node", "server.js"]

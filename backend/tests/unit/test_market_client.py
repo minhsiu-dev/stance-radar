@@ -1,4 +1,5 @@
 import pytest
+from datetime import date
 from unittest.mock import patch
 import pandas as pd
 
@@ -247,3 +248,72 @@ def test_fake_market_client_summary_includes_forward_pe():
     summary = asyncio.run(client.get_summary("AAPL"))
     assert summary.forward_pe is not None
     assert summary.forward_pe == round(summary.pe_ratio * 0.85, 4)
+
+
+async def test_fake_daily_history_is_deterministic_and_weekdays_only():
+    fake = FakeMarketClient()
+    out = await fake.get_daily_history(
+        ["AAPL", "VOO"], date(2026, 5, 1), date(2026, 5, 31)
+    )
+    assert set(out) == {"AAPL", "VOO"}
+    aapl = out["AAPL"]
+    assert all(date.fromisoformat(c.time).weekday() < 5 for c in aapl)
+    # 同一天的收盤價跨呼叫一致(store 的 overlap 比對依賴這點)
+    again = await fake.get_daily_history(["AAPL"], date(2026, 5, 15), date(2026, 5, 31))
+    by_date = {c.time: c.close for c in again["AAPL"]}
+    for c in aapl:
+        if c.time in by_date:
+            assert by_date[c.time] == c.close
+
+
+async def test_fake_daily_history_unknown_ticker_returns_empty():
+    fake = FakeMarketClient()
+    out = await fake.get_daily_history(["ZZZZ"], date(2026, 5, 1), date(2026, 5, 10))
+    assert out["ZZZZ"] == []
+
+
+async def test_fake_news_is_deterministic():
+    fake = FakeMarketClient()
+    items = await fake.get_news("AAPL")
+    assert len(items) == 2
+    assert all(n.ticker == "AAPL" and n.title and n.url for n in items)
+    assert items == await fake.get_news("AAPL")
+    assert await fake.get_news("ZZZZ") == []
+
+
+async def test_yfinance_news_parses_both_formats(monkeypatch):
+    from app.market.client import YFinanceMarketClient
+
+    raw = [
+        {  # 新版:包在 content 裡,pubDate 用 Z 結尾
+            "content": {
+                "title": "New format headline",
+                "canonicalUrl": {"url": "https://n.test/new"},
+                "provider": {"displayName": "NewWire"},
+                "pubDate": "2026-06-12T01:00:00Z",
+            }
+        },
+        {  # 舊版:攤平 + epoch 秒
+            "title": "Old format headline",
+            "link": "https://n.test/old",
+            "publisher": "OldWire",
+            "providerPublishTime": 1765500000,
+        },
+        {"content": {"title": "no url → skipped"}},
+    ]
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            self.news = raw
+
+    import yfinance
+
+    monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
+    items = YFinanceMarketClient()._fetch_news("aapl")
+    assert [n.url for n in items] == ["https://n.test/new", "https://n.test/old"]
+    new, old = items
+    assert new.publisher == "NewWire" and old.publisher == "OldWire"
+    assert new.ticker == "AAPL"
+    # Z 已標準化成 +00:00 → 與 epoch 轉出的格式可比較排序
+    assert new.published_at.endswith("+00:00")
+    assert old.published_at.endswith("+00:00")

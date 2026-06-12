@@ -4,6 +4,7 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.market.client import MarketClient
+from app.market.store import PriceStore
 from app.pipeline.refresh import RefreshRunner
 from app.youtube.client import YouTubeClient
 
@@ -23,3 +24,7 @@ def get_youtube(request: Request) -> YouTubeClient:
 
 def get_runner(request: Request) -> RefreshRunner:
     return request.app.state.runner
+
+
+def get_price_store(request: Request) -> PriceStore:
+    return request.app.state.price_store

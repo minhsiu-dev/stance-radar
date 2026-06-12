@@ -10,7 +10,7 @@ from app.insights.scorecard import (
     score_call,
     _to_series,
 )
-from app.market.client import Candle, StockNotFound
+from app.market.client import Candle
 
 
 def daily(day: str, close: float) -> Candle:
@@ -21,24 +21,27 @@ def make_series(*pairs: tuple[str, float]) -> PriceSeries:
     return _to_series([daily(d, c) for d, c in pairs])
 
 
-class LinearMarket:
-    """每天 +1 的價格序列;BENCH 固定不動(alpha = raw return)。"""
+class StubStore:
+    """duck-typed PriceStore:回傳預先寫好的日 K。"""
 
-    def __init__(self) -> None:
-        self.calls: list[str] = []
+    def __init__(self, data: dict[str, list]):
+        self._data = data
 
-    async def get_candles(self, ticker: str, range_key: str) -> list[Candle]:
-        self.calls.append(ticker)
-        if ticker == "GONE":
-            raise StockNotFound(ticker)
-        days = [f"2026-01-{d:02d}" for d in range(1, 32)] + [
-            f"2026-02-{d:02d}" for d in range(1, 29)
-        ] + [f"2026-03-{d:02d}" for d in range(1, 32)] + [
-            f"2026-04-{d:02d}" for d in range(1, 31)
-        ]
-        if ticker == "SPY":
-            return [daily(day, 100.0) for day in days]
-        return [daily(day, 100.0 + i) for i, day in enumerate(days)]
+    async def get_daily(self, tickers, start):
+        return {t: self._data.get(t, []) for t in tickers}
+
+
+def _linear_candles(ticker: str) -> list[Candle]:
+    """每天 +1 的價格序列;SPY 固定不動(alpha = raw return)。"""
+    days = (
+        [f"2026-01-{d:02d}" for d in range(1, 32)]
+        + [f"2026-02-{d:02d}" for d in range(1, 29)]
+        + [f"2026-03-{d:02d}" for d in range(1, 32)]
+        + [f"2026-04-{d:02d}" for d in range(1, 31)]
+    )
+    if ticker == "SPY":
+        return [daily(day, 100.0) for day in days]
+    return [daily(day, 100.0 + i) for i, day in enumerate(days)]
 
 
 def test_close_on_or_after_picks_next_trading_day():
@@ -72,9 +75,13 @@ def test_score_call_without_data_marks_has_data_false():
 
 
 async def test_build_scorecard_linear_market_returns_and_alpha():
-    market = LinearMarket()
+    store = StubStore({
+        "AAPL": _linear_candles("AAPL"),
+        "GONE": [],
+        "SPY": _linear_candles("SPY"),
+    })
     published = datetime(2026, 1, 10, 12, 0, tzinfo=timezone.utc)
-    result = await build_scorecard(market, [
+    result = await build_scorecard(store, [
         {
             "video_id": "v1", "video_title": "t1", "ticker": "AAPL",
             "stance": "buy", "confidence": "high", "summary": "s",

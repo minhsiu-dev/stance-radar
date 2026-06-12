@@ -1,8 +1,12 @@
 {
   "Nav": {
     "brand": "Stance Radar",
-    "dashboard": "首頁",
+    "portfolio": "持股",
     "channels": "頻道管理"
+  },
+  "Footer": {
+    "disclaimer": "Stance Radar — 僅供研究參考,非投資建議",
+    "sources": "市場資料:Yahoo Finance(延遲報價) · 立場判讀:Claude"
   },
   "Search": {
     "trigger": "搜尋…",
@@ -22,6 +26,17 @@
       "window": "近 {days} 天",
       "reversal": "多空反轉",
       "reversalHint": "同一頻道對同一檔股票,從買進直接翻到賣出(或反向)"
+    },
+    "performance": {
+      "portfolio": "我的組合",
+      "empty": "還沒有持股",
+      "emptyCta": "前往持股頁新增",
+      "loadError": "績效資料載入失敗:{message}"
+    },
+    "news": {
+      "title": "持股新聞",
+      "generalTitle": "市場新聞",
+      "empty": "暫無新聞"
     },
     "leaderboard": {
       "title": "頻道準確度排行",
@@ -63,7 +78,8 @@
       "filter": {
         "allChannels": "全部頻道",
         "allTickers": "全部股票",
-        "allStances": "全部立場"
+        "allStances": "全部立場",
+        "holdingsOnly": "只看持股"
       }
     }
   },
@@ -221,12 +237,52 @@
       "horizon": "{days} 天"
     }
   },
+  "Portfolio": {
+    "title": "持股",
+    "totals": {
+      "marketValue": "總市值",
+      "costBasis": "總成本",
+      "unrealizedPl": "未實現損益"
+    },
+    "chart": {
+      "title": "組合 vs VOO / QQQ(起點 = 100)",
+      "portfolioSeries": "我的組合",
+      "noData": "尚無足夠價格資料"
+    },
+    "holdings": {
+      "title": "持股明細",
+      "ticker": "股票",
+      "shares": "股數",
+      "avgCost": "平均成本",
+      "price": "現價",
+      "marketValue": "市值",
+      "pl": "損益",
+      "weight": "比重",
+      "empty": "尚無持股,先在下方新增一筆交易"
+    },
+    "transactions": {
+      "title": "交易紀錄",
+      "add": "新增",
+      "buy": "買入",
+      "sell": "賣出",
+      "shares": "股數",
+      "price": "價格",
+      "dateLabel": "日期",
+      "note": "備註(選填)",
+      "tickerPlaceholder": "代號,如 AAPL",
+      "delete": "刪除",
+      "empty": "尚無交易",
+      "addFailed": "新增失敗:{message}",
+      "deleteFailed": "刪除失敗:{message}"
+    }
+  },
   "Errors": {
     "priceLoad": "行情讀取失敗:{message}",
     "mentionsLoad": "提及讀取失敗:{message}",
     "candlesLoad": "K 線讀取失敗:{message}",
     "summaryLoad": "摘要讀取失敗:{message}",
     "financialsLoad": "財報讀取失敗:{message}",
+    "performanceLoad": "績效資料載入失敗:{message}",
     "searchUnavailable": "搜尋暫時無法使用"
   }
 }

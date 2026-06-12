@@ -77,8 +77,10 @@ async def test_scorecard_shape_with_fake_market(api, sessionmaker):
     aggregates = data["aggregates"]
     assert aggregates["buy"]["total"] == 3
     assert aggregates["sell"]["total"] == 1
-    # FakeMarketClient 沒有 SPY → alpha 全為 None,returns 至少 7 天有值
-    assert all(c["alpha"]["7"] is None for c in data["calls"])
+    # FakeMarketClient 含 SPY benchmark → 已實現(returns 有值)的窗口 alpha 應有值
+    realized = [c for c in data["calls"] if c["returns"]["7"] is not None]
+    assert realized
+    assert all(c["alpha"]["7"] is not None for c in realized)
 
 
 async def test_leaderboard_ranks_channels(api, sessionmaker):

@@ -17,11 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
 import type {
   ChannelItem,
   FeedItem,
   FeedResponse,
+  HoldingsResponse,
   StanceValue,
   StockListItem,
 } from "@/lib/types";
@@ -72,9 +74,10 @@ interface FeedFilters {
   channelId: string;
   ticker: string;
   stance: StanceValue | "all";
+  holdingsOnly: boolean;
 }
 
-const NO_FILTERS: FeedFilters = { channelId: "all", ticker: "all", stance: "all" };
+const NO_FILTERS: FeedFilters = { channelId: "all", ticker: "all", stance: "all", holdingsOnly: false };
 
 function feedQuery(page: number, filters: FeedFilters): string {
   const params = new URLSearchParams({
@@ -84,6 +87,7 @@ function feedQuery(page: number, filters: FeedFilters): string {
   if (filters.channelId !== "all") params.set("channel_id", filters.channelId);
   if (filters.ticker !== "all") params.set("ticker", filters.ticker);
   if (filters.stance !== "all") params.set("stance", filters.stance);
+  if (filters.holdingsOnly) params.set("holdings_only", "true");
   return `/api/feed?${params.toString()}`;
 }
 
@@ -98,6 +102,9 @@ function FeedFilterBar({
   const tStance = useTranslations("Stock.stance");
   const { data: channels } = useSWR<ChannelItem[]>("/api/channels");
   const { data: stocks } = useSWR<StockListItem[]>("/api/stocks");
+  const { data: holdings } = useSWR<HoldingsResponse>("/api/portfolio/holdings");
+
+  const hasHoldings = (holdings?.holdings?.length ?? 0) > 0;
 
   const channelTitle =
     filters.channelId === "all"
@@ -106,6 +113,19 @@ function FeedFilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {hasHoldings && (
+        <Button
+          size="sm"
+          variant={filters.holdingsOnly ? "default" : "outline"}
+          aria-pressed={filters.holdingsOnly}
+          data-testid="feed-filter-holdings"
+          onClick={() =>
+            onChange({ ...filters, holdingsOnly: !filters.holdingsOnly })
+          }
+        >
+          {t("holdingsOnly")}
+        </Button>
+      )}
       <Select
         value={filters.channelId}
         onValueChange={(v) => onChange({ ...filters, channelId: v ?? "all" })}
@@ -179,7 +199,8 @@ export function FeedList() {
   const filtersActive =
     filters.channelId !== "all" ||
     filters.ticker !== "all" ||
-    filters.stance !== "all";
+    filters.stance !== "all" ||
+    filters.holdingsOnly;
 
   useEffect(() => {
     const el = sentinelRef.current;

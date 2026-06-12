@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -20,6 +20,7 @@ const messages = {
         allChannels: "All channels",
         allTickers: "All stocks",
         allStances: "All stances",
+        holdingsOnly: "Holdings only",
       },
     },
     empty: { prompt: "", linkLabel: "channels", hint: "" },
@@ -64,5 +65,71 @@ describe("FeedList infinite scroll", () => {
     );
     expect(await screen.findByText("Video 0")).toBeInTheDocument();
     expect(await screen.findByText("No more results")).toBeInTheDocument();
+  });
+});
+
+const HOLDINGS_TOTALS = {
+  market_value: 1,
+  cost_basis: 1,
+  unrealized_pl: 0,
+  unrealized_pl_percent: 0,
+};
+
+describe("FeedList holdings-only chip", () => {
+  it("shows chip and sets holdings_only=true when clicked", async () => {
+    const fetcher = vi.fn().mockImplementation((key: string) => {
+      if (key.startsWith("/api/portfolio/holdings"))
+        return Promise.resolve({ holdings: [{ ticker: "AAPL" }], totals: HOLDINGS_TOTALS });
+      if (key.startsWith("/api/channels")) return Promise.resolve([]);
+      if (key.startsWith("/api/stocks")) return Promise.resolve([]);
+      // Return one item so FeedList renders the filter bar (not the empty-state card)
+      return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
+    });
+
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
+          <FeedList />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
+
+    const chip = await screen.findByRole("button", { name: "Holdings only" });
+    fireEvent.click(chip);
+
+    await waitFor(() => {
+      expect(
+        fetcher.mock.calls.some(([url]: string[]) => url.includes("holdings_only=true")),
+      ).toBe(true);
+    });
+  });
+
+  it("does not render chip when holdings list is empty", async () => {
+    const fetcher = vi.fn().mockImplementation((key: string) => {
+      if (key.startsWith("/api/portfolio/holdings"))
+        return Promise.resolve({ holdings: [], totals: HOLDINGS_TOTALS });
+      if (key.startsWith("/api/channels")) return Promise.resolve([]);
+      if (key.startsWith("/api/stocks")) return Promise.resolve([]);
+      // Return one item so FeedList renders the filter bar (not the empty-state card)
+      return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
+    });
+
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
+          <FeedList />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
+
+    // Wait for feed items to appear (filter bar is rendered), then check chip is absent
+    await screen.findByText("Video 0");
+
+    // Wait for holdings fetch to settle
+    await waitFor(() => {
+      expect(fetcher).toHaveBeenCalledWith("/api/portfolio/holdings");
+    });
+
+    expect(screen.queryByRole("button", { name: "Holdings only" })).toBeNull();
   });
 });

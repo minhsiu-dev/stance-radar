@@ -301,3 +301,78 @@ export interface LeaderboardResponse {
   benchmark: string;
   items: LeaderboardItem[];
 }
+
+export type TransactionSide = "buy" | "sell";
+
+export interface PortfolioTransaction {
+  id: string;
+  ticker: string;
+  side: TransactionSide;
+  shares: number;
+  price: number;
+  executed_on: string;
+  note: string | null;
+  created_at: string;
+}
+
+export interface HoldingItem {
+  ticker: string;
+  shares: number;
+  avg_cost: number;
+  price: number | null;
+  change_percent: number | null;
+  market_value: number | null;
+  unrealized_pl: number | null;
+  unrealized_pl_percent: number | null;
+  weight: number | null;
+}
+
+export interface HoldingsResponse {
+  holdings: HoldingItem[];
+  totals: {
+    market_value: number | null;
+    cost_basis: number;
+    unrealized_pl: number | null;
+    unrealized_pl_percent: number | null;
+  };
+}
+
+export type PerfChanges = Record<string, number | null>;
+
+export interface PerformanceSummary {
+  ranges: string[];
+  portfolio: { total_value: number | null; changes: PerfChanges } | null;
+  voo: { price: number | null; changes: PerfChanges };
+  qqq: { price: number | null; changes: PerfChanges };
+}
+
+export interface SeriesPoint {
+  date: string;
+  value: number;
+}
+
+export interface PerformanceSeries {
+  change_percent: number | null;
+  series: SeriesPoint[] | null;
+}
+
+export interface PerformanceRangeResponse {
+  range: string;
+  effective_start: string | null;
+  portfolio: PerformanceSeries | null;
+  voo: PerformanceSeries;
+  qqq: PerformanceSeries;
+}
+
+export interface NewsItemDto {
+  ticker: string;
+  title: string;
+  url: string;
+  publisher: string | null;
+  published_at: string;
+}
+
+export interface NewsResponse {
+  scope: "holdings" | "general";
+  items: NewsItemDto[];
+}

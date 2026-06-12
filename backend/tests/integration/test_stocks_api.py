@@ -48,7 +48,8 @@ async def test_candles_default_range_and_invalid_range(api):
     resp = await client.get("/api/stocks/AAPL/candles")
     body = resp.json()
     data = body["data"]
-    assert len(data) == 260  # 預設 1y
+    # 預設 1y → 現在走 PriceStore,日數由日曆天數決定(250–270 個交易日)
+    assert len(data) > 200
     assert "time" in body["data"][0]
     assert "date" not in body["data"][0]
     assert set(data[0]) == {"time", "open", "high", "low", "close", "volume"}
@@ -268,3 +269,24 @@ async def test_trending_uses_recency_weighted_score(api, sessionmaker):
     assert tickers == ["AAPL", "NVDA", "TSLA"]
     assert rows[0]["mention_count"] == 5
     assert rows[0]["score"] > rows[1]["score"] > rows[2]["score"]
+
+
+async def test_daily_candles_served_from_price_store(api):
+    app, client = api
+    resp = await client.get("/api/stocks/AAPL/candles?range=3m")
+    body = resp.json()
+    assert resp.status_code == 200 and body["success"]
+    assert len(body["data"]) > 30
+    # 日 K time 是 YYYY-MM-DD 字串
+    assert all(isinstance(c["time"], str) for c in body["data"])
+    # 第二次呼叫直接走 DB(不會壞)
+    resp2 = await client.get("/api/stocks/AAPL/candles?range=3m")
+    assert resp2.json()["data"] == body["data"]
+
+
+async def test_intraday_candles_still_use_market_client(api):
+    app, client = api
+    resp = await client.get("/api/stocks/AAPL/candles?range=1d")
+    body = resp.json()
+    assert resp.status_code == 200 and body["success"]
+    assert all(isinstance(c["time"], int) for c in body["data"])
