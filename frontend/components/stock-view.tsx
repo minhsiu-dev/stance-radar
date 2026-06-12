@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { MentionsTable } from "@/components/mentions-table";
 import { PriceChart } from "@/components/price-chart";
 import { StockHeader } from "@/components/stock-header";
 
@@ -14,8 +15,7 @@ export function StockView({ ticker }: { ticker: string }) {
     <div className="space-y-8">
       <StockHeader ticker={ticker} />
       <PriceChart ticker={ticker} onSelectVideo={handleSelect} />
-      {/* MentionsTable 在 Task 23 加入,selectedVideoId 屆時傳入 */}
-      {selectedVideoId && <span className="hidden">{selectedVideoId}</span>}
+      <MentionsTable ticker={ticker} selectedVideoId={selectedVideoId} />
     </div>
   );
 }
