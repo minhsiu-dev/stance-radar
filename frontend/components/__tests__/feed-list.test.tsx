@@ -99,7 +99,7 @@ describe("FeedList holdings-only chip", () => {
 
     await waitFor(() => {
       expect(
-        fetcher.mock.calls.some(([url]: [string]) => url.includes("holdings_only=true")),
+        fetcher.mock.calls.some(([url]: string[]) => url.includes("holdings_only=true")),
       ).toBe(true);
     });
   });
