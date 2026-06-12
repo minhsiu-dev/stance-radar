@@ -52,8 +52,8 @@ async def test_yfinance_summary_uses_cache(monkeypatch):
         calls["n"] += 1
         return StockSummary(
             ticker=ticker, name="Apple Inc.", price=190.0, change=1.0,
-            change_percent=0.53, market_cap=2.9e12, pe_ratio=29.5, eps=6.44,
-            week52_high=210.0, week52_low=160.0, volume=50_000_000,
+            change_percent=0.53, market_cap=2.9e12, pe_ratio=29.5, forward_pe=25.1,
+            eps=6.44, week52_high=210.0, week52_low=160.0, volume=50_000_000,
             dividend_yield=0.55,
         )
 
@@ -205,3 +205,13 @@ async def test_yfinance_financials_empty_raises_not_found():
     with patch("yfinance.Ticker", return_value=T()):
         with pytest.raises(StockNotFound):
             await client.get_financials("AAPL", "quarterly")
+
+
+def test_fake_market_client_summary_includes_forward_pe():
+    import asyncio
+    from app.market.client import FakeMarketClient
+
+    client = FakeMarketClient()
+    summary = asyncio.run(client.get_summary("AAPL"))
+    assert summary.forward_pe is not None
+    assert summary.forward_pe == round(summary.pe_ratio * 0.85, 4)

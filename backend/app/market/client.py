@@ -25,6 +25,7 @@ class StockSummary:
     change_percent: float | None
     market_cap: float | None
     pe_ratio: float | None
+    forward_pe: float | None
     eps: float | None
     week52_high: float | None
     week52_low: float | None
@@ -124,6 +125,7 @@ class YFinanceMarketClient:
             change_percent=change_percent,
             market_cap=info.get("marketCap"),
             pe_ratio=info.get("trailingPE"),
+            forward_pe=info.get("forwardPE"),
             eps=info.get("trailingEps"),
             week52_high=info.get("fiftyTwoWeekHigh"),
             week52_low=info.get("fiftyTwoWeekLow"),
@@ -253,7 +255,8 @@ class FakeMarketClient:
         return StockSummary(
             ticker=ticker, name=self.KNOWN[ticker], price=base,
             change=1.23, change_percent=round(1.23 / base * 100, 4),
-            market_cap=base * 1e10, pe_ratio=27.5, eps=round(base / 27.5, 2),
+            market_cap=base * 1e10, pe_ratio=27.5, forward_pe=round(27.5 * 0.85, 4),
+            eps=round(base / 27.5, 2),
             week52_high=base * 1.3, week52_low=base * 0.7,
             volume=42_000_000, dividend_yield=0.5,
         )
