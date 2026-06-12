@@ -11,6 +11,7 @@ from app.db_migrations import run_startup_migrations
 from app.market.client import FakeMarketClient, YFinanceMarketClient
 from app.pipeline.jobs import fail_orphan_jobs
 from app.pipeline.refresh import RefreshDeps, RefreshRunner
+from app.pipeline.scheduler import AutoRefreshScheduler
 from app.transcripts.client import FakeTranscriptClient, YouTubeTranscriptApiClient
 from app.youtube.client import DataAPIYouTubeClient, FakeYouTubeClient
 
@@ -36,6 +37,7 @@ async def lifespan(application: FastAPI):
     settings = get_settings()
     settings.validate_required_keys()
     engine, sessionmaker = create_engine_and_sessionmaker(settings.database_url)
+    scheduler: AutoRefreshScheduler | None = None
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -54,13 +56,22 @@ async def lifespan(application: FastAPI):
             ticker_validator=TickerValidator(adapters["market"]),
             settings=settings,
         ))
+        scheduler = AutoRefreshScheduler(
+            runner=application.state.runner,
+            sessionmaker=sessionmaker,
+            interval_minutes=settings.auto_refresh_minutes,
+        )
+        scheduler.start()
+        application.state.scheduler = scheduler
         yield
     finally:
+        if scheduler is not None:
+            await scheduler.stop()
         await engine.dispose()
 
 
 def create_app() -> FastAPI:
-    from app.api import channels, feed, refresh, stocks, videos
+    from app.api import channels, feed, insights, refresh, stocks, videos
 
     app = FastAPI(title="Stance Radar API", lifespan=lifespan)
     app.include_router(channels.router)
@@ -68,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(feed.router)
     app.include_router(stocks.router)
     app.include_router(videos.router)
+    app.include_router(insights.router)
 
     @app.get("/api/health")
     async def health() -> dict:
