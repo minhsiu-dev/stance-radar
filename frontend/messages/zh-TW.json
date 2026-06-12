@@ -78,7 +78,8 @@
       "filter": {
         "allChannels": "全部頻道",
         "allTickers": "全部股票",
-        "allStances": "全部立場"
+        "allStances": "全部立場",
+        "holdingsOnly": "只看持股"
       }
     }
   },

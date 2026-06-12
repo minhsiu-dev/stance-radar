@@ -78,7 +78,8 @@
       "filter": {
         "allChannels": "All channels",
         "allTickers": "All stocks",
-        "allStances": "All stances"
+        "allStances": "All stances",
+        "holdingsOnly": "Holdings only"
       }
     }
   },
