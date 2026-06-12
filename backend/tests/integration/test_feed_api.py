@@ -29,7 +29,12 @@ async def test_feed_lists_videos_newest_first_with_stances(api):
     assert newest["status"] == "analyzed"
     assert newest["channel"]["title"] == "頻道 Alpha"
     assert newest["stances"] == [
-        {"ticker": "AAPL", "stance": "buy", "summary": "財報強勁,整體看多 AAPL"}
+        {
+            "ticker": "AAPL",
+            "stance": "buy",
+            "summary": "財報強勁,整體看多 AAPL",
+            "confidence": "high",
+        }
     ]
 
     no_transcript = next(v for v in items if v["video_id"] == "beta_vid_1")

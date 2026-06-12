@@ -43,34 +43,44 @@ async def stock_search(
     return ok([asdict(h) for h in hits])
 
 
+_TRENDING_HALF_LIFE_DAYS = 7.0
+
+
 @router.get("/trending")
 async def stocks_trending(
     limit: int = Query(12, ge=1, le=50),
+    days: int = Query(90, ge=1, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    """熱度 = Σ 0.5^(提及距今天數 / 7):次數與新鮮度兼顧,
+    避免「昨天被提 1 次」排在「本週被提 50 次」前面。"""
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=days)
     rows = (await session.execute(
-        select(
-            Mention.ticker,
-            func.count(Mention.id).label("cnt"),
-            func.max(Video.published_at).label("last_mentioned_at"),
-        )
+        select(Mention.ticker, Video.published_at)
         .join(Video, Mention.video_id == Video.id)
         .where(Video.published_at >= cutoff)
-        .group_by(Mention.ticker)
-        .order_by(
-            func.max(Video.published_at).desc(),
-            func.count(Mention.id).desc(),
-        )
-        .limit(limit)
     )).all()
+    stats: dict[str, dict] = {}
+    for ticker, published_at in rows:
+        age_days = max((now - published_at).total_seconds() / 86400, 0.0)
+        entry = stats.setdefault(
+            ticker, {"count": 0, "score": 0.0, "last": published_at}
+        )
+        entry["count"] += 1
+        entry["score"] += 0.5 ** (age_days / _TRENDING_HALF_LIFE_DAYS)
+        entry["last"] = max(entry["last"], published_at)
+    ranked = sorted(
+        stats.items(), key=lambda kv: (-kv[1]["score"], kv[0])
+    )[:limit]
     return ok([
         {
             "ticker": ticker,
-            "mention_count": cnt,
-            "last_mentioned_at": last.isoformat(),
+            "mention_count": entry["count"],
+            "score": round(entry["score"], 4),
+            "last_mentioned_at": entry["last"].isoformat(),
         }
-        for ticker, cnt, last in rows
+        for ticker, entry in ranked
     ])
 
 
@@ -130,9 +140,10 @@ async def stock_candles(
 @router.get("/{ticker}/stance-summary")
 async def stance_summary(
     ticker: str,
+    days: int = Query(90, ge=1, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     rows = (await session.execute(
         select(VideoStance.stance, func.count(VideoStance.video_id))
         .join(Video, VideoStance.video_id == Video.id)
@@ -143,7 +154,7 @@ async def stance_summary(
     counts = {"buy": 0, "neutral": 0, "sell": 0}
     for stance, c in rows:
         counts[stance.value] = c
-    return ok({**counts, "window_days": 90})
+    return ok({**counts, "window_days": days})
 
 
 @router.get("/{ticker}/stances")
@@ -164,6 +175,7 @@ async def stock_stances(ticker: str, session: AsyncSession = Depends(get_session
             "published_at": video.published_at.isoformat(),
             "stance": stance.stance.value,
             "summary": stance.summary,
+            "confidence": stance.confidence,
         }
         for stance, video, channel in rows
     ])
@@ -205,6 +217,7 @@ async def stock_mentions(ticker: str, session: AsyncSession = Depends(get_sessio
                 "published_at": video.published_at.isoformat(),
                 "stance": video_stance.stance.value if video_stance else None,
                 "summary": video_stance.summary if video_stance else None,
+                "confidence": video_stance.confidence if video_stance else None,
                 "youtube_url": f"https://www.youtube.com/watch?v={video.id}",
                 "mentions": [],
             }
@@ -213,6 +226,11 @@ async def stock_mentions(ticker: str, session: AsyncSession = Depends(get_sessio
         grouped[video.id]["mentions"].append({
             "start_seconds": mention.start_seconds,
             "quote": mention.quote,
+            "stance": mention.stance.value,
+            "confidence": mention.confidence,
+            "time_horizon": mention.time_horizon,
+            "is_conditional": mention.is_conditional,
+            "condition": mention.condition,
             "context_before": mention.context_before,
             "context_after": mention.context_after,
             "youtube_url": (

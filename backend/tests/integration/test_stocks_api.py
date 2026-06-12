@@ -70,6 +70,7 @@ async def test_stock_stances_ascending_for_chart(api):
         "published_at": data[1]["published_at"],
         "stance": "buy",
         "summary": "財報強勁,整體看多 AAPL",
+        "confidence": "high",
     }
 
 
@@ -229,7 +230,7 @@ async def test_mentions_endpoint_returns_context_columns(api, sessionmaker):
 
 
 @pytest.mark.asyncio
-async def test_trending_returns_recently_mentioned_first(api, sessionmaker):
+async def test_trending_uses_recency_weighted_score(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
     from app.models import Channel, Mention, Stance, Video, VideoStatus
 
@@ -237,23 +238,33 @@ async def test_trending_returns_recently_mentioned_first(api, sessionmaker):
     async with sessionmaker() as s:
         s.add(Channel(id="ch_t", title="ch_t", thumbnail_url="", uploads_playlist_id="UU_t"))
         now = datetime.now(timezone.utc)
-        # Older video, lots of mentions on AAPL.
+        # AAPL:10 天前被密集提及 5 次(score ≈ 5 × 0.5^(10/7) ≈ 1.86)
         s.add(Video(id="v_old", channel_id="ch_t", title="old",
                     published_at=now - timedelta(days=10), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
         for i in range(5):
             s.add(Mention(video_id="v_old", ticker="AAPL", start_seconds=float(i),
                           quote="q", stance=Stance.buy, reasoning="r"))
-        # Newer video, single mention on NVDA.
+        # NVDA:1 小時前被提 1 次(score ≈ 1.0)→ 不應僅因較新就贏過 AAPL
         s.add(Video(id="v_new", channel_id="ch_t", title="new",
                     published_at=now - timedelta(hours=1), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="v_new", ticker="NVDA", start_seconds=1.0,
                       quote="q", stance=Stance.buy, reasoning="r"))
+        # TSLA:80 天前被提 5 次,熱度幾乎衰減光(score ≈ 0.02)→ 墊底
+        s.add(Video(id="v_stale", channel_id="ch_t", title="stale",
+                    published_at=now - timedelta(days=80), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        for i in range(5):
+            s.add(Mention(video_id="v_stale", ticker="TSLA", start_seconds=float(i),
+                          quote="q", stance=Stance.buy, reasoning="r"))
         await s.commit()
 
     response = await client.get("/api/stocks/trending?limit=5")
     assert response.status_code == 200
-    tickers = [row["ticker"] for row in response.json()["data"]]
-    # Newer mention timestamp wins despite lower count
-    assert tickers.index("NVDA") < tickers.index("AAPL")
+    rows = response.json()["data"]
+    tickers = [row["ticker"] for row in rows]
+    # 密集且不算舊 > 單次新鮮 > 大量但過期
+    assert tickers == ["AAPL", "NVDA", "TSLA"]
+    assert rows[0]["mention_count"] == 5
+    assert rows[0]["score"] > rows[1]["score"] > rows[2]["score"]

@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_session
-from app.envelope import ok
-from app.models import Video, VideoStatus
+from app.envelope import fail, ok
+from app.models import Stance, Video, VideoStance, VideoStatus
 
 router = APIRouter(prefix="/api")
 
@@ -17,16 +17,34 @@ HIDDEN_STATUSES = (VideoStatus.discovered, VideoStatus.skipped)
 async def feed(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    channel_id: str | None = Query(None),
+    ticker: str | None = Query(None),
+    stance: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
+    conditions = [Video.status.not_in(HIDDEN_STATUSES)]
+    if channel_id:
+        conditions.append(Video.channel_id == channel_id)
+    if ticker or stance:
+        stance_conditions = [VideoStance.video_id == Video.id]
+        if ticker:
+            stance_conditions.append(VideoStance.ticker == ticker.upper())
+        if stance:
+            try:
+                stance_conditions.append(VideoStance.stance == Stance(stance))
+            except ValueError:
+                return fail(f"未知的立場:{stance}", status_code=400)
+        conditions.append(
+            select(VideoStance).where(*stance_conditions).exists()
+        )
+
     total = (await session.execute(
-        select(func.count()).select_from(Video)
-        .where(Video.status.not_in(HIDDEN_STATUSES))
+        select(func.count()).select_from(Video).where(*conditions)
     )).scalar_one()
     videos = (await session.execute(
         select(Video)
         .options(selectinload(Video.stances), selectinload(Video.channel))
-        .where(Video.status.not_in(HIDDEN_STATUSES))
+        .where(*conditions)
         .order_by(Video.published_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
@@ -39,9 +57,15 @@ async def feed(
             "published_at": v.published_at.isoformat(),
             "status": v.status.value,
             "error_message": v.error_message,
+            "dropped_tickers": v.dropped_tickers or [],
             "channel": {"id": v.channel.id, "title": v.channel.title},
             "stances": [
-                {"ticker": s.ticker, "stance": s.stance.value, "summary": s.summary}
+                {
+                    "ticker": s.ticker,
+                    "stance": s.stance.value,
+                    "summary": s.summary,
+                    "confidence": s.confidence,
+                }
                 for s in sorted(v.stances, key=lambda s: s.ticker)
             ],
         }
