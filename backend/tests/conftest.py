@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlsplit
 
 import asyncpg
 import pytest
@@ -8,12 +9,13 @@ TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql+asyncpg://stance:stance@localhost:5432/stance_radar_test",
 )
+_DB = urlsplit(TEST_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"))
 
 
 async def _ensure_test_database() -> None:
     conn = await asyncpg.connect(
-        user="stance", password="stance", database="postgres",
-        host="localhost", port=5432,
+        user=_DB.username, password=_DB.password, database="postgres",
+        host=_DB.hostname, port=_DB.port or 5432,
     )
     try:
         exists = await conn.fetchval(
