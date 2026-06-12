@@ -163,15 +163,22 @@ async def holdings(
         if row["market_value"] is not None and total_value:
             row["weight"] = round(row["market_value"] / total_value * 100, 2)
     rows.sort(key=lambda r: -(r["market_value"] or 0))
+    # 全部報價失敗 → 總市值/損益回 None(顯示「—」),避免誤導成 $0;
+    # 部分失敗則維持 best-effort 加總(缺價的列本身已顯示 null price)
+    all_quotes_missing = bool(rows) and all(
+        r["market_value"] is None for r in rows
+    )
     return ok({
         "holdings": rows,
         "totals": {
-            "market_value": round(total_value, 2),
+            "market_value": None if all_quotes_missing else round(total_value, 2),
             "cost_basis": round(total_cost, 2),
-            "unrealized_pl": round(total_value - total_cost, 2),
+            "unrealized_pl": (
+                None if all_quotes_missing else round(total_value - total_cost, 2)
+            ),
             "unrealized_pl_percent": (
                 round((total_value - total_cost) / total_cost * 100, 2)
-                if total_cost else None
+                if total_cost and not all_quotes_missing else None
             ),
         },
     })
@@ -181,6 +188,8 @@ async def _one_day_changes(
     market: MarketClient, held: dict[str, Holding]
 ) -> tuple[float | None, dict[str, float | None], float | None]:
     """回傳 (組合 1d %, {benchmark: 1d %}, 組合現值)。"""
+    # 缺報價的持股直接略過 → 數字是「有報價部分」的 best-effort;
+    # 全部缺報價時 total_now=0 → 回 None
 
     async def summary_or_none(ticker: str):
         try:

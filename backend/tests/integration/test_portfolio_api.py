@@ -80,3 +80,44 @@ async def test_performance_summary_and_range(api):
 
     resp = await client.get("/api/portfolio/performance?range=bogus")
     assert resp.status_code == 422
+
+
+async def test_holdings_all_quotes_failed_degrades_to_null_totals(api):
+    app, client = api
+    await add_tx(client)
+
+    class DeadMarket:
+        async def get_summary(self, ticker):
+            raise RuntimeError("quotes down")
+
+    app.state.market = DeadMarket()
+    resp = await client.get("/api/portfolio/holdings")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["holdings"][0]["price"] is None
+    assert data["holdings"][0]["market_value"] is None
+    assert data["totals"]["market_value"] is None
+    assert data["totals"]["unrealized_pl"] is None
+    assert data["totals"]["cost_basis"] == 1000
+
+
+async def test_one_day_change_treats_missing_change_as_flat(api):
+    from app.market.client import StockSummary
+
+    app, client = api
+    await add_tx(client)
+
+    class FlatMarket:
+        async def get_summary(self, ticker):
+            return StockSummary(
+                ticker=ticker, name=ticker, price=100.0, change=None,
+                change_percent=None, market_cap=None, pe_ratio=None,
+                forward_pe=None, eps=None, week52_high=None, week52_low=None,
+                volume=None, dividend_yield=None,
+            )
+
+    app.state.market = FlatMarket()
+    resp = await client.get("/api/portfolio/performance?range=1d")
+    data = resp.json()["data"]
+    # change=None 視為 0 → 組合 1d 變化 0%
+    assert data["portfolio"]["change_percent"] == 0.0
