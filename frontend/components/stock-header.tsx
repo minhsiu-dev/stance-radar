@@ -3,7 +3,6 @@
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiFetch } from "@/lib/api";
 import {
   formatMarketCap,
   formatNumber,
@@ -17,7 +16,6 @@ export function StockHeader({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.header");
   const { data, error, isLoading } = useSWR<StockSummary>(
     `/api/stocks/${ticker}`,
-    apiFetch,
   );
 
   if (isLoading) return <Skeleton className="h-28 w-full" />;
@@ -31,19 +29,21 @@ export function StockHeader({ ticker }: { ticker: string }) {
   if (!data) return null;
 
   const up = (data.change ?? 0) >= 0;
-  const stats: [string, string][] = [
+
+  const peLabel =
+    data.forward_pe == null ? t("peRatio") : t("peLabelTF");
+  const peValue =
+    data.forward_pe == null
+      ? formatNumber(data.pe_ratio)
+      : `${formatNumber(data.pe_ratio)} / ${formatNumber(data.forward_pe)}`;
+
+  const stats: [string, string, string?][] = [
     [t("marketCap"), formatMarketCap(data.market_cap)],
-    [t("peRatio"), formatNumber(data.pe_ratio)],
+    [peLabel, peValue, data.forward_pe == null ? undefined : t("peTooltip")],
     [t("eps"), formatNumber(data.eps)],
-    [
-      t("week52Range"),
-      `${formatNumber(data.week52_low)} – ${formatNumber(data.week52_high)}`,
-    ],
+    [t("week52Range"), `${formatNumber(data.week52_low)} – ${formatNumber(data.week52_high)}`],
     [t("volume"), formatVolume(data.volume)],
-    [
-      t("dividendYield"),
-      data.dividend_yield == null ? "—" : `${formatNumber(data.dividend_yield)}%`,
-    ],
+    [t("dividendYield"), data.dividend_yield == null ? "—" : `${formatNumber(data.dividend_yield)}%`],
   ];
 
   return (
@@ -67,10 +67,10 @@ export function StockHeader({ ticker }: { ticker: string }) {
         </span>
       </div>
       <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
-        {stats.map(([label, value]) => (
+        {stats.map(([label, value, tooltip]) => (
           <div key={label}>
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd className="font-medium">{value}</dd>
+            <dt className="text-muted-foreground" title={tooltip}>{label}</dt>
+            <dd className="font-medium tabular-nums">{value}</dd>
           </div>
         ))}
       </dl>

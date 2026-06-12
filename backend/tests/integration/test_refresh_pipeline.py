@@ -164,3 +164,17 @@ async def test_quota_exceeded_fails_job_with_message(session, sessionmaker):
     job = await session.get(Job, job_id)
     assert job.status == JobStatus.failed
     assert "quota" in job.error_message
+
+
+async def test_refresh_pipeline_populates_mention_context(session, sessionmaker):
+    await seed_channels(session)
+    await run_refresh(make_runner(sessionmaker))
+
+    async with sessionmaker() as s:
+        mentions = (await s.execute(
+            select(Mention).where(Mention.video_id == "alpha_vid_3")
+        )).scalars().all()
+    assert mentions, "expected at least one mention for alpha_vid_3"
+    aapl = next(m for m in mentions if m.ticker == "AAPL")
+    assert aapl.context_before == "今天來看蘋果的財報"
+    assert aapl.context_after == "以上是今天的內容"

@@ -71,6 +71,7 @@ export interface StockSummary {
   change_percent: number | null;
   market_cap: number | null;
   pe_ratio: number | null;
+  forward_pe: number | null;
   eps: number | null;
   week52_high: number | null;
   week52_low: number | null;
@@ -79,7 +80,7 @@ export interface StockSummary {
 }
 
 export interface CandleDto {
-  date: string;
+  time: string | number; // "YYYY-MM-DD" daily, Unix seconds (UTC) intraday
   open: number;
   high: number;
   low: number;
@@ -107,12 +108,20 @@ export interface MentionRow {
   quote: string;
   stance: StanceValue;
   reasoning: string;
+  context_before: string | null;
+  context_after: string | null;
   youtube_url: string;
 }
 
 export interface StockListItem {
   ticker: string;
   mention_count: number;
+}
+
+export interface TrendingStock {
+  ticker: string;
+  mention_count: number;
+  last_mentioned_at: string;
 }
 
 export interface SearchHit {

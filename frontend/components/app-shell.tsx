@@ -8,7 +8,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   const t = await getTranslations("Nav");
   return (
     <>
-      <header className="border-b">
+      <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <nav className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
           <Link href="/" className="font-semibold">
             {t("brand")}

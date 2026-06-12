@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/app-shell";
+import { SWRProvider } from "@/components/swr-provider";
 import { routing } from "@/i18n/routing";
 
 export function generateStaticParams() {
@@ -22,7 +23,7 @@ export default async function LocaleLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning className="font-sans">
       <body className="min-h-screen bg-background text-foreground antialiased">
         <ThemeProvider
           attribute="class"
@@ -31,7 +32,9 @@ export default async function LocaleLayout({
           storageKey="stance-radar-theme"
         >
           <NextIntlClientProvider messages={messages}>
-            <AppShell>{children}</AppShell>
+            <SWRProvider>
+              <AppShell>{children}</AppShell>
+            </SWRProvider>
           </NextIntlClientProvider>
         </ThemeProvider>
       </body>

@@ -153,7 +153,7 @@ export function CommandSearch() {
                   onSelect={() => navigate(s.ticker)}
                 >
                   <span className="font-mono">{s.ticker}</span>
-                  <span className="ml-auto text-xs text-muted-foreground">
+                  <span className="ml-auto w-10 text-right font-mono tabular-nums text-xs text-muted-foreground">
                     {s.mention_count}
                   </span>
                 </CommandItem>

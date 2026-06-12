@@ -2,8 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
+import { ArrowUpRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { StanceBadge } from "@/components/stance-badge";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -20,7 +26,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { apiFetch } from "@/lib/api";
 import { formatDate, formatSeconds } from "@/lib/format";
 import type { MentionRow, StanceValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -38,7 +43,6 @@ export function MentionsTable({
   const tStance = useTranslations("Stock.stance");
   const { data, error, isLoading } = useSWR<MentionRow[]>(
     `/api/stocks/${ticker}/mentions`,
-    apiFetch,
   );
   const [stanceFilter, setStanceFilter] = useState<StanceValue | "all">("all");
   const [channelFilter, setChannelFilter] = useState<string>("all");
@@ -61,6 +65,11 @@ export function MentionsTable({
       ),
     [data, stanceFilter, channelFilter],
   );
+
+  const selectedChannelTitle =
+    channelFilter === "all"
+      ? t("filter.allChannels")
+      : channels.find(([id]) => id === channelFilter)?.[1];
 
   useEffect(() => {
     if (!selectedVideoId || !bodyRef.current) return;
@@ -100,9 +109,14 @@ export function MentionsTable({
             <SelectItem value="sell">{tStance("sell")}</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={channelFilter} onValueChange={(v) => setChannelFilter(v ?? "all")}>
+        <Select
+          value={channelFilter}
+          onValueChange={(v) => setChannelFilter(v ?? "all")}
+        >
           <SelectTrigger className="w-40">
-            <SelectValue placeholder={t("filter.channel")} />
+            <SelectValue placeholder={t("filter.channel")}>
+              {selectedChannelTitle}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("filter.allChannels")}</SelectItem>
@@ -120,11 +134,10 @@ export function MentionsTable({
           <TableRow>
             <TableHead>{t("columns.date")}</TableHead>
             <TableHead>{t("columns.channel")}</TableHead>
-            <TableHead>{t("columns.video")}</TableHead>
             <TableHead>{t("columns.timestamp")}</TableHead>
             <TableHead>{t("columns.quote")}</TableHead>
             <TableHead>{t("columns.stance")}</TableHead>
-            <TableHead>{t("columns.reasoning")}</TableHead>
+            <TableHead className="w-16 text-right">{t("columns.open")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody ref={bodyRef}>
@@ -132,14 +145,9 @@ export function MentionsTable({
             <TableRow
               key={`${m.video_id}-${m.start_seconds}`}
               data-video-id={m.video_id}
-              className={cn(
-                "cursor-pointer",
-                selectedVideoId === m.video_id && "bg-accent",
-              )}
-              onClick={() => window.open(m.youtube_url, "_blank", "noreferrer")}
+              className={cn(selectedVideoId === m.video_id && "bg-accent")}
               onMouseEnter={() => onRowHover?.(m.video_id)}
               onMouseLeave={() => onRowHover?.(null)}
-              title={t("openHint")}
             >
               <TableCell className="whitespace-nowrap">
                 {formatDate(m.published_at)}
@@ -147,18 +155,48 @@ export function MentionsTable({
               <TableCell className="whitespace-nowrap">
                 {m.channel_title}
               </TableCell>
-              <TableCell className="max-w-48 truncate">{m.video_title}</TableCell>
               <TableCell className="font-mono">
                 {formatSeconds(m.start_seconds)}
               </TableCell>
               <TableCell className="max-w-80">
-                <span className="line-clamp-2">{m.quote}</span>
+                <HoverCard>
+                  <HoverCardTrigger
+                    delay={150}
+                    render={
+                      <span className="line-clamp-2 cursor-help">
+                        {m.quote}
+                      </span>
+                    }
+                  />
+                  <HoverCardContent className="w-[480px] text-sm leading-relaxed">
+                    {m.context_before && (
+                      <p className="mb-2 text-muted-foreground">
+                        {m.context_before}
+                      </p>
+                    )}
+                    <p className="font-medium">{m.quote}</p>
+                    {m.context_after && (
+                      <p className="mt-2 text-muted-foreground">
+                        {m.context_after}
+                      </p>
+                    )}
+                  </HoverCardContent>
+                </HoverCard>
               </TableCell>
               <TableCell>
                 <StanceBadge stance={m.stance} />
               </TableCell>
-              <TableCell className="max-w-60 text-muted-foreground">
-                <span className="line-clamp-2">{m.reasoning}</span>
+              <TableCell className="text-right">
+                <a
+                  href={m.youtube_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={t("columns.open")}
+                  className="inline-flex items-center justify-end text-muted-foreground hover:text-foreground"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                </a>
               </TableCell>
             </TableRow>
           ))}

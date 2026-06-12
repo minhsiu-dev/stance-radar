@@ -15,6 +15,7 @@
   },
   "Dashboard": {
     "latest": "Latest videos",
+    "trending": { "title": "Recently mentioned" },
     "refresh": {
       "label": "Refresh",
       "running": "Updating… {stage}",
@@ -36,7 +37,8 @@
       "statusFailed": "Analysis failed",
       "statusPending": "Pending analysis",
       "statusNoMentions": "No US stock mentions",
-      "loadError": "Failed to load: {message}"
+      "loadError": "Failed to load: {message}",
+      "noMore": "No more results"
     }
   },
   "Channels": {
@@ -66,6 +68,8 @@
     "header": {
       "marketCap": "Market cap",
       "peRatio": "P/E (TTM)",
+      "peLabelTF": "P/E (T / F)",
+      "peTooltip": "Trailing / Forward",
       "eps": "EPS (TTM)",
       "week52Range": "52w range",
       "volume": "Volume",
@@ -100,11 +104,10 @@
     "columns": {
       "date": "Date",
       "channel": "Channel",
-      "video": "Video",
       "timestamp": "Timestamp",
       "quote": "Quote",
       "stance": "Stance",
-      "reasoning": "Reasoning"
+      "open": "Open"
     },
     "filter": {
       "stance": "Stance",
@@ -113,7 +116,6 @@
       "allStances": "All stances",
       "allChannels": "All channels"
     },
-    "openHint": "Click to open at this timestamp on YouTube",
     "empty": "No mentions recorded for this stock yet.",
     "loadError": "Failed to load mentions: {message}"
   },

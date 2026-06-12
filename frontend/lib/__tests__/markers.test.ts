@@ -5,7 +5,7 @@ import type { CandleDto, StanceRow } from "@/lib/types";
 const DAYS = ["2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09"]; // 週四五一二
 
 function candle(date: string): CandleDto {
-  return { date, open: 1, high: 2, low: 0.5, close: 1.5, volume: 100 };
+  return { time: date, open: 1, high: 2, low: 0.5, close: 1.5, volume: 100 };
 }
 
 function stance(videoId: string, publishedAt: string, s: StanceRow["stance"]): StanceRow {

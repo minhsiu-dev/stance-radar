@@ -15,6 +15,7 @@
   },
   "Dashboard": {
     "latest": "最新影片",
+    "trending": { "title": "最新被提及" },
     "refresh": {
       "label": "更新",
       "running": "更新中… {stage}",
@@ -36,7 +37,8 @@
       "statusFailed": "分析失敗",
       "statusPending": "待分析",
       "statusNoMentions": "未提及美股",
-      "loadError": "讀取失敗:{message}"
+      "loadError": "讀取失敗:{message}",
+      "noMore": "已無更多影片"
     }
   },
   "Channels": {
@@ -66,6 +68,8 @@
     "header": {
       "marketCap": "市值",
       "peRatio": "本益比 (TTM)",
+      "peLabelTF": "本益比 (歷史 / 預估)",
+      "peTooltip": "歷史 / 預估",
       "eps": "EPS (TTM)",
       "week52Range": "52 週區間",
       "volume": "成交量",
@@ -100,11 +104,10 @@
     "columns": {
       "date": "日期",
       "channel": "頻道",
-      "video": "影片",
       "timestamp": "時間點",
       "quote": "原句",
       "stance": "立場",
-      "reasoning": "理由"
+      "open": "開啟"
     },
     "filter": {
       "stance": "立場",
@@ -113,7 +116,6 @@
       "allStances": "全部立場",
       "allChannels": "全部頻道"
     },
-    "openHint": "點擊在 YouTube 開啟此秒數",
     "empty": "尚無此股票的提及紀錄。",
     "loadError": "提及讀取失敗:{message}"
   },

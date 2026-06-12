@@ -95,6 +95,8 @@ class Mention(Base):
     quote: Mapped[str] = mapped_column(Text)
     stance: Mapped[Stance] = mapped_column(_enum(Stance, "stance"))
     reasoning: Mapped[str] = mapped_column(Text)
+    context_before: Mapped[str | None] = mapped_column(Text, nullable=True)
+    context_after: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     video: Mapped[Video] = relationship(back_populates="mentions")
 

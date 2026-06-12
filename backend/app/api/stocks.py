@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_market, get_session
 from app.envelope import fail, ok
-from app.market.client import RANGE_TO_PERIOD, MarketClient, StockNotFound
+from app.market.client import RANGE_TO_FETCH, MarketClient, StockNotFound
 from app.models import Channel, Mention, Video, VideoStance
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,37 @@ async def stock_search(
         logger.exception("search failed for %s", q)
         return fail("搜尋暫時無法使用,稍後再試", status_code=502)
     return ok([asdict(h) for h in hits])
+
+
+@router.get("/trending")
+async def stocks_trending(
+    limit: int = Query(12, ge=1, le=50),
+    session: AsyncSession = Depends(get_session),
+):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    rows = (await session.execute(
+        select(
+            Mention.ticker,
+            func.count(Mention.id).label("cnt"),
+            func.max(Video.published_at).label("last_mentioned_at"),
+        )
+        .join(Video, Mention.video_id == Video.id)
+        .where(Video.published_at >= cutoff)
+        .group_by(Mention.ticker)
+        .order_by(
+            func.max(Video.published_at).desc(),
+            func.count(Mention.id).desc(),
+        )
+        .limit(limit)
+    )).all()
+    return ok([
+        {
+            "ticker": ticker,
+            "mention_count": cnt,
+            "last_mentioned_at": last.isoformat(),
+        }
+        for ticker, cnt, last in rows
+    ])
 
 
 @router.get("/{ticker}")
@@ -82,9 +113,9 @@ async def stock_candles(
     range_key: str = Query("1y", alias="range"),
     market: MarketClient = Depends(get_market),
 ):
-    if range_key not in RANGE_TO_PERIOD:
+    if range_key not in RANGE_TO_FETCH:
         return fail(
-            f"range 必須是 {', '.join(sorted(RANGE_TO_PERIOD))}", status_code=422
+            f"range 必須是 {', '.join(sorted(RANGE_TO_FETCH))}", status_code=422
         )
     try:
         candles = await market.get_candles(ticker.upper(), range_key)
@@ -158,6 +189,8 @@ async def stock_mentions(ticker: str, session: AsyncSession = Depends(get_sessio
             "quote": mention.quote,
             "stance": mention.stance.value,
             "reasoning": mention.reasoning,
+            "context_before": mention.context_before,
+            "context_after": mention.context_after,
             "youtube_url": (
                 f"https://www.youtube.com/watch?v={video.id}"
                 f"&t={int(mention.start_seconds)}s"

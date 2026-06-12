@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pandas as pd
 
 from app.market.client import (
-    RANGE_TO_PERIOD,
+    RANGE_TO_FETCH,
     Candle,
     FakeMarketClient,
     FinancialReport,
@@ -14,8 +14,22 @@ from app.market.client import (
 )
 
 
+def test_range_to_fetch_table_covers_intraday_and_daily():
+    from app.market.client import RANGE_TO_FETCH
+
+    assert RANGE_TO_FETCH["1d"] == ("1d", "5m")
+    assert RANGE_TO_FETCH["5d"] == ("5d", "30m")
+    assert RANGE_TO_FETCH["1m"] == ("1mo", "1d")
+    assert RANGE_TO_FETCH["3m"] == ("3mo", "1d")
+    assert RANGE_TO_FETCH["6m"] == ("6mo", "1d")
+    assert RANGE_TO_FETCH["ytd"] == ("ytd", "1d")
+    assert RANGE_TO_FETCH["1y"] == ("1y", "1d")
+    assert RANGE_TO_FETCH["3y"] == ("3y", "1d")
+    assert RANGE_TO_FETCH["5y"] == ("5y", "1d")
+
+
 def test_range_map_covers_spec_ranges():
-    assert set(RANGE_TO_PERIOD) == {"3m", "6m", "1y", "3y", "5y"}
+    assert set(RANGE_TO_FETCH) == {"1d", "5d", "1m", "3m", "6m", "ytd", "1y", "3y", "5y"}
 
 
 async def test_fake_known_ticker_summary():
@@ -39,9 +53,27 @@ async def test_fake_candles_deterministic_and_sorted():
     again = await client.get_candles("AAPL", "3m")
     assert candles == again
     assert all(isinstance(c, Candle) for c in candles)
-    dates = [c.date for c in candles]
-    assert dates == sorted(dates)
+    times = [c.time for c in candles]
+    assert times == sorted(times)
     assert len(candles) == 65
+
+
+async def test_fake_market_client_daily_candle_uses_iso_date_string():
+    from app.market.client import FakeMarketClient
+
+    candles = await FakeMarketClient().get_candles("AAPL", "1y")
+    assert candles
+    assert isinstance(candles[-1].time, str)
+    assert len(candles[-1].time) == 10  # YYYY-MM-DD
+
+
+async def test_fake_market_client_intraday_candle_uses_unix_seconds():
+    from app.market.client import FakeMarketClient
+
+    candles = await FakeMarketClient().get_candles("AAPL", "1d")
+    assert candles
+    assert isinstance(candles[-1].time, int)
+    assert candles[-1].time > 1_700_000_000  # plausible epoch
 
 
 async def test_yfinance_summary_uses_cache(monkeypatch):
@@ -52,8 +84,8 @@ async def test_yfinance_summary_uses_cache(monkeypatch):
         calls["n"] += 1
         return StockSummary(
             ticker=ticker, name="Apple Inc.", price=190.0, change=1.0,
-            change_percent=0.53, market_cap=2.9e12, pe_ratio=29.5, eps=6.44,
-            week52_high=210.0, week52_low=160.0, volume=50_000_000,
+            change_percent=0.53, market_cap=2.9e12, pe_ratio=29.5, forward_pe=25.1,
+            eps=6.44, week52_high=210.0, week52_low=160.0, volume=50_000_000,
             dividend_yield=0.55,
         )
 
@@ -205,3 +237,13 @@ async def test_yfinance_financials_empty_raises_not_found():
     with patch("yfinance.Ticker", return_value=T()):
         with pytest.raises(StockNotFound):
             await client.get_financials("AAPL", "quarterly")
+
+
+def test_fake_market_client_summary_includes_forward_pe():
+    import asyncio
+    from app.market.client import FakeMarketClient
+
+    client = FakeMarketClient()
+    summary = asyncio.run(client.get_summary("AAPL"))
+    assert summary.forward_pe is not None
+    assert summary.forward_pe == round(summary.pe_ratio * 0.85, 4)

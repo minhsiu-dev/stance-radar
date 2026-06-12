@@ -35,7 +35,10 @@ export function buildMarkers(
   stances: StanceRow[],
   candles: CandleDto[],
 ): ChartMarker[] {
-  const days = candles.map((c) => c.date);
+  const days = candles
+    .map((c) => c.time)
+    .filter((t): t is string => typeof t === "string");
+  if (days.length === 0) return [];
   const markers: ChartMarker[] = [];
   for (const row of stances) {
     const time = snapToTradingDay(row.published_at, days);

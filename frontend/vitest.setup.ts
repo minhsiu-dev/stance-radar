@@ -14,6 +14,16 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = function () {};
 }
 
+// Polyfill IntersectionObserver for feed-list (jsdom doesn't implement it)
+if (!globalThis.IntersectionObserver) {
+  globalThis.IntersectionObserver = class IntersectionObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return []; }
+  } as unknown as typeof IntersectionObserver;
+}
+
 // Polyfill window.matchMedia for next-themes
 if (!window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {

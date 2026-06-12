@@ -9,16 +9,20 @@ import {
   createSeriesMarkers,
   type IChartApi,
   type ISeriesApi,
+  type UTCTimestamp,
 } from "lightweight-charts";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import { buildMarkers, type ChartMarker } from "@/lib/markers";
 import type { CandleDto, StanceRow } from "@/lib/types";
 
-const RANGES = ["3m", "6m", "1y", "3y", "5y"] as const;
+const RANGES = ["1d", "5d", "1m", "3m", "6m", "ytd", "1y", "3y", "5y"] as const;
 type RangeKey = (typeof RANGES)[number];
+
+const INTRADAY: ReadonlySet<RangeKey> = new Set(["1d", "5d"]);
 
 interface Tooltip {
   x: number;
@@ -41,7 +45,7 @@ export function PriceChart({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const markersByVideoId = useRef<Map<string, ChartMarker>>(new Map());
-  const candleByTime = useRef<Map<string, CandleDto>>(new Map());
+  const candleByTime = useRef<Map<string | number, CandleDto>>(new Map());
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
 
   const { data: candles, error, isLoading } = useSWR<CandleDto[]>(
@@ -78,7 +82,7 @@ export function PriceChart({
     });
     series.setData(
       candles.map((c) => ({
-        time: c.date,
+        time: (typeof c.time === "number" ? (c.time as UTCTimestamp) : c.time) as UTCTimestamp | string,
         open: c.open,
         high: c.high,
         low: c.low,
@@ -89,23 +93,27 @@ export function PriceChart({
     const markers = buildMarkers(stances ?? [], candles);
     createSeriesMarkers(series, markers);
     chart.timeScale().fitContent();
+    chart.timeScale().applyOptions({
+      timeVisible: INTRADAY.has(range),
+      secondsVisible: false,
+    });
 
-    const markersByTime = new Map<string, ChartMarker[]>();
+    const markersByTime = new Map<string | number, ChartMarker[]>();
     const byVideo = new Map<string, ChartMarker>();
     for (const m of markers) {
       markersByTime.set(m.time, [...(markersByTime.get(m.time) ?? []), m]);
       byVideo.set(m.id, m);
     }
     markersByVideoId.current = byVideo;
-    const byTime = new Map<string, CandleDto>();
-    for (const c of candles) byTime.set(c.date, c);
+    const byTime = new Map<string | number, CandleDto>();
+    for (const c of candles) byTime.set(c.time, c);
     candleByTime.current = byTime;
 
     const stanceById = new Map((stances ?? []).map((s) => [s.video_id, s]));
 
     chart.subscribeCrosshairMove((param) => {
-      const time = param.time as string | undefined;
-      const hits = time ? markersByTime.get(time) : undefined;
+      const time = param.time as string | number | undefined;
+      const hits = time != null ? markersByTime.get(time) : undefined;
       if (!hits || !param.point) {
         setTooltip(null);
         return;
@@ -122,8 +130,8 @@ export function PriceChart({
       });
     });
     chart.subscribeClick((param) => {
-      const time = param.time as string | undefined;
-      const hits = time ? markersByTime.get(time) : undefined;
+      const time = param.time as string | number | undefined;
+      const hits = time != null ? markersByTime.get(time) : undefined;
       if (hits?.length && onSelectVideo) onSelectVideo(hits[0].id);
     });
 
@@ -135,7 +143,7 @@ export function PriceChart({
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [candles, stances, onSelectVideo]);
+  }, [candles, stances, onSelectVideo, range]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -152,19 +160,38 @@ export function PriceChart({
     chart.setCrosshairPosition(candle.close, hit.time, series);
   }, [hoveredVideoId]);
 
+  const first = candles?.[0]?.close;
+  const last = candles?.at(-1)?.close;
+  const delta = first && last ? (last - first) / first : null;
+
   return (
     <div className="space-y-3">
-      <div className="flex gap-1">
-        {RANGES.map((r) => (
-          <Button
-            key={r}
-            size="sm"
-            variant={r === range ? "default" : "ghost"}
-            onClick={() => setRange(r)}
+      <div className="flex items-baseline gap-3">
+        <div className="flex gap-1">
+          {RANGES.map((r) => (
+            <Button
+              key={r}
+              size="sm"
+              variant={r === range ? "default" : "ghost"}
+              onClick={() => setRange(r)}
+            >
+              {r.toUpperCase()}
+            </Button>
+          ))}
+        </div>
+        {delta != null && (
+          <span
+            className={cn(
+              "text-sm tabular-nums",
+              delta >= 0
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-rose-600 dark:text-rose-400",
+            )}
           >
-            {r.toUpperCase()}
-          </Button>
-        ))}
+            {delta >= 0 ? "+" : ""}
+            {(delta * 100).toFixed(2)}%
+          </span>
+        )}
       </div>
       {error && (
         <p className="text-sm text-red-500">
