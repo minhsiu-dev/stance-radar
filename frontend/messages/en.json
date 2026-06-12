@@ -15,10 +15,52 @@
   },
   "Dashboard": {
     "latest": "Latest videos",
-    "refresh": "Refresh"
+    "refresh": {
+      "label": "Refresh",
+      "running": "Updating… {stage}",
+      "lastFailed": "Last update failed: {message}",
+      "triggerFailed": "Update failed",
+      "stages": {
+        "listing": "Channels {done}/{total}",
+        "analyzing": "Videos {done}/{total}",
+        "preparing": "Preparing…"
+      }
+    },
+    "empty": {
+      "prompt": "No videos yet. Go to",
+      "linkLabel": "Channels",
+      "hint": "and paste a YouTube channel ID (e.g. UCbta0n8i6Rljh0obO7HzG9A). The system will automatically fetch the latest videos and analyse them."
+    },
+    "feed": {
+      "statusNoTranscript": "No transcript",
+      "statusFailed": "Analysis failed",
+      "statusPending": "Pending analysis",
+      "statusNoMentions": "No US stock mentions",
+      "loadError": "Failed to load: {message}"
+    }
   },
   "Channels": {
-    "title": "Channel management"
+    "title": "Channel management",
+    "add": {
+      "title": "Add channel",
+      "placeholder": "Paste one or more channel IDs (newline- or comma-separated)\ne.g. UCbta0n8i6Rljh0obO7HzG9A",
+      "submit": "Add",
+      "submitting": "Adding…",
+      "addSuccess": "Added successfully",
+      "alreadyExists": "Already exists",
+      "autoFetch": "Auto-fetch started",
+      "failedGeneric": "Add failed",
+      "added": "Added {names}",
+      "skipped": "Already exists: {names}"
+    },
+    "list": {
+      "empty": "No channels added yet.",
+      "lastUpdated": "Last updated: {date}",
+      "neverUpdated": "Never updated",
+      "remove": "Remove",
+      "removeFailed": "Delete failed",
+      "removePrompt": "Remove \"{name}\"? Its videos and analysis will also be deleted."
+    }
   },
   "Stock": {
     "header": {
@@ -27,7 +69,8 @@
       "eps": "EPS (TTM)",
       "week52Range": "52w range",
       "volume": "Volume",
-      "dividendYield": "Dividend yield"
+      "dividendYield": "Dividend yield",
+      "loadError": "Failed to load price data: {message}"
     },
     "tabs": {
       "overview": "Overview",
@@ -66,10 +109,13 @@
     "filter": {
       "stance": "Stance",
       "channel": "Channel",
-      "all": "All"
+      "all": "All",
+      "allStances": "All stances",
+      "allChannels": "All channels"
     },
     "openHint": "Click to open at this timestamp on YouTube",
-    "empty": "No mentions recorded for this stock yet."
+    "empty": "No mentions recorded for this stock yet.",
+    "loadError": "Failed to load mentions: {message}"
   },
   "Errors": {
     "priceLoad": "Failed to load price data: {message}",

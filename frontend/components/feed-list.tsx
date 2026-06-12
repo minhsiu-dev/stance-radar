@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import useSWR from "swr";
+import { useTranslations } from "next-intl";
 import { StanceBadge } from "@/components/stance-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,26 +12,29 @@ import { formatDate } from "@/lib/format";
 import type { FeedItem, FeedResponse } from "@/lib/types";
 
 function StatusTag({ item }: { item: FeedItem }) {
+  const t = useTranslations("Dashboard.feed");
+
   if (item.status === "no_transcript") {
-    return <Badge variant="secondary">無字幕</Badge>;
+    return <Badge variant="secondary">{t("statusNoTranscript")}</Badge>;
   }
   if (item.status === "failed") {
     return (
       <Badge variant="destructive" title={item.error_message ?? undefined}>
-        分析失敗
+        {t("statusFailed")}
       </Badge>
     );
   }
   if (item.status === "pending") {
-    return <Badge variant="secondary">待分析</Badge>;
+    return <Badge variant="secondary">{t("statusPending")}</Badge>;
   }
   if (item.stances.length === 0) {
-    return <span className="text-xs text-muted-foreground">未提及美股</span>;
+    return <span className="text-xs text-muted-foreground">{t("statusNoMentions")}</span>;
   }
   return null;
 }
 
 export function FeedList() {
+  const t = useTranslations("Dashboard");
   const { data, error, isLoading } = useSWR<FeedResponse>(
     "/api/feed?page=1&page_size=50",
     apiFetch,
@@ -46,18 +50,21 @@ export function FeedList() {
     );
   }
   if (error) {
-    return <p className="text-sm text-red-500">讀取失敗:{error.message}</p>;
+    return (
+      <p className="text-sm text-red-500">
+        {t("feed.loadError", { message: error.message })}
+      </p>
+    );
   }
   if (!data || data.items.length === 0) {
     return (
       <Card>
         <CardContent className="py-10 text-center text-sm text-muted-foreground">
-          還沒有任何影片。先到
+          {t("empty.prompt")}
           <Link href="/channels" className="mx-1 underline">
-            頻道管理
+            {t("empty.linkLabel")}
           </Link>
-          貼上 YouTube channel ID(例:UCbta0n8i6Rljh0obO7HzG9A),
-          系統會自動抓取最新影片並分析。
+          {t("empty.hint")}
         </CardContent>
       </Card>
     );

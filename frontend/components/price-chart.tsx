@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
+import { useTranslations } from "next-intl";
 import {
   CandlestickSeries,
   ColorType,
@@ -30,6 +31,7 @@ export function PriceChart({
   ticker: string;
   onSelectVideo?: (videoId: string) => void;
 }) {
+  const t = useTranslations("Errors");
   const [range, setRange] = useState<RangeKey>("1y");
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
@@ -128,7 +130,9 @@ export function PriceChart({
         ))}
       </div>
       {error && (
-        <p className="text-sm text-red-500">K 線讀取失敗:{error.message}</p>
+        <p className="text-sm text-red-500">
+          {t("candlesLoad", { message: error.message })}
+        </p>
       )}
       {isLoading && <Skeleton className="h-[380px] w-full" />}
       <div className="relative">
