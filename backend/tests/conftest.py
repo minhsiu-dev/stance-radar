@@ -12,7 +12,7 @@ TEST_DATABASE_URL = os.environ.get(
 
 async def _ensure_test_database() -> None:
     conn = await asyncpg.connect(
-        user="stance", password="stance", database="stance_radar",
+        user="stance", password="stance", database="postgres",
         host="localhost", port=5432,
     )
     try:
