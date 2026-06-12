@@ -40,6 +40,12 @@ describe("PerformanceCards", () => {
     expect(screen.getByText("QQQ")).toBeInTheDocument();
     expect(screen.getAllByText("+4.3%").length).toBe(3); // 1m chip on each card
     expect(screen.getAllByText("-1.2%").length).toBe(3);
+    for (const el of screen.getAllByText("+4.3%")) {
+      expect(el).toHaveClass("text-emerald-600");
+    }
+    for (const el of screen.getAllByText("-1.2%")) {
+      expect(el).toHaveClass("text-rose-600");
+    }
   });
 
   it("shows empty-portfolio hint when portfolio is null", async () => {

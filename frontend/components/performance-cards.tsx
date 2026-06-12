@@ -9,18 +9,19 @@ import type { PerfChanges, PerformanceSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const CHIP_RANGES = ["5d", "1m", "3m", "6m", "ytd", "1y"] as const;
-const RANGE_LABEL: Record<string, string> = {
+const RANGE_LABEL: Record<(typeof CHIP_RANGES)[number], string> = {
   "5d": "5D", "1m": "1M", "3m": "3M", "6m": "6M", ytd: "YTD", "1y": "1Y",
 };
 
 function pctText(v: number | null | undefined): string {
   if (v == null) return "—";
-  return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+  const rounded = Math.round(v * 10) / 10 + 0; // 避免 -0.04 顯示成 "-0.0%"
+  return `${rounded >= 0 ? "+" : ""}${rounded.toFixed(1)}%`;
 }
 
 function pctClass(v: number | null | undefined): string {
   if (v == null) return "text-muted-foreground";
-  return v >= 0
+  return Math.round(v * 10) / 10 + 0 >= 0
     ? "text-emerald-600 dark:text-emerald-400"
     : "text-rose-600 dark:text-rose-400";
 }

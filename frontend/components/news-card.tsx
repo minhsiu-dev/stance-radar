@@ -40,8 +40,12 @@ export function NewsCard() {
                 {n.title}
               </a>
               <p className="text-xs text-muted-foreground">
-                {n.publisher && <span>{n.publisher}</span>}
-                {n.publisher && <span className="mx-1 opacity-60">·</span>}
+                {n.publisher && (
+                  <>
+                    <span>{n.publisher}</span>
+                    <span className="mx-1 opacity-60">·</span>
+                  </>
+                )}
                 <span>{formatDate(n.published_at)}</span>
               </p>
             </div>
