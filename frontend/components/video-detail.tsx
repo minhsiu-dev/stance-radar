@@ -23,14 +23,9 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   if (error) {
     const notFound = (error as { status?: number }).status === 404;
     return (
-      <div className="space-y-3">
-        <Link href="/videos" className="text-sm text-muted-foreground hover:underline">
-          {t("backToVideos")}
-        </Link>
-        <p className="text-sm text-red-500">
-          {notFound ? t("notFound") : t("loadError", { message: error.message })}
-        </p>
-      </div>
+      <p className="text-sm text-red-500">
+        {notFound ? t("notFound") : t("loadError", { message: error.message })}
+      </p>
     );
   }
   if (!data) {
@@ -45,9 +40,6 @@ export function VideoDetail({ videoId }: { videoId: string }) {
 
   return (
     <div className="space-y-4">
-      <Link href="/videos" className="text-sm text-muted-foreground hover:underline">
-        {t("backToVideos")}
-      </Link>
       <YouTubePlayer ref={playerRef} videoId={data.video.id} />
       <div className="space-y-1">
         <h1 className="text-xl font-semibold leading-snug">{data.video.title}</h1>

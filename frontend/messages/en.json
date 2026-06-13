@@ -29,6 +29,7 @@
   "Dashboard": {
     "latest": "Latest videos",
     "viewAll": "View all →",
+    "recentStocks": { "title": "Recently discussed" },
     "trending": { "title": "Trending" },
     "flips": {
       "title": "Stance flips",
@@ -250,7 +251,6 @@
   "VideoDetail": {
     "loadError": "Failed to load video: {message}",
     "notFound": "Video not found",
-    "backToVideos": "← Back to latest videos",
     "watchOnYoutube": "Open on YouTube",
     "mentionsHeading": "Mentions & stances",
     "mentionCount": "{count} mentions",

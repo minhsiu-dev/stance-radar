@@ -29,6 +29,7 @@
   "Dashboard": {
     "latest": "最新影片",
     "viewAll": "看全部 →",
+    "recentStocks": { "title": "最新被討論的股票" },
     "trending": { "title": "熱門提及" },
     "flips": {
       "title": "立場轉變",
@@ -250,7 +251,6 @@
   "VideoDetail": {
     "loadError": "影片載入失敗:{message}",
     "notFound": "找不到這部影片",
-    "backToVideos": "← 返回最新影片",
     "watchOnYoutube": "在 YouTube 開啟",
     "mentionsHeading": "提及與立場",
     "mentionCount": "{count} 次提及",
