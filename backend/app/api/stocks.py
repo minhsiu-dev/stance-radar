@@ -57,6 +57,32 @@ async def stock_search(
 _TRENDING_HALF_LIFE_DAYS = 7.0
 
 
+def _trending_item(ticker: str, entry: dict) -> dict:
+    """Build a trending payload row, bucketing each channel into its most-recent
+    stance so the three zones partition the distinct channels exactly."""
+    buckets: dict[str, list[dict]] = {"buy": [], "neutral": [], "sell": []}
+    for ch in entry["channels"].values():
+        buckets[ch["stance"]].append(ch)
+    stances = {}
+    for key, chans in buckets.items():
+        chans.sort(key=lambda c: c["last"], reverse=True)
+        stances[key] = {
+            "count": len(chans),
+            "avatars": [
+                {"title": c["title"], "thumbnail_url": c["thumbnail_url"]}
+                for c in chans[:3]
+            ],
+        }
+    return {
+        "ticker": ticker,
+        "channel_count": len(entry["channels"]),
+        "mention_count": entry["count"],
+        "score": round(entry["score"], 4),
+        "last_mentioned_at": entry["last"].isoformat(),
+        "stances": stances,
+    }
+
+
 @router.get("/trending")
 async def stocks_trending(
     limit: int = Query(12, ge=1, le=50),
@@ -64,39 +90,46 @@ async def stocks_trending(
     session: AsyncSession = Depends(get_session),
 ):
     """排序鍵 = 不重複頻道數;同分用最近一次提及、再用 ticker。
-    score(時間衰減熱度)與 mention_count 仍回傳,供其他畫面使用。"""
+    每股附帶 stances(各立場的頻道數 + 至多 3 個頻道頭像,頻道以其最近一次提及的立場歸類)。"""
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=days)
     rows = (await session.execute(
-        select(Mention.ticker, Video.channel_id, Video.published_at)
+        select(
+            Mention.ticker,
+            Mention.stance,
+            Video.channel_id,
+            Channel.title,
+            Channel.thumbnail_url,
+            Video.published_at,
+        )
         .join(Video, Mention.video_id == Video.id)
+        .join(Channel, Video.channel_id == Channel.id)
         .where(Video.published_at >= cutoff)
+        .order_by(Video.published_at.asc(), Mention.id.asc())
     )).all()
     stats: dict[str, dict] = {}
-    for ticker, channel_id, published_at in rows:
+    for ticker, stance, channel_id, ch_title, ch_thumb, published_at in rows:
         age_days = max((now - published_at).total_seconds() / 86400, 0.0)
         entry = stats.setdefault(
             ticker,
-            {"count": 0, "channels": set(), "score": 0.0, "last": published_at},
+            {"count": 0, "score": 0.0, "last": published_at, "channels": {}},
         )
         entry["count"] += 1
-        entry["channels"].add(channel_id)
         entry["score"] += 0.5 ** (age_days / _TRENDING_HALF_LIFE_DAYS)
         entry["last"] = max(entry["last"], published_at)
+        ch = entry["channels"].get(channel_id)
+        if ch is None or published_at >= ch["last"]:
+            entry["channels"][channel_id] = {
+                "title": ch_title,
+                "thumbnail_url": ch_thumb,
+                "stance": stance.value,
+                "last": published_at,
+            }
     ranked = sorted(
         stats.items(),
         key=lambda kv: (-len(kv[1]["channels"]), -kv[1]["last"].timestamp(), kv[0]),
     )[:limit]
-    return ok([
-        {
-            "ticker": ticker,
-            "channel_count": len(entry["channels"]),
-            "mention_count": entry["count"],
-            "score": round(entry["score"], 4),
-            "last_mentioned_at": entry["last"].isoformat(),
-        }
-        for ticker, entry in ranked
-    ])
+    return ok([_trending_item(ticker, entry) for ticker, entry in ranked])
 
 
 @router.get("/{ticker}")

@@ -375,3 +375,55 @@ async def test_stance_summary_counts_distinct_channels(api, sessionmaker):
     assert body["buy"] == 2     # channel A (once, despite 2 videos) + channel B
     assert body["sell"] == 1    # channel B
     assert body["neutral"] == 0
+
+
+@pytest.mark.asyncio
+async def test_trending_includes_per_stance_channel_avatars(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        # 4 channels currently BULLISH on AMZN; distinct published_at so ordering is deterministic
+        # cb0 is newest (days=2, hours=0), cb3 is oldest (days=2, hours=3)
+        for n in range(4):
+            s.add(Channel(id=f"cb{n}", title=f"Bull{n}", thumbnail_url=f"http://x/{n}.jpg",
+                          uploads_playlist_id=f"UUb{n}"))
+            s.add(Video(id=f"vb{n}", channel_id=f"cb{n}", title="t",
+                        published_at=now - timedelta(days=2, hours=n), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(Mention(video_id=f"vb{n}", ticker="AMZN", start_seconds=1.0,
+                          quote="q", stance=Stance.buy, reasoning="r"))
+        # channel cb0 ALSO has an OLDER sell mention → its latest stance is buy, so it
+        # must count only in buy (proves most-recent-wins reduction + clean partition)
+        s.add(Video(id="vb0_old", channel_id="cb0", title="t",
+                    published_at=now - timedelta(days=9), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="vb0_old", ticker="AMZN", start_seconds=1.0,
+                      quote="q", stance=Stance.sell, reasoning="r"))
+        # 1 channel bearish
+        s.add(Channel(id="cs", title="Bear", thumbnail_url="http://x/s.jpg",
+                      uploads_playlist_id="UUs"))
+        s.add(Video(id="vs", channel_id="cs", title="t",
+                    published_at=now - timedelta(days=1), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="vs", ticker="AMZN", start_seconds=1.0,
+                      quote="q", stance=Stance.sell, reasoning="r"))
+        await s.commit()
+
+    rows = (await client.get("/api/stocks/trending?limit=5")).json()["data"]
+    amzn = next(r for r in rows if r["ticker"] == "AMZN")
+    assert amzn["channel_count"] == 5
+    st = amzn["stances"]
+    assert st["buy"]["count"] == 4       # cb0 counted as buy (latest), not sell
+    assert st["neutral"]["count"] == 0
+    assert st["sell"]["count"] == 1
+    assert st["buy"]["count"] + st["neutral"]["count"] + st["sell"]["count"] == amzn["channel_count"]
+    assert len(st["buy"]["avatars"]) == 3
+    assert st["buy"]["avatars"][0]["title"].startswith("Bull")
+    assert st["buy"]["avatars"][0]["thumbnail_url"].startswith("http")
+    # avatars are most-recent-first; cb0 (newest buy mention) leads
+    assert st["buy"]["avatars"][0]["title"] == "Bull0"
+    assert len(st["sell"]["avatars"]) == 1
+    assert st["sell"]["avatars"][0]["title"] == "Bear"
