@@ -333,8 +333,8 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
 
       <Tabs defaultValue="scorecard">
         <TabsList>
-          <TabsTrigger value="videos">{t("tabs.videos")}</TabsTrigger>
           <TabsTrigger value="scorecard">{t("tabs.scorecard")}</TabsTrigger>
+          <TabsTrigger value="videos">{t("tabs.videos")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="videos" className="space-y-6">
