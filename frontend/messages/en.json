@@ -202,8 +202,7 @@
     },
     "tabs": {
       "overview": "Overview",
-      "mentions": "Mentions",
-      "financials": "Financials"
+      "mentions": "Mentions"
     },
     "overview": {
       "latestQuarter": "Latest quarter",
