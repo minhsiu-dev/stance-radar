@@ -8,14 +8,12 @@ import { ExternalLink } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { YouTubePlayer, type YouTubePlayerHandle } from "@/components/youtube-player";
 import { VideoMentions } from "@/components/video-mentions";
-import { FloatingDock } from "@/components/floating-dock";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/format";
 import type { VideoDetailResponse } from "@/lib/types";
 
 export function VideoDetail({ videoId }: { videoId: string }) {
   const t = useTranslations("VideoDetail");
-  const tc = useTranslations("Common");
   const playerRef = useRef<YouTubePlayerHandle>(null);
   const searchParams = useSearchParams();
   const initialTicker = searchParams.get("ticker");
@@ -41,30 +39,32 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   }
 
   return (
-    <div className="space-y-4">
-      <FloatingDock floatingWidth={360} onClose={() => playerRef.current?.pause()} dragLabel={tc("dragHandle")} closeLabel={tc("close")}>
-        {() => <YouTubePlayer ref={playerRef} videoId={data.video.id} />}
-      </FloatingDock>
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight leading-snug line-clamp-2">
-          {data.video.title}
-        </h1>
-        <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <Link href={`/channels/${data.video.channel.id}`} className="font-medium text-foreground/70 hover:underline">
-            {data.video.channel.title}
-          </Link>
-          <span className="opacity-60">·</span>
-          {formatDate(data.video.published_at)}
-          <a
-            href={`https://www.youtube.com/watch?v=${data.video.id}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 underline hover:text-foreground"
-          >
-            <ExternalLink className="h-3 w-3" />
-            {t("watchOnYoutube")}
-          </a>
-        </p>
+    <div className="grid gap-6 lg:grid-cols-2">
+      <div>
+        <div className="space-y-2 lg:sticky lg:top-14">
+          <YouTubePlayer ref={playerRef} videoId={data.video.id} />
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight leading-snug line-clamp-2">
+              {data.video.title}
+            </h1>
+            <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Link href={`/channels/${data.video.channel.id}`} className="font-medium text-foreground/70 hover:underline">
+                {data.video.channel.title}
+              </Link>
+              <span className="opacity-60">·</span>
+              {formatDate(data.video.published_at)}
+              <a
+                href={`https://www.youtube.com/watch?v=${data.video.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 underline hover:text-foreground"
+              >
+                <ExternalLink className="h-3 w-3" />
+                {t("watchOnYoutube")}
+              </a>
+            </p>
+          </div>
+        </div>
       </div>
       <VideoMentions
         groups={data.groups}

@@ -8,12 +8,6 @@ vi.mock("@/components/youtube-player", () => ({
   YouTubePlayer: () => <div data-testid="yt-player-mock" />,
 }));
 
-vi.mock("@/components/floating-dock", () => ({
-  FloatingDock: ({ children }: { children: (s: { floating: boolean }) => React.ReactNode }) => (
-    <div data-testid="floating-dock">{children({ floating: false })}</div>
-  ),
-}));
-
 // 預設無 ?ticker
 vi.mock("next/navigation", async (orig) => ({
   ...(await orig<typeof import("next/navigation")>()),
@@ -81,9 +75,10 @@ describe("VideoDetail", () => {
     expect(await screen.findByText("Video not found")).toBeInTheDocument();
   });
 
-  it("wraps the player in a FloatingDock", async () => {
+  it("renders the player and mentions in a two-column layout", async () => {
     wrap(vi.fn().mockResolvedValue(DATA));
-    expect(await screen.findByTestId("floating-dock")).toBeInTheDocument();
-    expect(screen.getByTestId("yt-player-mock")).toBeInTheDocument();
+    expect(await screen.findByTestId("yt-player-mock")).toBeInTheDocument();
+    expect(screen.getByText("My Video")).toBeInTheDocument();
+    expect(screen.getByText("Bullish")).toBeInTheDocument(); // a mention group
   });
 });
