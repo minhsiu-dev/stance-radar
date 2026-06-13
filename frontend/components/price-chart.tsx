@@ -165,14 +165,17 @@ export function PriceChart({
     const chart = chartRef.current;
     const series = seriesRef.current;
     if (!chart || !series) return;
-    if (!hoveredVideoId) {
+    const hit = hoveredVideoId
+      ? markersByVideoId.current.get(hoveredVideoId)
+      : undefined;
+    const candle = hit ? candleByTime.current.get(hit.time) : undefined;
+    // No row hovered, or the hovered video has no marker in the current range
+    // (e.g. published before the visible window, or an intraday range with no
+    // markers) → clear any prior highlight instead of leaving a stale one.
+    if (!hit || !candle) {
       chart.clearCrosshairPosition();
       return;
     }
-    const hit = markersByVideoId.current.get(hoveredVideoId);
-    if (!hit) return;
-    const candle = candleByTime.current.get(hit.time);
-    if (!candle) return;
     chart.setCrosshairPosition(candle.close, hit.time, series);
   }, [hoveredVideoId]);
 
