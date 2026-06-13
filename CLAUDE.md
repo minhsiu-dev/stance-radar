@@ -105,13 +105,16 @@ daemon 容器的 `/var/lib/docker`,跟 repo 共用同一顆 backing disk(`df /` 
 
 吃空間的兩個來源:每次 `docker compose build` 累積的 image layer / build cache,
 以及 **E2E 會另外 build 一整套 `stance-e2e-*` image(~2–3G)**。跑完 E2E 或空間
-吃緊時清一輪:
+吃緊時一鍵清:
 
 ```bash
-docker builder prune -af
-docker image prune -af
-docker images --format '{{.ID}} {{.Repository}}' | awk '/stance-e2e/{print $1}' | xargs -r docker rmi -f
+make clean-docker      # 拆 E2E stack(含其拋棄式 pgdata)+ prune image/cache;不碰主 DB
 ```
+
+`make clean-docker` 不會動 `workspace_pgdata`(你的持股/分析資料)。要連 volume 全清
+(會刪掉主 DB)才用 `make clean-docker-all`,它會先要你打 `yes` 確認。
+（沒裝 make 時等價於 `docker compose -p stance-e2e down -v --remove-orphans &&
+docker image prune -af && docker builder prune -af`。)
 
 **磁碟滿(100%)會害死 Postgres**:它 WAL redo 完、寫 end-of-recovery checkpoint
 時 `No space left on device` → PANIC → 重啟 → 無限迴圈,`db` 變 unhealthy、所有
