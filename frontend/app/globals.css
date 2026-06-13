@@ -135,5 +135,9 @@
     @apply font-sans;
     /* tabular figures 對齊數字欄;保留 Geist 預設的字形(不啟用 ss01 的 single-story a) */
     font-feature-settings: "tnum" 1;
+    /* Sticky-shrink headers (stock/video pages) resize on collapse; disabling scroll
+       anchoring stops the browser from nudging scrollY in response, which otherwise
+       feeds back into the collapse trigger. */
+    overflow-anchor: none;
   }
 }
