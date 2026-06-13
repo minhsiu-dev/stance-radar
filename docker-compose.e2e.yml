@@ -2,3 +2,11 @@ services:
   api:
     environment:
       USE_FAKE_ADAPTERS: "true"
+  # 磁碟受限環境的 opt-in 路徑:用 frontend/Dockerfile.e2e 打包 host 已 build 好的
+  # .next/standalone,避免容器內 ~1GB 的 npm ci。
+  # 注意:next rewrites() 的 API_URL 是在 `next build` 時固化到 standalone 的,
+  # 所以 host build 必須帶上 `API_URL=http://api:8000 npm run build`(否則會 fallback
+  # 到 localhost:8000,容器內連不到 api)。runtime env 在 standalone 不會重新生效。
+  frontend:
+    build:
+      dockerfile: Dockerfile.e2e

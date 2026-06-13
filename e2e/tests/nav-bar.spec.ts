@@ -12,15 +12,20 @@ test("⌘K opens command palette and navigates", async ({ page }) => {
   await expect(page).toHaveURL(/\/en\/stocks\/AAPL$/);
 });
 
-test("language switcher preserves path", async ({ page }) => {
+test("language switcher (gear) preserves path", async ({ page }) => {
   await page.goto("/en/stocks/AAPL");
-  await page.getByRole("button", { name: "EN" }).click();
-  await page.getByRole("menuitem", { name: "繁中" }).click();
+  // Language now lives inside the settings gear menu
+  await page.getByRole("button", { name: /settings/i }).click();
+  await page.getByRole("menuitemcheckbox", { name: "繁中" }).click();
   await expect(page).toHaveURL(/\/zh-TW\/stocks\/AAPL$/);
 });
 
-test("theme toggle adds dark class", async ({ page }) => {
+test("theme toggle (gear) adds dark class", async ({ page }) => {
   await page.goto("/en");
-  await page.getByRole("button", { name: /toggle theme/i }).click();
+  // Dark mode now lives inside the settings gear menu
+  await page.getByRole("button", { name: /settings/i }).click();
+  await page
+    .getByRole("menuitemcheckbox", { name: /dark mode/i })
+    .click();
   await expect(page.locator("html")).toHaveClass(/dark/);
 });
