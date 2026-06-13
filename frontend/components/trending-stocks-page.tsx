@@ -63,12 +63,13 @@ function WindowSelect({
   onChange: (n: number) => void;
   t: ReturnType<typeof useTranslations<"Trending">>;
 }) {
+  const current = WINDOWS.find((w) => w.days === value);
   return (
     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
       {label}
       <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
         <SelectTrigger className="w-28">
-          <SelectValue />
+          <SelectValue>{current ? t(current.key) : ""}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {WINDOWS.map((w) => (

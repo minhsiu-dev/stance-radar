@@ -39,6 +39,11 @@ describe("TrendingStocksPage", () => {
     wrap(fetcher);
     expect(await screen.findByTestId("recent-stock-card")).toBeInTheDocument();
     expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("days=30") && u.includes("count_days=90"))).toBe(true);
+    // triggers show window labels, not raw day-count numbers
+    expect(screen.getAllByText("1M").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("3M").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("30")).toBeNull();
+    expect(screen.queryByText("90")).toBeNull();
   });
 
   it("shows the empty state when no stocks come back", async () => {
