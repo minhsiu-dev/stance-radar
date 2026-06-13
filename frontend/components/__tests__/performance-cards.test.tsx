@@ -73,10 +73,27 @@ describe("PerformanceCards", () => {
       qqq: { price: 478.91, changes },
     }));
     expect(await screen.findByText("My portfolio")).toBeInTheDocument();
-    expect(screen.getByText("••••")).toBeInTheDocument();
+    // 組合 headline 被遮罩(百分比也遮 → 可能有多個 ••••)
+    expect(screen.getAllByText("••••").length).toBeGreaterThan(0);
     expect(screen.queryByText(/128,430/)).toBeNull();
     // VOO/QQQ are public market prices, not masked
     expect(screen.getByText("$512.3")).toBeInTheDocument();
     expect(screen.getByText("$478.91")).toBeInTheDocument();  // QQQ price visible
+  });
+
+  it("masks percentages too when privacy mode is on", async () => {
+    localStorage.setItem("stance-radar-hide-amounts", "true");
+    wrap(vi.fn().mockResolvedValue({
+      ranges: ["1d", "5d", "1m", "3m", "6m", "ytd", "1y"],
+      portfolio: { total_value: 128430.5, changes },
+      voo: { price: 512.3, changes },
+      qqq: { price: 478.91, changes },
+    }));
+    await screen.findByText("My portfolio");
+    // 隱私模式下不應出現任何百分比文字
+    expect(screen.queryByText("+4.3%")).toBeNull();
+    expect(screen.queryByText("-1.2%")).toBeNull();
+    // 三張卡的 headline 與 1D 皆遮罩(portfolio headline + 三張卡的百分比 → 多個 ••••)
+    expect(screen.getAllByText("••••").length).toBeGreaterThanOrEqual(3);
   });
 });

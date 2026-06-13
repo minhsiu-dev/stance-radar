@@ -36,10 +36,12 @@ function PerfCard({
   title,
   headline,
   changes,
+  hide,
 }: {
   title: string;
   headline: string;
   changes: PerfChanges;
+  hide: boolean;
 }) {
   return (
     <Card data-testid="perf-card">
@@ -50,7 +52,7 @@ function PerfCard({
         </div>
         <div className="flex items-baseline gap-2">
           <span className={cn("text-2xl font-semibold", pctClass(changes["1d"]))}>
-            {pctText(changes["1d"])}
+            {masked(hide, pctText(changes["1d"]))}
           </span>
           <span className="text-xs text-muted-foreground">1D</span>
         </div>
@@ -59,7 +61,7 @@ function PerfCard({
             <span key={r} className="inline-flex items-baseline gap-1">
               <span className="text-muted-foreground">{RANGE_LABEL[r]}</span>
               <span className={cn("font-mono tabular-nums", pctClass(changes[r]))}>
-                {pctText(changes[r])}
+                {masked(hide, pctText(changes[r]))}
               </span>
             </span>
           ))}
@@ -97,6 +99,7 @@ export function PerformanceCards() {
           title={t("portfolio")}
           headline={masked(hideAmounts, money(data.portfolio.total_value))}
           changes={data.portfolio.changes}
+          hide={hideAmounts}
         />
       ) : (
         <Card>
@@ -108,8 +111,8 @@ export function PerformanceCards() {
           </CardContent>
         </Card>
       )}
-      <PerfCard title="VOO" headline={money(data.voo.price)} changes={data.voo.changes} />
-      <PerfCard title="QQQ" headline={money(data.qqq.price)} changes={data.qqq.changes} />
+      <PerfCard title="VOO" headline={money(data.voo.price)} changes={data.voo.changes} hide={hideAmounts} />
+      <PerfCard title="QQQ" headline={money(data.qqq.price)} changes={data.qqq.changes} hide={hideAmounts} />
     </div>
   );
 }
