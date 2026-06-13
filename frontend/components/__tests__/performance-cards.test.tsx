@@ -77,5 +77,6 @@ describe("PerformanceCards", () => {
     expect(screen.queryByText(/128,430/)).toBeNull();
     // VOO/QQQ are public market prices, not masked
     expect(screen.getByText("$512.3")).toBeInTheDocument();
+    expect(screen.getByText("$478.91")).toBeInTheDocument();  // QQQ price visible
   });
 });

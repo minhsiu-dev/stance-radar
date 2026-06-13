@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
+import { PrivacyProvider } from "@/components/privacy-provider";
 import { PortfolioTransactions } from "@/components/portfolio-transactions";
 
 const messages = {
@@ -26,12 +27,15 @@ function wrap(fetcher: (url: string) => Promise<unknown>) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <SWRConfig value={{ fetcher, provider: () => new Map() }}>
-        <PortfolioTransactions />
+        <PrivacyProvider>
+          <PortfolioTransactions />
+        </PrivacyProvider>
       </SWRConfig>
     </NextIntlClientProvider>,
   );
 }
 
+beforeEach(() => localStorage.clear());
 afterEach(() => vi.restoreAllMocks());
 
 describe("PortfolioTransactions", () => {
@@ -66,5 +70,17 @@ describe("PortfolioTransactions", () => {
       expect(body.shares).toBe(10);
       expect(body.note).toBe("first buy");
     });
+  });
+
+  it("masks shares but not price in privacy mode", async () => {
+    localStorage.setItem("stance-radar-hide-amounts", "true");
+    wrap(vi.fn().mockImplementation((url: string) =>
+      url.startsWith("/api/portfolio/transactions")
+        ? Promise.resolve([tx])
+        : Promise.resolve([]),
+    ));
+    expect(await screen.findByText("AAPL")).toBeInTheDocument();
+    expect(screen.getByText(/•••• × \$100/)).toBeInTheDocument();
+    expect(screen.queryByText(/10 × \$100/)).toBeNull();
   });
 });
