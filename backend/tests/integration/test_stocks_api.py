@@ -427,3 +427,91 @@ async def test_trending_includes_per_stance_channel_avatars(api, sessionmaker):
     assert st["buy"]["avatars"][0]["title"] == "Bull0"
     assert len(st["sell"]["avatars"]) == 1
     assert st["sell"]["avatars"][0]["title"] == "Bear"
+
+
+@pytest.mark.asyncio
+async def test_trending_count_days_independent_of_freshness(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(id="cc0", title="C0", thumbnail_url="http://x/0.jpg", uploads_playlist_id="UU0"))
+        s.add(Channel(id="cc1", title="C1", thumbnail_url="http://x/1.jpg", uploads_playlist_id="UU1"))
+        # NFLX: a fresh mention (2 days ago) by cc0 + an older mention (60 days ago) by cc1
+        s.add(Video(id="nf_new", channel_id="cc0", title="t",
+                    published_at=now - timedelta(days=2), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="nf_new", ticker="NFLX", start_seconds=1.0, quote="q",
+                      stance=Stance.buy, reasoning="r"))
+        s.add(Video(id="nf_old", channel_id="cc1", title="t",
+                    published_at=now - timedelta(days=60), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="nf_old", ticker="NFLX", start_seconds=1.0, quote="q",
+                      stance=Stance.buy, reasoning="r"))
+        # ORCL: only an old mention (60 days ago) → NOT fresh in a 7-day window
+        s.add(Video(id="or_old", channel_id="cc0", title="t",
+                    published_at=now - timedelta(days=60), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="or_old", ticker="ORCL", start_seconds=1.0, quote="q",
+                      stance=Stance.buy, reasoning="r"))
+        await s.commit()
+
+    # freshness=7d, count=90d: only NFLX is fresh; its channel_count counts BOTH channels (90d window)
+    rows = (await client.get("/api/stocks/trending?days=7&count_days=90&limit=50")).json()["data"]
+    by = {r["ticker"]: r for r in rows}
+    assert "NFLX" in by and "ORCL" not in by          # ORCL filtered out by 7d freshness
+    assert by["NFLX"]["channel_count"] == 2           # counted over the 90d window
+
+    # freshness=7d, count=7d: NFLX still fresh, but only the 2-day-ago channel counts
+    rows2 = (await client.get("/api/stocks/trending?days=7&count_days=7&limit=50")).json()["data"]
+    by2 = {r["ticker"]: r for r in rows2}
+    assert by2["NFLX"]["channel_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_trending_count_days_defaults_to_days(api, sessionmaker):
+    # Omitting count_days must preserve the current behaviour (count window == days).
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(id="cd0", title="D0", thumbnail_url="", uploads_playlist_id="UUd0"))
+        s.add(Video(id="d_v", channel_id="cd0", title="t",
+                    published_at=now - timedelta(days=3), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="d_v", ticker="ADBE", start_seconds=1.0, quote="q",
+                      stance=Stance.buy, reasoning="r"))
+        await s.commit()
+    rows = (await client.get("/api/stocks/trending?days=90&limit=50")).json()["data"]
+    adbe = next(r for r in rows if r["ticker"] == "ADBE")
+    assert adbe["channel_count"] == 1
+    assert set(adbe["stances"].keys()) == {"buy", "neutral", "sell"}
+
+
+@pytest.mark.asyncio
+async def test_trending_fresh_but_outside_count_window(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(id="cg0", title="G0", thumbnail_url="", uploads_playlist_id="UUg0"))
+        # SHOP mentioned 30 days ago: passes a 90d freshness gate, but a 7d count window is empty
+        s.add(Video(id="g_v", channel_id="cg0", title="t",
+                    published_at=now - timedelta(days=30), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="g_v", ticker="SHOP", start_seconds=1.0, quote="q",
+                      stance=Stance.buy, reasoning="r"))
+        await s.commit()
+
+    rows = (await client.get("/api/stocks/trending?days=90&count_days=7&limit=50")).json()["data"]
+    shop = next(r for r in rows if r["ticker"] == "SHOP")  # still included (fresh within 90d)
+    assert shop["channel_count"] == 0          # no channels within the 7d count window
+    assert shop["mention_count"] == 0
+    assert shop["stances"]["buy"]["count"] == 0
+    assert shop["last_mentioned_at"].startswith("20")  # from fresh_last, not None

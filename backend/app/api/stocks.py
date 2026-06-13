@@ -58,8 +58,9 @@ _TRENDING_HALF_LIFE_DAYS = 7.0
 
 
 def _trending_item(ticker: str, entry: dict) -> dict:
-    """Build a trending payload row, bucketing each channel into its most-recent
-    stance so the three zones partition the distinct channels exactly."""
+    """Build a trending payload row. Channels are bucketed into their most-recent
+    stance (within the count window). `last` is the newest mention in the count
+    window, falling back to the freshness window when the count window is empty."""
     buckets: dict[str, list[dict]] = {"buy": [], "neutral": [], "sell": []}
     for ch in entry["channels"].values():
         buckets[ch["stance"]].append(ch)
@@ -73,26 +74,31 @@ def _trending_item(ticker: str, entry: dict) -> dict:
                 for c in chans[:3]
             ],
         }
+    last = entry["last"] or entry["fresh_last"]
     return {
         "ticker": ticker,
         "channel_count": len(entry["channels"]),
         "mention_count": entry["count"],
         "score": round(entry["score"], 4),
-        "last_mentioned_at": entry["last"].isoformat(),
+        "last_mentioned_at": last.isoformat(),
         "stances": stances,
     }
 
 
 @router.get("/trending")
 async def stocks_trending(
-    limit: int = Query(12, ge=1, le=50),
+    limit: int = Query(12, ge=1, le=200),
     days: int = Query(90, ge=1, le=365),
+    count_days: int | None = Query(None, ge=1, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    """排序鍵 = 不重複頻道數;同分用最近一次提及、再用 ticker。
-    每股附帶 stances(各立場的頻道數 + 至多 3 個頻道頭像,頻道以其最近一次提及的立場歸類)。"""
+    """`days` = 新鮮度:只收錄此區間內被提及過的股票。
+    `count_days`(預設 = days)= 統計頻道數與立場的區間。
+    排序鍵 = 不重複頻道數 → 最近提及 → ticker。"""
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=days)
+    fresh_cutoff = now - timedelta(days=days)
+    count_cutoff = now - timedelta(days=(count_days or days))
+    earliest = min(fresh_cutoff, count_cutoff)
     rows = (await session.execute(
         select(
             Mention.ticker,
@@ -104,32 +110,46 @@ async def stocks_trending(
         )
         .join(Video, Mention.video_id == Video.id)
         .join(Channel, Video.channel_id == Channel.id)
-        .where(Video.published_at >= cutoff)
+        .where(Video.published_at >= earliest)
         .order_by(Video.published_at.asc(), Mention.id.asc())
     )).all()
     stats: dict[str, dict] = {}
     for ticker, stance, channel_id, ch_title, ch_thumb, published_at in rows:
-        age_days = max((now - published_at).total_seconds() / 86400, 0.0)
         entry = stats.setdefault(
             ticker,
-            {"count": 0, "score": 0.0, "last": published_at, "channels": {}},
+            {"count": 0, "score": 0.0, "last": None, "fresh_last": None, "channels": {}},
         )
-        entry["count"] += 1
-        entry["score"] += 0.5 ** (age_days / _TRENDING_HALF_LIFE_DAYS)
-        entry["last"] = max(entry["last"], published_at)
-        ch = entry["channels"].get(channel_id)
-        if ch is None or published_at >= ch["last"]:
-            entry["channels"][channel_id] = {
-                "title": ch_title,
-                "thumbnail_url": ch_thumb,
-                "stance": stance.value,
-                "last": published_at,
-            }
-    ranked = sorted(
-        stats.items(),
-        key=lambda kv: (-len(kv[1]["channels"]), -kv[1]["last"].timestamp(), kv[0]),
-    )[:limit]
-    return ok([_trending_item(ticker, entry) for ticker, entry in ranked])
+        if published_at >= fresh_cutoff:
+            entry["fresh_last"] = (
+                published_at if entry["fresh_last"] is None
+                else max(entry["fresh_last"], published_at)
+            )
+        if published_at >= count_cutoff:
+            age_days = max((now - published_at).total_seconds() / 86400, 0.0)
+            entry["count"] += 1
+            entry["score"] += 0.5 ** (age_days / _TRENDING_HALF_LIFE_DAYS)
+            entry["last"] = (
+                published_at if entry["last"] is None
+                else max(entry["last"], published_at)
+            )
+            ch = entry["channels"].get(channel_id)
+            if ch is None or published_at >= ch["last"]:
+                entry["channels"][channel_id] = {
+                    "title": ch_title,
+                    "thumbnail_url": ch_thumb,
+                    "stance": stance.value,
+                    "last": published_at,
+                }
+    # only tickers that were mentioned within the freshness window
+    fresh = [(t, e) for t, e in stats.items() if e["fresh_last"] is not None]
+    fresh.sort(
+        key=lambda te: (
+            -len(te[1]["channels"]),
+            -(te[1]["last"] or te[1]["fresh_last"]).timestamp(),
+            te[0],
+        ),
+    )
+    return ok([_trending_item(t, e) for t, e in fresh[:limit]])
 
 
 @router.get("/{ticker}")
