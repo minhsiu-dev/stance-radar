@@ -95,3 +95,30 @@ docker compose -p stance-e2e \
 
 - 設計 spec:`docs/superpowers/specs/`
 - 實作計畫:`docs/superpowers/plans/`
+
+## 磁碟 / Docker 空間
+
+開發是 Docker-in-Docker:image layers、container overlay、build cache 全部存在
+daemon 容器的 `/var/lib/docker`,跟 repo 共用同一顆 backing disk(`df /` 看到的
+~79G overlay)。從 workspace 容器內 `du` 只看得到自己約 2G,docker 那塊要用
+`docker` CLI 看(`docker system df`),不是 `du`。
+
+吃空間的兩個來源:每次 `docker compose build` 累積的 image layer / build cache,
+以及 **E2E 會另外 build 一整套 `stance-e2e-*` image(~2–3G)**。跑完 E2E 或空間
+吃緊時清一輪:
+
+```bash
+docker builder prune -af
+docker image prune -af
+docker images --format '{{.ID}} {{.Repository}}' | awk '/stance-e2e/{print $1}' | xargs -r docker rmi -f
+```
+
+**磁碟滿(100%)會害死 Postgres**:它 WAL redo 完、寫 end-of-recovery checkpoint
+時 `No space left on device` → PANIC → 重啟 → 無限迴圈,`db` 變 unhealthy、所有
+`/api/portfolio/*` 回 500(`CannotConnectNowError: ... in recovery mode`)。
+資料沒壞(redo 已完成),只是寫不進去。處理:先清出空間(上面的 prune),再
+`docker compose restart db`,幾秒就會 healthy。
+
+79G 大半是 host 共用、非我們可控;真正能回收的只有上面那些 docker artifact。要更大
+空間得在開這個 sandbox 的那層(雲端 workspace 磁碟設定 / VM volume / Docker Desktop
+的 virtual disk limit)調,容器內無法改。
