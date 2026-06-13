@@ -5,6 +5,12 @@ import { NextIntlClientProvider } from "next-intl";
 import { VideoMentions } from "@/components/video-mentions";
 import type { VideoDetailGroup } from "@/lib/types";
 
+vi.mock("@/i18n/navigation", () => ({
+  Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
+
 const messages = {
   VideoDetail: {
     mentionsHeading: "Mentions & stances",
@@ -77,5 +83,23 @@ describe("VideoMentions", () => {
   it("shows empty state when there are no groups", () => {
     wrap(<VideoMentions groups={[]} onSeek={() => {}} initialTicker={null} />);
     expect(screen.getByText("No mentions")).toBeInTheDocument();
+  });
+
+  it("links the ticker (left) to its stock page", async () => {
+    wrap(<VideoMentions groups={GROUPS} onSeek={() => {}} initialTicker={null} />);
+    const link = screen.getByRole("link", { name: "AAPL" });
+    expect(link.getAttribute("href")).toContain("/stocks/AAPL");
+  });
+
+  it("has no separate right-side stock-page link and no header stance bubble", async () => {
+    wrap(<VideoMentions groups={GROUPS} onSeek={() => {}} initialTicker={null} />);
+    expect(screen.queryByText("Stock page")).toBeNull(); // viewStock link gone
+    // header no longer renders "AAPL · Buy" badge; ticker link is plain "AAPL"
+    expect(screen.queryByText("AAPL · Buy")).toBeNull();
+  });
+
+  it("is expanded by default (mention quotes visible without clicking)", async () => {
+    wrap(<VideoMentions groups={GROUPS} onSeek={() => {}} initialTicker={null} />);
+    expect(screen.getByText("still going up")).toBeInTheDocument();
   });
 });

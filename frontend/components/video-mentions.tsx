@@ -64,13 +64,19 @@ export function VideoMentions({
                   type="button"
                   onClick={() => toggle(g.ticker)}
                   aria-expanded={isOpen}
-                  className="flex items-center gap-2"
+                  aria-label={g.ticker}
+                  className="shrink-0"
                 >
                   <ChevronDown
                     className={cn("h-4 w-4 transition-transform", !isOpen && "-rotate-90")}
                   />
-                  <StanceBadge stance={g.stance} ticker={g.ticker} confidence={g.confidence} />
                 </button>
+                <Link
+                  href={`/stocks/${g.ticker}`}
+                  className="font-mono font-semibold hover:underline"
+                >
+                  {g.ticker}
+                </Link>
                 <span className="text-xs text-muted-foreground">
                   {t("mentionCount", { count: g.mentions.length })}
                 </span>
@@ -79,12 +85,6 @@ export function VideoMentions({
                     {g.summary}
                   </span>
                 )}
-                <Link
-                  href={`/stocks/${g.ticker}`}
-                  className="ml-auto shrink-0 text-xs underline hover:text-foreground"
-                >
-                  {t("viewStock")}
-                </Link>
               </div>
               {isOpen && (
                 <ul className="divide-y border-t">
