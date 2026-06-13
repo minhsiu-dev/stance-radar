@@ -8,6 +8,8 @@ vi.mock("@/components/youtube-player", () => ({
   YouTubePlayer: () => <div data-testid="yt-player-mock" />,
 }));
 
+vi.mock("@/lib/use-scroll-shrink", () => ({ useScrollShrink: () => 1 }));
+
 // 預設無 ?ticker
 vi.mock("next/navigation", async (orig) => ({
   ...(await orig<typeof import("next/navigation")>()),
@@ -73,5 +75,13 @@ describe("VideoDetail", () => {
     const err = Object.assign(new Error("404"), { status: 404 });
     wrap(vi.fn().mockRejectedValue(err));
     expect(await screen.findByText("Video not found")).toBeInTheDocument();
+  });
+
+  it("renders the player in a sticky wrapper that shrinks at full progress", async () => {
+    wrap(vi.fn().mockResolvedValue(DATA));
+    const wrapper = await screen.findByTestId("video-sticky");
+    expect(wrapper.className).toContain("sticky");
+    const sizer = screen.getByTestId("video-sizer") as HTMLElement;
+    expect(sizer.style.maxWidth).toBe("45%"); // 100 - 1*55
   });
 });
