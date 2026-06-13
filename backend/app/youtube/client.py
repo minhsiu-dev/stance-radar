@@ -42,6 +42,9 @@ class YouTubeClient(Protocol):
     async def list_new_uploads(
         self, playlist_id: str, *, known_video_ids: set[str], limit: int | None
     ) -> list[VideoInfo]: ...
+    async def list_older_uploads(
+        self, playlist_id: str, *, known_video_ids: set[str], limit: int
+    ) -> list[VideoInfo]: ...
     async def get_durations(self, video_ids: list[str]) -> dict[str, int]: ...
 
 
@@ -143,6 +146,45 @@ class DataAPIYouTubeClient:
                 break
         return collected
 
+    async def list_older_uploads(
+        self, playlist_id: str, *, known_video_ids: set[str], limit: int
+    ) -> list[VideoInfo]:
+        """走過已知的影片區塊,收集較舊的未知影片(用於 load-older)。
+
+        與 list_new_uploads 相反:遇到 known id 不停止而是 continue,
+        一直收集到 limit 達成或 playlist/翻頁上限耗盡。
+        """
+        collected: list[VideoInfo] = []
+        page_token: str | None = None
+        for _ in range(_MAX_PAGES):
+            params = {
+                "part": "snippet,contentDetails",
+                "playlistId": playlist_id,
+                "maxResults": 50,
+            }
+            if page_token:
+                params["pageToken"] = page_token
+            data = await self._get("/playlistItems", params)
+            for item in data.get("items", []):
+                details = item["contentDetails"]
+                video_id = details["videoId"]
+                if video_id in known_video_ids:
+                    continue
+                snippet = item["snippet"]
+                published_raw = details.get("videoPublishedAt") or snippet["publishedAt"]
+                collected.append(VideoInfo(
+                    id=video_id,
+                    title=snippet["title"],
+                    published_at=_parse_published(published_raw),
+                    thumbnail_url=_medium_thumbnail(snippet),
+                ))
+                if len(collected) >= limit:
+                    return collected
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                break
+        return collected
+
     async def get_durations(self, video_ids: list[str]) -> dict[str, int]:
         durations: dict[str, int] = {}
         for i in range(0, len(video_ids), 50):
@@ -211,6 +253,18 @@ class FakeYouTubeClient:
                 break
             collected.append(video)
             if limit is not None and len(collected) >= limit:
+                break
+        return collected
+
+    async def list_older_uploads(
+        self, playlist_id: str, *, known_video_ids: set[str], limit: int
+    ) -> list[VideoInfo]:
+        collected: list[VideoInfo] = []
+        for video in self.UPLOADS.get(playlist_id, []):
+            if video.id in known_video_ids:
+                continue
+            collected.append(video)
+            if len(collected) >= limit:
                 break
         return collected
 

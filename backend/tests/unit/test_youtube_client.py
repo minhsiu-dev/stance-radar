@@ -159,3 +159,52 @@ async def test_fake_client_has_seeded_channels():
     assert len(videos) == 3
     with pytest.raises(ChannelNotFound):
         await fake.resolve_channel("UC_unknown")
+
+
+# ---- list_older_uploads ----
+
+async def test_fake_list_older_skips_known_and_collects_older():
+    yt = FakeYouTubeClient()
+    # 已知最新一部 → 應拿到剩下兩部較舊的(略過已知,不在第一個已知就停)
+    older = await yt.list_older_uploads(
+        "UU_fake_alpha", known_video_ids={"alpha_vid_3"}, limit=10
+    )
+    assert [v.id for v in older] == ["alpha_vid_2", "alpha_vid_1"]
+    # limit 生效
+    one = await yt.list_older_uploads(
+        "UU_fake_alpha", known_video_ids={"alpha_vid_3"}, limit=1
+    )
+    assert [v.id for v in one] == ["alpha_vid_2"]
+    # 全部已知 → 空
+    assert await yt.list_older_uploads(
+        "UU_fake_alpha",
+        known_video_ids={"alpha_vid_1", "alpha_vid_2", "alpha_vid_3"},
+        limit=10,
+    ) == []
+
+
+async def test_data_api_list_older_walks_past_known_block():
+    # 真實 client:略過 known(continue),走到較舊的影片,而非在第一個 known 就停
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_page([_item("seen1"), _item("seen2"), _item("old1"), _item("old2")]),
+        )
+
+    videos = await make_client(handler).list_older_uploads(
+        "UUabc", known_video_ids={"seen1", "seen2"}, limit=10
+    )
+    assert [v.id for v in videos] == ["old1", "old2"]
+
+
+async def test_data_api_list_older_respects_limit():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_page([_item(f"v{i}") for i in range(50)], next_token="more"),
+        )
+
+    videos = await make_client(handler).list_older_uploads(
+        "UUabc", known_video_ids=set(), limit=5
+    )
+    assert len(videos) == 5

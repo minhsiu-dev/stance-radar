@@ -32,6 +32,7 @@ class VideoStatus(str, enum.Enum):
 class JobKind(str, enum.Enum):
     discover = "discover"
     analyze = "analyze"
+    load_older = "load_older"
 
 
 class Stance(str, enum.Enum):
