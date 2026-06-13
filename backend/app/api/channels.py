@@ -1,4 +1,5 @@
 import re
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -33,6 +34,37 @@ def parse_channel_ids(raw: str) -> list[str]:
     return unique
 
 
+# 真實頻道 ID 是 UC + 22 字元;放寬成 UC 前綴即可,讓測試用的短 ID 也算 ID
+_CHANNEL_ID_RE = re.compile(r"^UC[A-Za-z0-9_-]+$")
+
+
+def classify_channel_ref(token: str) -> tuple[str, str]:
+    """把使用者貼上的字串歸類成 ('id', channel_id) 或 ('handle', handle)。
+
+    支援:純 UC... ID、@handle、以及 YouTube 連結
+    (/channel/UC...、/@handle、/c/Name、/user/Name、youtube.com/Name)。
+    無法判斷時一律當作 handle 交給 forHandle 解析。
+    """
+    t = token.strip()
+    if "youtube.com" in t or "youtu.be" in t:
+        path = urlparse(t if "//" in t else f"https://{t}").path
+        segs = [s for s in path.split("/") if s]
+        if segs:
+            if segs[0] == "channel" and len(segs) > 1:
+                return ("id", segs[1])
+            if segs[0].startswith("@"):
+                return ("handle", segs[0])
+            if segs[0] in ("c", "user") and len(segs) > 1:
+                return ("handle", segs[1])
+            if len(segs) == 1:
+                return ("handle", segs[0])
+    if t.startswith("@"):
+        return ("handle", t)
+    if _CHANNEL_ID_RE.match(t):
+        return ("id", t)
+    return ("handle", t)
+
+
 def channel_to_dict(channel: Channel) -> dict:
     return {
         "id": channel.id,
@@ -53,28 +85,40 @@ async def add_channels(
     youtube: YouTubeClient = Depends(get_youtube),
     runner: RefreshRunner = Depends(get_runner),
 ):
-    channel_ids = parse_channel_ids(body.channel_ids)
-    if not channel_ids:
+    tokens = parse_channel_ids(body.channel_ids)
+    if not tokens:
         return fail("沒有可解析的 channel ID", status_code=400)
 
-    existing = set((await session.execute(
-        select(Channel.id).where(Channel.id.in_(channel_ids))
-    )).scalars().all())
-
+    # 先把每個 token(ID / @handle / 連結)解析成 ChannelInfo
     added: list[dict] = []
     skipped: list[str] = []
     failed: list[dict] = []
-    for channel_id in channel_ids:
-        if channel_id in existing:
-            skipped.append(channel_id)
-            continue
+    resolved: list[tuple[str, object]] = []  # (原始 token, ChannelInfo)
+    for token in tokens:
+        kind, value = classify_channel_ref(token)
         try:
-            info = await youtube.resolve_channel(channel_id)
+            info = (
+                await youtube.resolve_channel(value)
+                if kind == "id"
+                else await youtube.resolve_channel_by_handle(value)
+            )
         except ChannelNotFound:
-            failed.append({"id": channel_id, "reason": "查無此頻道"})
+            failed.append({"id": token, "reason": "查無此頻道"})
             continue
         except QuotaExceededError as exc:
             return fail(str(exc), status_code=503)
+        resolved.append((token, info))
+
+    # 以解析後的 channel id 去重(避免同時貼 @handle 與其 UC ID 重複新增)
+    existing = set((await session.execute(
+        select(Channel.id).where(Channel.id.in_([info.id for _, info in resolved]))
+    )).scalars().all())
+    seen_in_batch: set[str] = set()
+    for token, info in resolved:
+        if info.id in existing or info.id in seen_in_batch:
+            skipped.append(token)
+            continue
+        seen_in_batch.add(info.id)
         channel = Channel(
             id=info.id, title=info.title, thumbnail_url=info.thumbnail_url,
             uploads_playlist_id=info.uploads_playlist_id,

@@ -1,10 +1,20 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { RecentStocks } from "@/components/recent-stocks";
 
-const messages = { Dashboard: { recentStocks: { title: "Recently discussed" } } };
+const messages = {
+  Dashboard: {
+    recentStocks: {
+      title: "Recently discussed",
+      week: "This week",
+      month: "This month",
+      quarter: "3M",
+      empty: "No stocks discussed in this period",
+    },
+  },
+};
 
 function wrap(fetcher: () => Promise<unknown>) {
   return render(
@@ -39,5 +49,17 @@ describe("RecentStocks", () => {
     const { container } = wrap(vi.fn().mockResolvedValue([]));
     await new Promise((r) => setTimeout(r, 0));
     expect(container.querySelector("[data-testid='recent-stock-pill']")).toBeNull();
+  });
+
+  it("defaults to a 90-day window and refetches when a period is selected", async () => {
+    const fetcher = vi.fn().mockResolvedValue(STOCKS);
+    wrap(fetcher);
+    await screen.findByRole("link", { name: /NVDA/ });
+    expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("days=90"))).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "This week" }));
+    await waitFor(() => {
+      expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("days=7"))).toBe(true);
+    });
   });
 });

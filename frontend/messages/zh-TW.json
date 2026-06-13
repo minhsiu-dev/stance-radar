@@ -29,7 +29,7 @@
   "Dashboard": {
     "latest": "最新影片",
     "viewAll": "看全部 →",
-    "recentStocks": { "title": "最新被討論的股票" },
+    "recentStocks": { "title": "最新被討論的股票", "week": "本週", "month": "本月", "quarter": "3個月", "empty": "這段期間沒有被討論的股票" },
     "flips": {
       "title": "立場轉變",
       "window": "近 {days} 天",
@@ -92,7 +92,7 @@
     "title": "頻道管理",
     "add": {
       "title": "新增頻道",
-      "placeholder": "貼上一個或多個 channel ID(換行或逗號分隔)\n例:UCbta0n8i6Rljh0obO7HzG9A",
+      "placeholder": "貼上頻道 ID、@handle 或 YouTube 連結(換行或逗號分隔)\n例:@handle 或 UCbta0n8i6Rljh0obO7HzG9A",
       "submit": "新增",
       "submitting": "新增中…",
       "addSuccess": "新增成功",

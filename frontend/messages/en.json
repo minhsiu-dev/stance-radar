@@ -29,7 +29,7 @@
   "Dashboard": {
     "latest": "Latest videos",
     "viewAll": "View all →",
-    "recentStocks": { "title": "Recently discussed" },
+    "recentStocks": { "title": "Recently discussed", "week": "This week", "month": "This month", "quarter": "3M", "empty": "No stocks discussed in this period" },
     "flips": {
       "title": "Stance flips",
       "window": "last {days} days",
@@ -92,7 +92,7 @@
     "title": "Channel management",
     "add": {
       "title": "Add channel",
-      "placeholder": "Paste one or more channel IDs (newline- or comma-separated)\ne.g. UCbta0n8i6Rljh0obO7HzG9A",
+      "placeholder": "Paste channel IDs, @handles, or YouTube URLs (newline- or comma-separated)\ne.g. @handle or UCbta0n8i6Rljh0obO7HzG9A",
       "submit": "Add",
       "submitting": "Adding…",
       "addSuccess": "Added successfully",

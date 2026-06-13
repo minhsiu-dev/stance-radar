@@ -39,6 +39,7 @@ class VideoInfo:
 
 class YouTubeClient(Protocol):
     async def resolve_channel(self, channel_id: str) -> ChannelInfo: ...
+    async def resolve_channel_by_handle(self, handle: str) -> ChannelInfo: ...
     async def list_new_uploads(
         self, playlist_id: str, *, known_video_ids: set[str], limit: int | None
     ) -> list[VideoInfo]: ...
@@ -96,14 +97,8 @@ class DataAPIYouTubeClient:
             raise YouTubeError(f"YouTube API {resp.status_code}: {resp.text[:300]}")
         return resp.json()
 
-    async def resolve_channel(self, channel_id: str) -> ChannelInfo:
-        data = await self._get(
-            "/channels", {"part": "snippet,contentDetails", "id": channel_id}
-        )
-        items = data.get("items", [])
-        if not items:
-            raise ChannelNotFound(channel_id)
-        item = items[0]
+    @staticmethod
+    def _channel_info(item: dict) -> ChannelInfo:
         snippet = item["snippet"]
         return ChannelInfo(
             id=item["id"],
@@ -111,6 +106,26 @@ class DataAPIYouTubeClient:
             thumbnail_url=_medium_thumbnail(snippet),
             uploads_playlist_id=item["contentDetails"]["relatedPlaylists"]["uploads"],
         )
+
+    async def resolve_channel(self, channel_id: str) -> ChannelInfo:
+        data = await self._get(
+            "/channels", {"part": "snippet,contentDetails", "id": channel_id}
+        )
+        items = data.get("items", [])
+        if not items:
+            raise ChannelNotFound(channel_id)
+        return self._channel_info(items[0])
+
+    async def resolve_channel_by_handle(self, handle: str) -> ChannelInfo:
+        # YouTube Data API forHandle 接受帶不帶 @ 皆可,統一去掉前綴
+        data = await self._get(
+            "/channels",
+            {"part": "snippet,contentDetails", "forHandle": handle.lstrip("@")},
+        )
+        items = data.get("items", [])
+        if not items:
+            raise ChannelNotFound(handle)
+        return self._channel_info(items[0])
 
     async def list_new_uploads(
         self, playlist_id: str, *, known_video_ids: set[str], limit: int | None
@@ -238,10 +253,22 @@ class FakeYouTubeClient:
             _fake_video("beta_vid_1", "投資心法", "2026-05-01T12:00:00"),
         ],
     }
+    # @handle → channel id,用於假資料的 handle 解析
+    HANDLES = {
+        "@alpha": "UC_fake_alpha",
+        "@beta": "UC_fake_beta",
+    }
 
     async def resolve_channel(self, channel_id: str) -> ChannelInfo:
         if channel_id not in self.CHANNELS:
             raise ChannelNotFound(channel_id)
+        return self.CHANNELS[channel_id]
+
+    async def resolve_channel_by_handle(self, handle: str) -> ChannelInfo:
+        key = handle if handle.startswith("@") else f"@{handle}"
+        channel_id = self.HANDLES.get(key)
+        if channel_id is None:
+            raise ChannelNotFound(handle)
         return self.CHANNELS[channel_id]
 
     async def list_new_uploads(

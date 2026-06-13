@@ -37,6 +37,48 @@ async def test_add_with_invalid_id_returns_400_but_adds_valid(api, session):
     await wait_refresh(app)
 
 
+async def test_add_channel_by_handle(api, session):
+    app, client = api
+    resp = await client.post("/api/channels", json={"channel_ids": "@alpha"})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert [c["id"] for c in data["added"]] == ["UC_fake_alpha"]
+    assert await session.get(Channel, "UC_fake_alpha") is not None
+    await wait_refresh(app)
+
+
+async def test_add_channel_by_handle_url(api, session):
+    app, client = api
+    resp = await client.post(
+        "/api/channels", json={"channel_ids": "https://www.youtube.com/@beta"}
+    )
+    assert resp.status_code == 200, resp.text
+    assert [c["id"] for c in resp.json()["data"]["added"]] == ["UC_fake_beta"]
+    await wait_refresh(app)
+
+
+async def test_handle_and_id_for_same_channel_dedupes(api):
+    app, client = api
+    resp = await client.post(
+        "/api/channels", json={"channel_ids": "@alpha\nUC_fake_alpha"}
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert [c["id"] for c in data["added"]] == ["UC_fake_alpha"]
+    # 第二個(同一頻道)被視為重複略過,回報原始 token
+    assert data["skipped"] == ["UC_fake_alpha"]
+    await wait_refresh(app)
+
+
+async def test_unknown_handle_fails(api):
+    app, client = api
+    resp = await client.post("/api/channels", json={"channel_ids": "@nope"})
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["data"]["failed"] == [{"id": "@nope", "reason": "查無此頻道"}]
+    assert body["data"]["added"] == []
+
+
 async def test_re_adding_existing_channel_is_skipped(api):
     app, client = api
     await client.post("/api/channels", json={"channel_ids": "UC_fake_alpha"})
