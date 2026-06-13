@@ -146,12 +146,22 @@ export interface StockListItem {
   mention_count: number;
 }
 
+export interface StanceZone {
+  count: number;
+  avatars: { title: string; thumbnail_url: string }[];
+}
+
 export interface TrendingStock {
   ticker: string;
   channel_count: number;
   mention_count: number;
   score: number;
   last_mentioned_at: string;
+  stances: {
+    buy: StanceZone;
+    neutral: StanceZone;
+    sell: StanceZone;
+  };
 }
 
 export interface SearchHit {
