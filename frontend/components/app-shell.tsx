@@ -13,29 +13,20 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/" className="shrink-0 font-semibold">
             {t("brand")}
           </Link>
-          <Link
-            href="/"
-            className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
-          >
+          <Link href="/" className="shrink-0 text-sm text-muted-foreground hover:text-foreground">
             {t("home")}
           </Link>
-          <Link
-            href="/videos"
-            className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
-          >
+          <Link href="/stocks" className="shrink-0 text-sm text-muted-foreground hover:text-foreground">
+            {t("trending")}
+          </Link>
+          <Link href="/videos" className="shrink-0 text-sm text-muted-foreground hover:text-foreground">
             {t("videos")}
           </Link>
-          <Link
-            href="/portfolio"
-            className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
-          >
-            {t("portfolio")}
-          </Link>
-          <Link
-            href="/channels"
-            className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
-          >
+          <Link href="/channels" className="shrink-0 text-sm text-muted-foreground hover:text-foreground">
             {t("channels")}
+          </Link>
+          <Link href="/portfolio" className="shrink-0 text-sm text-muted-foreground hover:text-foreground">
+            {t("portfolio")}
           </Link>
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <CommandSearch />
