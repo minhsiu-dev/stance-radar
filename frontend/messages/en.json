@@ -198,7 +198,8 @@
       "week52Range": "52w range",
       "volume": "Volume",
       "dividendYield": "Dividend yield",
-      "loadError": "Failed to load price data: {message}"
+      "loadError": "Failed to load price data: {message}",
+      "externalData": "StockAnalysis"
     },
     "tabs": {
       "overview": "Overview",

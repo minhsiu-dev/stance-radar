@@ -2,7 +2,9 @@
 
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
+import { ExternalLink } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { buttonVariants } from "@/components/ui/button";
 import {
   formatMarketCap,
   formatNumber,
@@ -48,9 +50,20 @@ export function StockHeader({ ticker }: { ticker: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-baseline gap-3">
-        <h1 className="text-2xl font-semibold">{data.ticker}</h1>
-        <span className="text-muted-foreground">{data.name}</span>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-2xl font-semibold">{data.ticker}</h1>
+          <span className="text-muted-foreground">{data.name}</span>
+        </div>
+        <a
+          href={`https://stockanalysis.com/stocks/${data.ticker.toLowerCase()}/`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0 gap-1.5")}
+        >
+          {t("externalData")}
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
       </div>
       <div className="flex items-baseline gap-3">
         <span className="text-3xl font-semibold">{formatNumber(data.price)}</span>

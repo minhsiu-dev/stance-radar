@@ -198,7 +198,8 @@
       "week52Range": "52 週區間",
       "volume": "成交量",
       "dividendYield": "殖利率",
-      "loadError": "行情讀取失敗:{message}"
+      "loadError": "行情讀取失敗:{message}",
+      "externalData": "StockAnalysis"
     },
     "tabs": {
       "overview": "總覽",

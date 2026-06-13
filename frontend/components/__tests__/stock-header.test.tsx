@@ -16,6 +16,7 @@ const messages = {
       volume: "Vol",
       dividendYield: "Div",
       loadError: "Error: {message}",
+      externalData: "StockAnalysis",
     },
   },
 };
@@ -25,6 +26,25 @@ const base = {
   market_cap: 1e12, eps: 5, week52_high: 110, week52_low: 90,
   volume: 1e6, dividend_yield: 0.5,
 };
+
+describe("StockHeader external link", () => {
+  it("links to StockAnalysis for the ticker (lowercased, new tab)", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ...base, ticker: "ZS", pe_ratio: 27.5, forward_pe: null,
+    });
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
+          <StockHeader ticker="ZS" />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
+    const link = await screen.findByRole("link", { name: /StockAnalysis/i });
+    expect(link.getAttribute("href")).toBe("https://stockanalysis.com/stocks/zs/");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+  });
+});
 
 describe("StockHeader P/E rendering", () => {
   it("shows trailing/forward pair when forward_pe present", async () => {
