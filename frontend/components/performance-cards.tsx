@@ -6,6 +6,7 @@ import { Link } from "@/i18n/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { masked, usePrivacy } from "@/components/privacy-provider";
+import { Sparkline } from "@/components/sparkline";
 import type { PerfChanges, PerformanceSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -37,11 +38,13 @@ function PerfCard({
   headline,
   changes,
   hide,
+  ticker,
 }: {
   title: string;
   headline: string;
   changes: PerfChanges;
   hide: boolean;
+  ticker?: string;
 }) {
   return (
     <Card data-testid="perf-card">
@@ -50,6 +53,7 @@ function PerfCard({
           <span className="text-sm font-medium">{title}</span>
           <span className="font-mono text-sm tabular-nums">{headline}</span>
         </div>
+        {ticker && <Sparkline ticker={ticker} />}
         <div className="flex items-baseline gap-2">
           <span className={cn("text-2xl font-semibold", pctClass(changes["1d"]))}>
             {masked(hide, pctText(changes["1d"]))}
@@ -111,8 +115,8 @@ export function PerformanceCards() {
           </CardContent>
         </Card>
       )}
-      <PerfCard title="VOO" headline={money(data.voo.price)} changes={data.voo.changes} hide={hideAmounts} />
-      <PerfCard title="QQQ" headline={money(data.qqq.price)} changes={data.qqq.changes} hide={hideAmounts} />
+      <PerfCard title="VOO" headline={money(data.voo.price)} changes={data.voo.changes} hide={false} ticker="VOO" />
+      <PerfCard title="QQQ" headline={money(data.qqq.price)} changes={data.qqq.changes} hide={false} ticker="QQQ" />
     </div>
   );
 }
