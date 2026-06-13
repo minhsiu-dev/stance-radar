@@ -57,10 +57,18 @@ docker compose -p stance-e2e -f docker-compose.yml -f docker-compose.e2e.yml up 
 cd e2e && npm test
 ```
 
-磁碟受限環境(如 CI 沙箱)有 opt-in 的 `frontend/Dockerfile.e2e`(打包 host 已
-build 好的 `.next/standalone`,跳過容器內 npm ci)與 `e2e/Dockerfile.testrunner`
-(容器內跑 Playwright)。這兩個檔案只在無法照預設流程時用 compose override 指定,
-一般情況不需要——細節見各檔頂端註解。
+磁碟受限環境(如 CI 沙箱)用 opt-in 的 `docker-compose.e2e.lowdisk.yml`:它把
+frontend 改用 `frontend/Dockerfile.e2e`(打包 host 已 build 好的 `.next/standalone`,
+跳過容器內 ~1GB npm ci),搭配 `e2e/Dockerfile.testrunner`(容器內跑 Playwright)。
+
+```bash
+cd frontend && API_URL=http://api:8000 npm run build && cd ..
+docker compose -p stance-e2e \
+  -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.e2e.lowdisk.yml \
+  up -d --build
+```
+
+一般情況不需要——細節見 `docker-compose.e2e.lowdisk.yml` 頂端註解。
 
 ## Migration 規則
 
