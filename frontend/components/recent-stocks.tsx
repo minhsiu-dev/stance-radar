@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { StockCard } from "@/components/stock-card";
@@ -55,6 +56,9 @@ export function RecentStocks() {
             );
           })}
         </div>
+        <Link href="/stocks" className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+          {t("viewAll")}
+        </Link>
       </div>
       {isLoading ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

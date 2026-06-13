@@ -7,6 +7,15 @@
     "portfolio": "持股狀態",
     "channels": "頻道管理"
   },
+  "Trending": {
+    "title": "熱門個股",
+    "freshness": "新鮮度",
+    "countWindow": "計數區間",
+    "week": "1週",
+    "month": "1個月",
+    "quarter": "3個月",
+    "empty": "這個區間沒有被討論的股票"
+  },
   "Footer": {
     "disclaimer": "Stance Radar — 僅供研究參考,非投資建議",
     "sources": "市場資料:Yahoo Finance(延遲報價) · 立場判讀:Claude"
@@ -30,7 +39,7 @@
   "Dashboard": {
     "latest": "最新影片",
     "viewAll": "看全部 →",
-    "recentStocks": { "title": "最新被討論的股票", "week": "本週", "month": "本月", "quarter": "3個月", "empty": "這段期間沒有被討論的股票", "channelCount": "{count} 個頻道" },
+    "recentStocks": { "title": "最新被討論的股票", "week": "本週", "month": "本月", "quarter": "3個月", "empty": "這段期間沒有被討論的股票", "channelCount": "{count} 個頻道", "viewAll": "查看全部" },
     "flips": {
       "title": "立場轉變",
       "window": "近 {days} 天",

@@ -13,6 +13,7 @@ const messages = {
       quarter: "3M",
       empty: "No stocks discussed in this period",
       channelCount: "{count} channels",
+      viewAll: "View all",
     },
   },
 };

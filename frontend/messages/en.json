@@ -7,6 +7,15 @@
     "portfolio": "Holdings",
     "channels": "Channels"
   },
+  "Trending": {
+    "title": "Trending stocks",
+    "freshness": "Freshness",
+    "countWindow": "Count window",
+    "week": "1W",
+    "month": "1M",
+    "quarter": "3M",
+    "empty": "No stocks discussed in this window"
+  },
   "Footer": {
     "disclaimer": "Stance Radar — for research only, not investment advice",
     "sources": "Market data: Yahoo Finance (delayed) · Stance analysis: Claude"
@@ -30,7 +39,7 @@
   "Dashboard": {
     "latest": "Latest videos",
     "viewAll": "View all →",
-    "recentStocks": { "title": "Recently discussed", "week": "This week", "month": "This month", "quarter": "3M", "empty": "No stocks discussed in this period", "channelCount": "{count, plural, one {# channel} other {# channels}}" },
+    "recentStocks": { "title": "Recently discussed", "week": "This week", "month": "This month", "quarter": "3M", "empty": "No stocks discussed in this period", "channelCount": "{count, plural, one {# channel} other {# channels}}", "viewAll": "View all" },
     "flips": {
       "title": "Stance flips",
       "window": "last {days} days",
