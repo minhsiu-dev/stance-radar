@@ -63,22 +63,22 @@ export function RecentStocks() {
           ))}
         </div>
       ) : data && data.length > 0 ? (
-        // 換行排列,最多兩行(max-h ≈ 2 列 pill 高 + 列距),其餘裁掉
-        <div className="flex max-h-[5rem] flex-wrap gap-2 overflow-hidden">
+        <ul className="divide-y overflow-hidden rounded-lg border">
           {data.map((s) => (
-            <Link
-              key={s.ticker}
-              href={`/stocks/${s.ticker}`}
-              data-testid="recent-stock-pill"
-              className="flex shrink-0 items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm transition-colors hover:border-foreground/40 hover:bg-accent hover:shadow-sm"
-            >
-              <span className="font-mono font-semibold tracking-tight">{s.ticker}</span>
-              <span className="tabular-nums text-xs font-medium text-muted-foreground">
-                {s.mention_count}
-              </span>
-            </Link>
+            <li key={s.ticker}>
+              <Link
+                href={`/stocks/${s.ticker}`}
+                data-testid="recent-stock-row"
+                className="flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-accent"
+              >
+                <span className="font-mono font-semibold tracking-tight">{s.ticker}</span>
+                <span className="tabular-nums text-xs font-medium text-muted-foreground">
+                  {t("channelCount", { count: s.channel_count })}
+                </span>
+              </Link>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
         <p className="text-sm text-muted-foreground">{t("empty")}</p>
       )}

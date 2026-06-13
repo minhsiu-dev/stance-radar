@@ -148,6 +148,7 @@ export interface StockListItem {
 
 export interface TrendingStock {
   ticker: string;
+  channel_count: number;
   mention_count: number;
   score: number;
   last_mentioned_at: string;

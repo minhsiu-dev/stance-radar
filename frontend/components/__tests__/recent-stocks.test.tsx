@@ -12,6 +12,7 @@ const messages = {
       month: "This month",
       quarter: "3M",
       empty: "No stocks discussed in this period",
+      channelCount: "{count} channels",
     },
   },
 };
@@ -27,28 +28,28 @@ function wrap(fetcher: () => Promise<unknown>) {
 }
 
 const STOCKS = [
-  { ticker: "NVDA", mention_count: 7, last_mentioned_at: "2026-06-11T00:00:00Z" },
-  { ticker: "AAPL", mention_count: 5, last_mentioned_at: "2026-06-10T00:00:00Z" },
+  { ticker: "NVDA", channel_count: 4, mention_count: 7, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z" },
+  { ticker: "AAPL", channel_count: 2, mention_count: 5, score: 1, last_mentioned_at: "2026-06-10T00:00:00Z" },
 ];
 
 describe("RecentStocks", () => {
-  it("renders each stock as a link to its stock page, in API order", async () => {
+  it("renders each stock as a row linking to its page, with its channel count", async () => {
     wrap(vi.fn().mockResolvedValue(STOCKS));
     const nvda = await screen.findByRole("link", { name: /NVDA/ });
     expect(nvda.getAttribute("href")).toContain("/stocks/NVDA");
-    const aapl = screen.getByRole("link", { name: /AAPL/ });
-    expect(aapl.getAttribute("href")).toContain("/stocks/AAPL");
-    expect(aapl.getAttribute("href")).not.toContain("ticker=");
+    expect(nvda.getAttribute("href")).not.toContain("ticker=");
 
-    const pills = screen.getAllByTestId("recent-stock-pill").map((el) => el.textContent);
-    expect(pills[0]).toContain("NVDA");
-    expect(pills[1]).toContain("AAPL");
+    const rows = screen.getAllByTestId("recent-stock-row").map((el) => el.textContent);
+    expect(rows[0]).toContain("NVDA");
+    expect(rows[0]).toContain("4");   // channel count, not mention_count (7)
+    expect(rows[1]).toContain("AAPL");
+    expect(rows[1]).toContain("2");
   });
 
   it("renders nothing when the API returns an empty array", async () => {
     const { container } = wrap(vi.fn().mockResolvedValue([]));
     await new Promise((r) => setTimeout(r, 0));
-    expect(container.querySelector("[data-testid='recent-stock-pill']")).toBeNull();
+    expect(container.querySelector("[data-testid='recent-stock-row']")).toBeNull();
   });
 
   it("defaults to a 90-day window and refetches when a period is selected", async () => {

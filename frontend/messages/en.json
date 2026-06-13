@@ -29,7 +29,7 @@
   "Dashboard": {
     "latest": "Latest videos",
     "viewAll": "View all →",
-    "recentStocks": { "title": "Recently discussed", "week": "This week", "month": "This month", "quarter": "3M", "empty": "No stocks discussed in this period" },
+    "recentStocks": { "title": "Recently discussed", "week": "This week", "month": "This month", "quarter": "3M", "empty": "No stocks discussed in this period", "channelCount": "{count, plural, one {# channel} other {# channels}}" },
     "flips": {
       "title": "Stance flips",
       "window": "last {days} days",
