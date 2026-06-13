@@ -15,10 +15,10 @@ export function StockView({ ticker }: { ticker: string }) {
 
   return (
     <div className="space-y-6">
+      <StockHeader ticker={ticker} />
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
-          <div className="space-y-2 lg:sticky lg:top-14">
-            <StockHeader ticker={ticker} />
+          <div className="lg:sticky lg:top-14">
             <PriceChart
               ticker={ticker}
               hoveredVideoId={hoveredVideoId}
