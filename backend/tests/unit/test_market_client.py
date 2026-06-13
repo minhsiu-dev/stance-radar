@@ -317,3 +317,42 @@ async def test_yfinance_news_parses_both_formats(monkeypatch):
     # Z 已標準化成 +00:00 → 與 epoch 轉出的格式可比較排序
     assert new.published_at.endswith("+00:00")
     assert old.published_at.endswith("+00:00")
+
+
+async def test_fake_analyst_is_deterministic_and_complete():
+    fake = FakeMarketClient()
+    a = await fake.get_analyst("AAPL")
+    assert a.target_low is not None and a.target_low < a.target_mean < a.target_high
+    assert a.analyst_count and a.analyst_count > 0
+    assert set(a.recommendations) == {"strongBuy", "buy", "hold", "sell", "strongSell"}
+    assert a == await fake.get_analyst("AAPL")
+    empty = await fake.get_analyst("ZZZZ")
+    assert empty.target_mean is None and empty.recommendations == {}
+
+
+async def test_yfinance_analyst_parses_info_and_recommendations(monkeypatch):
+    import pandas as pd
+
+    from app.market.client import YFinanceMarketClient
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            self.info = {
+                "targetLowPrice": 100.0, "targetMeanPrice": 150.0,
+                "targetHighPrice": 200.0, "numberOfAnalystOpinions": 30,
+            }
+            self.recommendations_summary = pd.DataFrame([
+                {"period": "0m", "strongBuy": 10, "buy": 12, "hold": 6,
+                 "sell": 1, "strongSell": 1},
+                {"period": "-1m", "strongBuy": 9, "buy": 11, "hold": 7,
+                 "sell": 2, "strongSell": 1},
+            ])
+
+    import yfinance
+
+    monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
+    a = YFinanceMarketClient()._fetch_analyst("aapl")
+    assert a.target_mean == 150.0 and a.analyst_count == 30
+    assert a.recommendations == {
+        "strongBuy": 10, "buy": 12, "hold": 6, "sell": 1, "strongSell": 1,
+    }

@@ -79,6 +79,21 @@ class NewsItem:
     published_at: str  # ISO 8601
 
 
+@dataclass(frozen=True)
+class AnalystData:
+    target_low: float | None
+    target_mean: float | None
+    target_high: float | None
+    analyst_count: int | None
+    recommendations: dict[str, int]  # strongBuy/buy/hold/sell/strongSell
+
+
+_EMPTY_ANALYST = AnalystData(
+    target_low=None, target_mean=None, target_high=None,
+    analyst_count=None, recommendations={},
+)
+
+
 class MarketClient(Protocol):
     async def get_summary(self, ticker: str) -> StockSummary: ...
     async def get_candles(self, ticker: str, range_key: str) -> list[Candle]: ...
@@ -91,6 +106,7 @@ class MarketClient(Protocol):
         self, tickers: list[str], start: date, end: date
     ) -> dict[str, list[Candle]]: ...
     async def get_news(self, ticker: str) -> list[NewsItem]: ...
+    async def get_analyst(self, ticker: str) -> AnalystData: ...
 
 
 class YFinanceMarketClient:
@@ -101,6 +117,7 @@ class YFinanceMarketClient:
         self._search_cache = TTLCache(ttl_seconds=300)      # 5 分鐘
         self._financials_cache = TTLCache(ttl_seconds=86400) # 24 小時,財報一季才變一次
         self._news_cache = TTLCache(ttl_seconds=900)        # 15 分鐘
+        self._analyst_cache = TTLCache(ttl_seconds=86400)  # 24 小時
 
     async def get_summary(self, ticker: str) -> StockSummary:
         cached = self._summary_cache.get(ticker)
@@ -358,6 +375,42 @@ class YFinanceMarketClient:
             ))
         return out[:10]
 
+    async def get_analyst(self, ticker: str) -> AnalystData:
+        cached = self._analyst_cache.get(ticker)
+        if cached is not None:
+            return cached
+        data = await asyncio.to_thread(self._fetch_analyst, ticker)
+        self._analyst_cache.set(ticker, data)
+        return data
+
+    def _fetch_analyst(self, ticker: str) -> AnalystData:
+        import yfinance as yf
+
+        try:
+            t = yf.Ticker(ticker)
+            info = t.info or {}
+            recs: dict[str, int] = {}
+            df = t.recommendations_summary
+            if df is not None and not df.empty and "period" in df.columns:
+                current = df[df["period"] == "0m"]
+                if not current.empty:
+                    row = current.iloc[0]
+                    recs = {
+                        k: int(row[k])
+                        for k in ("strongBuy", "buy", "hold", "sell", "strongSell")
+                        if k in current.columns and row[k] == row[k]
+                    }
+            return AnalystData(
+                target_low=info.get("targetLowPrice"),
+                target_mean=info.get("targetMeanPrice"),
+                target_high=info.get("targetHighPrice"),
+                analyst_count=info.get("numberOfAnalystOpinions"),
+                recommendations=recs,
+            )
+        except Exception:
+            logger.warning("analyst fetch failed for %s", ticker, exc_info=True)
+            return _EMPTY_ANALYST
+
 
 _RANGE_TO_DAYS = {"1m": 22, "3m": 65, "6m": 130, "ytd": 110, "1y": 260, "3y": 780, "5y": 1300}
 _FAKE_END_DATE = date(2026, 6, 10)
@@ -513,3 +566,17 @@ class FakeMarketClient:
             )
             for i in (1, 2)
         ]
+
+    async def get_analyst(self, ticker: str) -> AnalystData:
+        if ticker not in self.KNOWN:
+            return _EMPTY_ANALYST
+        base = float(100 + sum(ord(c) for c in ticker) % 150)
+        return AnalystData(
+            target_low=round(base * 0.85, 2),
+            target_mean=round(base * 1.1, 2),
+            target_high=round(base * 1.35, 2),
+            analyst_count=20 + sum(ord(c) for c in ticker) % 20,
+            recommendations={
+                "strongBuy": 8, "buy": 10, "hold": 5, "sell": 2, "strongSell": 1,
+            },
+        )
