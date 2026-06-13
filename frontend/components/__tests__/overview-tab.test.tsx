@@ -12,6 +12,10 @@ vi.mock("swr", () => ({
   default: (key: string) => ({ data: swrResponses[key] }),
 }));
 
+vi.mock("@/components/financials-chart", () => ({
+  FinancialsChart: () => <div data-testid="financials-chart" />,
+}));
+
 import { OverviewTab } from "@/components/overview-tab";
 
 const baseStock = {

@@ -207,8 +207,9 @@
     },
     "overview": {
       "latestQuarter": "Latest quarter",
-      "ytStance": "YouTube stance (last {days}d)",
-      "ytStanceAll": "YouTube stance (all time)",
+      "financialsTitle": "Financials",
+      "ytStance": "YouTube stance · channels (last {days}d)",
+      "ytStanceAll": "YouTube stance · channels (all time)",
       "windowAll": "All",
       "revenue": "Revenue",
       "netIncome": "Net income",

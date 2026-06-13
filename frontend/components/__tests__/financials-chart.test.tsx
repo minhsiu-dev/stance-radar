@@ -42,11 +42,11 @@ vi.mock("recharts", () => ({
   YAxis: () => null,
 }));
 
-import { FinancialsTab } from "@/components/financials-tab";
+import { FinancialsChart } from "@/components/financials-chart";
 
-describe("FinancialsTab", () => {
+describe("FinancialsChart", () => {
   it("fetches quarterly by default and switches to annual", () => {
-    render(<FinancialsTab ticker="AAPL" />);
+    render(<FinancialsChart ticker="AAPL" />);
     expect(swrCalls.some((k) => k.includes("period=quarterly"))).toBe(true);
     fireEvent.click(screen.getByText("annual"));
     expect(swrCalls.some((k) => k.includes("period=annual"))).toBe(true);

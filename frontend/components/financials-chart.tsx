@@ -10,7 +10,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Button } from "@/components/ui/button";
 import {
   ChartContainer,
   ChartLegend,
@@ -19,6 +18,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
 import type { FinancialReport, FinancialsPeriod } from "@/lib/types";
@@ -32,7 +32,7 @@ function compactUSD(n: number | null | undefined): string {
   return `$${n.toFixed(0)}`;
 }
 
-export function FinancialsTab({ ticker }: { ticker: string }) {
+export function FinancialsChart({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.financials");
   const tErr = useTranslations("Errors");
   const [period, setPeriod] = useState<FinancialsPeriod>("quarterly");
@@ -52,18 +52,10 @@ export function FinancialsTab({ ticker }: { ticker: string }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end gap-1">
-        <Button
-          size="sm"
-          variant={period === "quarterly" ? "default" : "ghost"}
-          onClick={() => setPeriod("quarterly")}
-        >
+        <Button size="sm" variant={period === "quarterly" ? "default" : "ghost"} onClick={() => setPeriod("quarterly")}>
           {t("quarterly")}
         </Button>
-        <Button
-          size="sm"
-          variant={period === "annual" ? "default" : "ghost"}
-          onClick={() => setPeriod("annual")}
-        >
+        <Button size="sm" variant={period === "annual" ? "default" : "ghost"} onClick={() => setPeriod("annual")}>
           {t("annual")}
         </Button>
       </div>
@@ -79,20 +71,11 @@ export function FinancialsTab({ ticker }: { ticker: string }) {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="period_end" />
             <YAxis tickFormatter={(v) => compactUSD(Number(v))} />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  formatter={(v) => compactUSD(Number(v))}
-                />
-              }
-            />
+            <ChartTooltip content={<ChartTooltipContent formatter={(v) => compactUSD(Number(v))} />} />
             <ChartLegend content={<ChartLegendContent />} />
             <Bar dataKey="total_revenue" fill="var(--color-total_revenue)" />
             <Bar dataKey="gross_profit" fill="var(--color-gross_profit)" />
-            <Bar
-              dataKey="operating_income"
-              fill="var(--color-operating_income)"
-            />
+            <Bar dataKey="operating_income" fill="var(--color-operating_income)" />
             <Bar dataKey="pretax_income" fill="var(--color-pretax_income)" />
             <Bar dataKey="net_income" fill="var(--color-net_income)" />
           </BarChart>

@@ -20,6 +20,7 @@ import type {
   StockSummary,
 } from "@/lib/types";
 import { AnalystCard } from "@/components/analyst-card";
+import { FinancialsChart } from "@/components/financials-chart";
 import { GrowthMargins } from "@/components/growth-margins";
 import { cn } from "@/lib/utils";
 
@@ -74,65 +75,53 @@ export function OverviewTab({ ticker }: { ticker: string }) {
   const stanceTitleArgs = windowDays === ALL_WINDOW ? undefined : { days: windowDays };
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-y-1 space-y-0">
+            <CardTitle>
+              {stanceTitleArgs ? t(stanceTitleKey, stanceTitleArgs) : t(stanceTitleKey)}
+            </CardTitle>
+            <div className="flex gap-1">
+              {WINDOW_OPTIONS.map((days) => (
+                <Button key={days} size="sm" variant={windowDays === days ? "default" : "ghost"} onClick={() => setWindowDays(days)}>
+                  {days}
+                </Button>
+              ))}
+              <Button size="sm" variant={windowDays === ALL_WINDOW ? "default" : "ghost"} onClick={() => setWindowDays(ALL_WINDOW)}>
+                {t("windowAll")}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Bar label={tStance("buy")} count={summary.buy} max={maxStance} color="bg-sky-500" />
+            <Bar label={tStance("neutral")} count={summary.neutral} max={maxStance} color="bg-zinc-400" />
+            <Bar label={tStance("sell")} count={summary.sell} max={maxStance} color="bg-orange-500" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("latestQuarter")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Row label={t("revenue")} latest={latest?.total_revenue ?? null} prior={prior?.total_revenue ?? null} format={formatMarketCap} />
+            <Row label={t("netIncome")} latest={latest?.net_income ?? null} prior={prior?.net_income ?? null} format={formatMarketCap} />
+            <Row label={t("eps")} latest={stock.eps} prior={null} format={(v) => (v == null ? "—" : v.toFixed(2))} />
+          </CardContent>
+        </Card>
+      </div>
       <Card>
         <CardHeader>
-          <CardTitle>{t("latestQuarter")}</CardTitle>
+          <CardTitle>{t("financialsTitle")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <Row
-            label={t("revenue")}
-            latest={latest?.total_revenue ?? null}
-            prior={prior?.total_revenue ?? null}
-            format={formatMarketCap}
-          />
-          <Row
-            label={t("netIncome")}
-            latest={latest?.net_income ?? null}
-            prior={prior?.net_income ?? null}
-            format={formatMarketCap}
-          />
-          <Row
-            label={t("eps")}
-            latest={stock.eps}
-            prior={null}
-            format={(v) => (v == null ? "—" : v.toFixed(2))}
-          />
+        <CardContent>
+          <FinancialsChart ticker={ticker} />
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-y-1 space-y-0">
-          <CardTitle>
-            {stanceTitleArgs ? t(stanceTitleKey, stanceTitleArgs) : t(stanceTitleKey)}
-          </CardTitle>
-          <div className="flex gap-1">
-            {WINDOW_OPTIONS.map((days) => (
-              <Button
-                key={days}
-                size="sm"
-                variant={windowDays === days ? "default" : "ghost"}
-                onClick={() => setWindowDays(days)}
-              >
-                {days}
-              </Button>
-            ))}
-            <Button
-              size="sm"
-              variant={windowDays === ALL_WINDOW ? "default" : "ghost"}
-              onClick={() => setWindowDays(ALL_WINDOW)}
-            >
-              {t("windowAll")}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Bar label={tStance("buy")} count={summary.buy} max={maxStance} color="bg-sky-500" />
-          <Bar label={tStance("neutral")} count={summary.neutral} max={maxStance} color="bg-zinc-400" />
-          <Bar label={tStance("sell")} count={summary.sell} max={maxStance} color="bg-orange-500" />
-        </CardContent>
-      </Card>
-      <GrowthMargins reports={financials} />
-      {analyst && <AnalystCard data={analyst} price={stock.price} />}
+      <div className="grid gap-4 md:grid-cols-2">
+        <GrowthMargins reports={financials} />
+        {analyst && <AnalystCard data={analyst} price={stock.price} />}
+      </div>
     </div>
   );
 }

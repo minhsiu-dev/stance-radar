@@ -207,8 +207,9 @@
     },
     "overview": {
       "latestQuarter": "最近一季",
-      "ytStance": "YouTube 立場 (近 {days} 天)",
-      "ytStanceAll": "YouTube 立場 (全部)",
+      "financialsTitle": "財報",
+      "ytStance": "YouTube 立場 · 頻道數 (近 {days} 天)",
+      "ytStanceAll": "YouTube 立場 · 頻道數 (全部)",
       "windowAll": "全部",
       "revenue": "營收",
       "netIncome": "淨利",
