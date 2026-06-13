@@ -9,6 +9,7 @@ import {
 
 export interface YouTubePlayerHandle {
   seekTo: (seconds: number) => void;
+  pause: () => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,6 +69,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, { videoId: string }
         seekTo: (seconds: number) => {
           playerRef.current?.seekTo?.(seconds, true);
           playerRef.current?.playVideo?.();
+        },
+        pause: () => {
+          playerRef.current?.pauseVideo?.();
         },
       }),
       [],
