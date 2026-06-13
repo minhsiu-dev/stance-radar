@@ -15,6 +15,7 @@ import type { VideoDetailResponse } from "@/lib/types";
 
 export function VideoDetail({ videoId }: { videoId: string }) {
   const t = useTranslations("VideoDetail");
+  const tc = useTranslations("Common");
   const playerRef = useRef<YouTubePlayerHandle>(null);
   const searchParams = useSearchParams();
   const initialTicker = searchParams.get("ticker");
@@ -41,7 +42,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
 
   return (
     <div className="space-y-4">
-      <FloatingDock floatingWidth={360} onClose={() => playerRef.current?.pause()}>
+      <FloatingDock floatingWidth={360} onClose={() => playerRef.current?.pause()} dragLabel={tc("dragHandle")} closeLabel={tc("close")}>
         {() => <YouTubePlayer ref={playerRef} videoId={data.video.id} />}
       </FloatingDock>
       <div className="space-y-1">

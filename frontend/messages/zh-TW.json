@@ -355,6 +355,10 @@
       "deleteFailed": "刪除失敗:{message}"
     }
   },
+  "Common": {
+    "dragHandle": "拖曳",
+    "close": "關閉"
+  },
   "Errors": {
     "priceLoad": "行情讀取失敗:{message}",
     "mentionsLoad": "提及讀取失敗:{message}",

@@ -23,12 +23,16 @@ export function FloatingDock({
   navHeight = 56,
   sentinelOffset = 192,
   onClose,
+  dragLabel = "Drag",
+  closeLabel = "Close",
 }: {
   children: (state: { floating: boolean }) => React.ReactNode;
   floatingWidth: number;
   navHeight?: number;
   sentinelOffset?: number;
   onClose?: () => void;
+  dragLabel?: string;
+  closeLabel?: string;
 }) {
   const sentinelRef = useRef<HTMLSpanElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
@@ -142,12 +146,12 @@ export function FloatingDock({
             data-testid="floating-dock-handle"
             onPointerDown={onDragStart}
             className="h-4 flex-1 cursor-move select-none"
-            aria-label="drag"
+            aria-label={dragLabel}
           />
           <button
             type="button"
             onClick={handleClose}
-            aria-label="close"
+            aria-label={closeLabel}
             className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <X className="h-4 w-4" />

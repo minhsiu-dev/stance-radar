@@ -52,7 +52,7 @@ describe("FloatingDock", () => {
   it("close hides the floating panel; re-docking restores it", () => {
     renderDock();
     act(() => ioCb([{ isIntersecting: false }]));
-    fireEvent.click(screen.getByLabelText("close"));
+    fireEvent.click(screen.getByLabelText("Close"));
     expect(screen.getByTestId("floating-dock-panel").className).toContain("hidden");
     act(() => ioCb([{ isIntersecting: true }]));
     const panel = screen.getByTestId("floating-dock-panel");

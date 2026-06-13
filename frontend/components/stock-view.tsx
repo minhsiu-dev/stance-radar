@@ -17,6 +17,7 @@ import { FloatingDock } from "@/components/floating-dock";
 
 export function StockView({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.tabs");
+  const tc = useTranslations("Common");
   const params = useSearchParams();
   const deepLinkVideo = params.get("video");
   const [tab, setTab] = useState(deepLinkVideo ? "mentions" : "overview");
@@ -25,7 +26,7 @@ export function StockView({ ticker }: { ticker: string }) {
 
   return (
     <div className="space-y-6">
-      <FloatingDock floatingWidth={360}>
+      <FloatingDock floatingWidth={360} dragLabel={tc("dragHandle")} closeLabel={tc("close")}>
         {({ floating }) => (
           <div className="space-y-2">
             <StockHeader ticker={ticker} compact={floating} />
