@@ -15,8 +15,9 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { StanceMiniBar } from "@/components/stance-mini-bar";
 import { apiFetch } from "@/lib/api";
-import type { SearchHit, StockListItem } from "@/lib/types";
+import type { SearchHit, StockListItem, TrendingStock } from "@/lib/types";
 
 const RECENT_KEY = "stance-radar-recent-tickers";
 const MAX_RECENT = 5;
@@ -80,6 +81,11 @@ export function CommandSearch() {
     open && debounced
       ? `/api/stocks/search?q=${encodeURIComponent(debounced)}`
       : null,
+    apiFetch,
+  );
+
+  const { data: trending } = useSWR<TrendingStock[]>(
+    open && !debounced ? "/api/stocks/trending?days=30&count_days=90&limit=8" : null,
     apiFetch,
   );
 
@@ -151,7 +157,25 @@ export function CommandSearch() {
               </div>
             </CommandGroup>
           )}
-          {mentionedFiltered.length > 0 && (
+          {!debounced && (trending ?? []).length > 0 && (
+            <CommandGroup heading={t("trending")}>
+              {(trending ?? []).map((s) => (
+                <CommandItem
+                  key={`t-${s.ticker}`}
+                  value={`t-${s.ticker}`}
+                  onSelect={() => navigate(s.ticker)}
+                  className="gap-3 [&_svg]:hidden"
+                >
+                  <span className="font-mono">{s.ticker}</span>
+                  <StanceMiniBar stances={s.stances} className="h-1.5 w-16" />
+                  <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                    {t("mentionCount", { count: s.channel_count })}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {debounced && mentionedFiltered.length > 0 && (
             <CommandGroup heading={t("mentioned")}>
               {mentionedFiltered.map((s) => (
                 <CommandItem

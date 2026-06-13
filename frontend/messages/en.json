@@ -27,6 +27,7 @@
     "mentionCount": "{count, plural, one {# mention} other {# mentions}}",
     "all": "All stocks",
     "recent": "Recent",
+    "trending": "Trending",
     "empty": "No results. Try a ticker like AAPL.",
     "fallback": "Network error, showing mentioned only"
   },

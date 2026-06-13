@@ -27,6 +27,7 @@
     "mentionCount": "{count} 次提及",
     "all": "全部股票",
     "recent": "最近瀏覽",
+    "trending": "熱門個股",
     "empty": "查無結果，試試輸入 AAPL 之類的代號。",
     "fallback": "搜尋暫時無法使用,僅顯示已提及"
   },

@@ -11,7 +11,13 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 vi.mock("swr", () => ({
-  default: () => ({ data: undefined, error: undefined }),
+  default: (key: string | null) => ({
+    data: key && key.includes("trending")
+      ? [{ ticker: "MSFT", channel_count: 4, mention_count: 9, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z",
+            stances: { buy: { count: 3, avatars: [] }, neutral: { count: 0, avatars: [] }, sell: { count: 1, avatars: [] } } }]
+      : undefined,
+    error: undefined,
+  }),
 }));
 
 import { CommandSearch } from "@/components/command-search";
@@ -53,5 +59,13 @@ describe("CommandSearch", () => {
     expect(
       JSON.parse(localStorage.getItem("stance-radar-recent-tickers")!)[0],
     ).toBe("NVDA");
+  });
+
+  it("shows trending stocks in the empty state and navigates on select", async () => {
+    render(<CommandSearch />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+    const item = await screen.findByText("MSFT");
+    fireEvent.click(item);
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/en/stocks/MSFT"));
   });
 });
