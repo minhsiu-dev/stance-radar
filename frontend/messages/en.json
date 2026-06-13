@@ -1,7 +1,9 @@
 {
   "Nav": {
     "brand": "Stance Radar",
-    "portfolio": "Portfolio",
+    "home": "Home",
+    "videos": "Latest videos",
+    "portfolio": "Holdings",
     "channels": "Channels"
   },
   "Footer": {
@@ -26,6 +28,7 @@
   },
   "Dashboard": {
     "latest": "Latest videos",
+    "viewAll": "View all →",
     "trending": { "title": "Trending" },
     "flips": {
       "title": "Stance flips",
@@ -243,6 +246,17 @@
       "netIncome": "Net income"
     },
     "stance": { "buy": "Buy", "sell": "Sell", "neutral": "Neutral" }
+  },
+  "VideoDetail": {
+    "loadError": "Failed to load video: {message}",
+    "notFound": "Video not found",
+    "backToVideos": "← Back to latest videos",
+    "watchOnYoutube": "Open on YouTube",
+    "mentionsHeading": "Mentions & stances",
+    "mentionCount": "{count} mentions",
+    "jumpHint": "Click a timestamp to jump there",
+    "noMentions": "No U.S. stock mentions detected in this video",
+    "viewStock": "Stock page"
   },
   "Mentions": {
     "title": "All mentions",

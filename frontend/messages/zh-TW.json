@@ -1,7 +1,9 @@
 {
   "Nav": {
     "brand": "Stance Radar",
-    "portfolio": "持股",
+    "home": "首頁",
+    "videos": "最新影片",
+    "portfolio": "持股狀態",
     "channels": "頻道管理"
   },
   "Footer": {
@@ -26,6 +28,7 @@
   },
   "Dashboard": {
     "latest": "最新影片",
+    "viewAll": "看全部 →",
     "trending": { "title": "熱門提及" },
     "flips": {
       "title": "立場轉變",
@@ -243,6 +246,17 @@
       "netIncome": "淨利"
     },
     "stance": { "buy": "Buy", "sell": "Sell", "neutral": "Neutral" }
+  },
+  "VideoDetail": {
+    "loadError": "影片載入失敗:{message}",
+    "notFound": "找不到這部影片",
+    "backToVideos": "← 返回最新影片",
+    "watchOnYoutube": "在 YouTube 開啟",
+    "mentionsHeading": "提及與立場",
+    "mentionCount": "{count} 次提及",
+    "jumpHint": "點時間碼可跳到影片該處",
+    "noMentions": "這部影片沒有偵測到美股提及",
+    "viewStock": "個股頁"
   },
   "Mentions": {
     "title": "逐筆提及",
