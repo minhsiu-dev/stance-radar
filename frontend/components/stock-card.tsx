@@ -4,27 +4,8 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { ChannelAvatar } from "@/components/channel-avatar";
+import { StanceMiniBar, ZONES } from "@/components/stance-mini-bar";
 import type { TrendingStock, StanceZone } from "@/lib/types";
-
-const ZONES = [
-  { key: "buy", color: "bg-sky-500" },
-  { key: "neutral", color: "bg-zinc-400" },
-  { key: "sell", color: "bg-orange-500" },
-] as const;
-
-function StanceBar({ stances }: { stances: TrendingStock["stances"] }) {
-  const total = stances.buy.count + stances.neutral.count + stances.sell.count;
-  if (total === 0) return null;
-  return (
-    <div className="flex h-2 overflow-hidden rounded-full bg-muted">
-      {ZONES.map(({ key, color }) => {
-        const c = stances[key].count;
-        if (c === 0) return null;
-        return <div key={key} className={color} style={{ width: `${(c / total) * 100}%` }} />;
-      })}
-    </div>
-  );
-}
 
 function AvatarGroup({ zone, color }: { zone: StanceZone; color: string }) {
   if (zone.count === 0) return null;
@@ -59,7 +40,7 @@ export function StockCard({ s }: { s: TrendingStock }) {
           {t("channelCount", { count: s.channel_count })}
         </span>
       </div>
-      <StanceBar stances={s.stances} />
+      <StanceMiniBar stances={s.stances} />
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {ZONES.map(({ key, color }) => (
           <AvatarGroup key={key} zone={s.stances[key]} color={color} />
