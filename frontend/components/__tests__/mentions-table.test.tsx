@@ -70,8 +70,11 @@ describe("MentionsTable", () => {
     await screen.findByText(/I'm bullish on Google/);
     const t1 = screen.getByRole("link", { name: "0:42" });
     const t2 = screen.getByRole("link", { name: "2:05" });
-    expect(t1.getAttribute("href")).toBe("https://www.youtube.com/watch?v=v1&t=42s");
-    expect(t2.getAttribute("href")).toBe("https://www.youtube.com/watch?v=v1&t=125s");
+    for (const t of [t1, t2]) {
+      expect(t.getAttribute("href")).toContain("/videos/v1");
+      expect(t.getAttribute("href")).toContain("ticker=GOOGL");
+      expect(t.getAttribute("href")).not.toContain("youtube.com");
+    }
     // 多筆提及仍只有一列(一個 stance badge)
     expect(screen.getAllByText("Buy")).toHaveLength(1);
   });
@@ -103,12 +106,13 @@ describe("MentionsTable", () => {
     openSpy.mockRestore();
   });
 
-  it("ArrowUpRight link opens the video on YouTube in new tab", async () => {
+  it("ArrowUpRight link goes to the internal video page", async () => {
     setup();
     await screen.findByText(/I'm bullish on Google/);
     const link = screen.getByRole("link", { name: /Open/i });
-    expect(link.getAttribute("target")).toBe("_blank");
-    expect(link.getAttribute("href")).toBe("https://www.youtube.com/watch?v=v1");
+    expect(link.getAttribute("href")).toContain("/videos/v1");
+    expect(link.getAttribute("href")).toContain("ticker=GOOGL");
+    expect(link.getAttribute("href")).not.toContain("youtube.com");
   });
 
   it("invokes onRowHover with video_id on mouseEnter / null on leave", async () => {

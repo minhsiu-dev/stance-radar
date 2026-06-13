@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from "swr";
 import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
 import { ExternalLink, Play, Zap, ZapOff } from "lucide-react";
+import { Link } from "@/i18n/navigation";
 import { ChannelScorecard } from "@/components/channel-scorecard";
 import { ChannelTopTickers } from "@/components/channel-top-tickers";
 import { Badge } from "@/components/ui/badge";
@@ -496,15 +497,13 @@ function VideoRow({
 
       {/* 主資訊欄:標題 → 時間/狀態徽章 → stance chips */}
       <div className="min-w-0 space-y-1.5">
-        <a
-          href={`https://www.youtube.com/watch?v=${video.id}`}
-          target="_blank"
-          rel="noreferrer"
+        <Link
+          href={`/videos/${video.id}`}
           className="line-clamp-1 text-sm font-medium leading-snug hover:underline"
           title={video.title}
         >
           {video.title}
-        </a>
+        </Link>
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span className="tabular-nums">{formatDate(video.published_at)}</span>
           <span className="opacity-60">·</span>

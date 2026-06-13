@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { ArrowUpRight } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { StanceBadge } from "@/components/stance-badge";
 import {
   HoverCard,
@@ -183,16 +184,14 @@ export function MentionsTable({
               <TableCell className="font-mono">
                 <span className="flex flex-wrap gap-x-2 gap-y-1">
                   {m.mentions.map((d) => (
-                    <a
+                    <Link
                       key={d.start_seconds}
-                      href={d.youtube_url}
-                      target="_blank"
-                      rel="noreferrer"
+                      href={`/videos/${m.video_id}?ticker=${ticker}`}
                       className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {formatSeconds(d.start_seconds)}
-                    </a>
+                    </Link>
                   ))}
                 </span>
               </TableCell>
@@ -251,16 +250,14 @@ export function MentionsTable({
                 <StanceBadge stance={m.stance} confidence={m.confidence} />
               </TableCell>
               <TableCell className="text-right">
-                <a
-                  href={m.youtube_url}
-                  target="_blank"
-                  rel="noreferrer"
+                <Link
+                  href={`/videos/${m.video_id}?ticker=${ticker}`}
                   aria-label={t("columns.open")}
                   className="inline-flex items-center justify-end text-muted-foreground hover:text-foreground"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <ArrowUpRight className="h-4 w-4" />
-                </a>
+                </Link>
               </TableCell>
             </TableRow>
           ))}

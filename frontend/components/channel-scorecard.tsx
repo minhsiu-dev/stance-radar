@@ -125,15 +125,13 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
                   {data.calls.map((call) => (
                     <TableRow key={`${call.video_id}-${call.ticker}`}>
                       <TableCell className="whitespace-nowrap tabular-nums">
-                        <a
-                          href={`https://www.youtube.com/watch?v=${call.video_id}`}
-                          target="_blank"
-                          rel="noreferrer"
+                        <Link
+                          href={`/videos/${call.video_id}?ticker=${call.ticker}`}
                           title={call.video_title}
                           className="hover:underline"
                         >
                           {formatDate(call.published_at)}
-                        </a>
+                        </Link>
                       </TableCell>
                       <TableCell>
                         <Link
