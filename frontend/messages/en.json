@@ -355,10 +355,6 @@
       "deleteFailed": "Delete failed: {message}"
     }
   },
-  "Common": {
-    "dragHandle": "Drag",
-    "close": "Close"
-  },
   "Errors": {
     "priceLoad": "Failed to load price data: {message}",
     "mentionsLoad": "Failed to load mentions: {message}",
