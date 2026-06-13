@@ -35,7 +35,6 @@ export function PortfolioTransactions() {
     await mutate(
       (key) => typeof key === "string" && key.startsWith("/api/portfolio"),
     );
-    await mutate("/api/news");
   }
 
   async function submit(e: React.FormEvent) {

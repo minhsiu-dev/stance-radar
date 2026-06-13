@@ -373,17 +373,3 @@ export interface AnalystData {
   analyst_count: number | null;
   recommendations: Record<string, number>;
 }
-
-// NOTE: NewsItemDto/NewsResponse 留到 homepage rework task 與 news-card.tsx 一起移除
-export interface NewsItemDto {
-  ticker: string;
-  title: string;
-  url: string;
-  publisher: string | null;
-  published_at: string;
-}
-
-export interface NewsResponse {
-  scope: "holdings" | "general";
-  items: NewsItemDto[];
-}

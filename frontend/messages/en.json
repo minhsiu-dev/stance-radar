@@ -39,11 +39,6 @@
       "emptyCta": "Add some on the portfolio page",
       "loadError": "Failed to load performance: {message}"
     },
-    "news": {
-      "title": "Holdings news",
-      "generalTitle": "Market news",
-      "empty": "No news right now"
-    },
     "leaderboard": {
       "title": "Channel accuracy leaderboard",
       "subtitle": "{days}d after each call · vs {benchmark}",

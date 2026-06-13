@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
-import { FeedList } from "@/components/feed-list";
+import { FeedList, NO_FILTERS, type FeedFilters } from "@/components/feed-list";
 
 const messages = {
   Dashboard: {
@@ -44,11 +45,29 @@ function makeItem(i: number) {
   };
 }
 
+// FeedList 改為受控元件;測試用小型 stateful wrapper 提供 filters/onFiltersChange
+function ControlledFeedList({ initial = NO_FILTERS }: { initial?: FeedFilters }) {
+  const [filters, setFilters] = useState<FeedFilters>(initial);
+  return <FeedList filters={filters} onFiltersChange={setFilters} />;
+}
+
+function wrap(fetcher: (key: string) => Promise<unknown>) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <SWRConfig value={{ fetcher, provider: () => new Map() }}>
+        <ControlledFeedList />
+      </SWRConfig>
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("FeedList infinite scroll", () => {
   it("shows 'No more results' when last page is short", async () => {
     const fetcher = vi.fn().mockImplementation((key: string) => {
       if (key.startsWith("/api/channels")) return Promise.resolve([]);
       if (key.startsWith("/api/stocks")) return Promise.resolve([]);
+      if (key.startsWith("/api/portfolio/holdings"))
+        return Promise.resolve({ holdings: [], totals: HOLDINGS_TOTALS });
       return Promise.resolve({
         items: [makeItem(0)],
         total: 1,
@@ -56,13 +75,7 @@ describe("FeedList infinite scroll", () => {
         page_size: PAGE_SIZE,
       });
     });
-    render(
-      <NextIntlClientProvider locale="en" messages={messages}>
-        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
-          <FeedList />
-        </SWRConfig>
-      </NextIntlClientProvider>,
-    );
+    wrap(fetcher);
     expect(await screen.findByText("Video 0")).toBeInTheDocument();
     expect(await screen.findByText("No more results")).toBeInTheDocument();
   });
@@ -86,13 +99,7 @@ describe("FeedList holdings-only chip", () => {
       return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
     });
 
-    render(
-      <NextIntlClientProvider locale="en" messages={messages}>
-        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
-          <FeedList />
-        </SWRConfig>
-      </NextIntlClientProvider>,
-    );
+    wrap(fetcher);
 
     const chip = await screen.findByRole("button", { name: "Holdings only" });
     fireEvent.click(chip);
@@ -114,13 +121,7 @@ describe("FeedList holdings-only chip", () => {
       return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
     });
 
-    render(
-      <NextIntlClientProvider locale="en" messages={messages}>
-        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
-          <FeedList />
-        </SWRConfig>
-      </NextIntlClientProvider>,
-    );
+    wrap(fetcher);
 
     // Wait for feed items to appear (filter bar is rendered), then check chip is absent
     await screen.findByText("Video 0");

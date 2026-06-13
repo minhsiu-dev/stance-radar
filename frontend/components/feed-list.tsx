@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type {
   ChannelItem,
   FeedItem,
@@ -70,14 +71,14 @@ function StatusTag({ item }: { item: FeedItem }) {
   return null;
 }
 
-interface FeedFilters {
+export interface FeedFilters {
   channelId: string;
   ticker: string;
   stance: StanceValue | "all";
   holdingsOnly: boolean;
 }
 
-const NO_FILTERS: FeedFilters = { channelId: "all", ticker: "all", stance: "all", holdingsOnly: false };
+export const NO_FILTERS: FeedFilters = { channelId: "all", ticker: "all", stance: "all", holdingsOnly: false };
 
 function feedQuery(page: number, filters: FeedFilters): string {
   const params = new URLSearchParams({
@@ -94,15 +95,16 @@ function feedQuery(page: number, filters: FeedFilters): string {
 function FeedFilterBar({
   filters,
   onChange,
+  holdings,
 }: {
   filters: FeedFilters;
   onChange: (filters: FeedFilters) => void;
+  holdings: HoldingsResponse | undefined;
 }) {
   const t = useTranslations("Dashboard.feed.filter");
   const tStance = useTranslations("Stock.stance");
   const { data: channels } = useSWR<ChannelItem[]>("/api/channels");
   const { data: stocks } = useSWR<StockListItem[]>("/api/stocks");
-  const { data: holdings } = useSWR<HoldingsResponse>("/api/portfolio/holdings");
 
   const hasHoldings = (holdings?.holdings?.length ?? 0) > 0;
 
@@ -178,9 +180,26 @@ function FeedFilterBar({
   );
 }
 
-export function FeedList() {
+export function FeedList({
+  filters,
+  onFiltersChange,
+}: {
+  filters: FeedFilters;
+  onFiltersChange: (filters: FeedFilters) => void;
+}) {
   const t = useTranslations("Dashboard");
-  const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
+  const { data: holdings } = useSWR<HoldingsResponse>("/api/portfolio/holdings");
+  const heldSet = useMemo(
+    () => new Set((holdings?.holdings ?? []).map((h) => h.ticker)),
+    [holdings],
+  );
+  // 高亮集合:選了 ticker → 只亮該 ticker;只開 holdingsOnly → 亮持股;否則不變暗
+  const highlightSet: Set<string> | null =
+    filters.ticker !== "all"
+      ? new Set([filters.ticker])
+      : filters.holdingsOnly
+        ? heldSet
+        : null;
   const getKey = useMemo(
     () => (pageIndex: number, previous: FeedResponse | null) => {
       if (previous && previous.items.length < PAGE_SIZE) return null;
@@ -244,7 +263,7 @@ export function FeedList() {
 
   return (
     <div className="space-y-3">
-      <FeedFilterBar filters={filters} onChange={setFilters} />
+      <FeedFilterBar filters={filters} onChange={onFiltersChange} holdings={holdings} />
       {items.length === 0 && !isValidating && (
         <p className="py-6 text-center text-sm text-muted-foreground">
           {t("feed.noMatch")}
@@ -283,7 +302,10 @@ export function FeedList() {
                     key={s.ticker}
                     href={`/stocks/${s.ticker}`}
                     title={s.summary}
-                    className="transition-transform hover:-translate-y-px"
+                    className={cn(
+                      "transition-transform hover:-translate-y-px",
+                      highlightSet && !highlightSet.has(s.ticker) && "opacity-40",
+                    )}
                   >
                     <StanceBadge
                       stance={s.stance}

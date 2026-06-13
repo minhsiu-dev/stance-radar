@@ -39,11 +39,6 @@
       "emptyCta": "前往持股頁新增",
       "loadError": "績效資料載入失敗:{message}"
     },
-    "news": {
-      "title": "持股新聞",
-      "generalTitle": "市場新聞",
-      "empty": "暫無新聞"
-    },
     "leaderboard": {
       "title": "頻道準確度排行",
       "subtitle": "call 後 {days} 天 · 對比 {benchmark}",
