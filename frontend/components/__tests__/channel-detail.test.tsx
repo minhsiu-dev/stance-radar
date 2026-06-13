@@ -47,6 +47,7 @@ const messages = {
       selectedCount: "{count} selected",
       analyzeSelected: "Analyze selected",
       skipSelected: "Skip selected",
+      selectAll: "Select all",
       analyze: "Analyze",
       retry: "Retry",
       reanalyze: "Re-analyze",
@@ -259,6 +260,24 @@ describe("ChannelDetail", () => {
     expect(
       screen.getByRole("button", { name: "Load more" }),
     ).toBeInTheDocument();
+  });
+
+  it("select-all toggles every actionable loaded video at once", async () => {
+    renderDetail(pagedVideos(3)); // 3 discovered videos
+    expect(await screen.findByText("Video 1")).toBeInTheDocument();
+
+    const selectAll = screen.getByTestId("select-all");
+    fireEvent.click(selectAll);
+
+    expect(screen.getByText("3 selected")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Video 1" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Video 3" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Analyze selected" })).toBeInTheDocument();
+
+    // 再點一次全部取消
+    fireEvent.click(selectAll);
+    expect(screen.queryByText("3 selected")).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Video 1" })).not.toBeChecked();
   });
 
   it("hides load-more when every video is loaded", async () => {

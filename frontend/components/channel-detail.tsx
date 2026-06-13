@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
@@ -111,6 +111,31 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
   const videosTotal = videoPages?.[0]?.total ?? 0;
   const videosLoaded = videoPages !== undefined;
   const hasMore = videoItems.length < videosTotal;
+
+  // 全選只作用在「已載入且可操作」的影片(尊重目前的狀態篩選)
+  const actionableIds = useMemo(
+    () => videoItems.filter((v) => ACTIONABLE.has(v.status)).map((v) => v.id),
+    [videoItems],
+  );
+  const allActionableSelected =
+    actionableIds.length > 0 && actionableIds.every((id) => selected.has(id));
+  const someActionableSelected = actionableIds.some((id) => selected.has(id));
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate =
+        someActionableSelected && !allActionableSelected;
+    }
+  }, [someActionableSelected, allActionableSelected]);
+
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allActionableSelected) actionableIds.forEach((id) => next.delete(id));
+      else actionableIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -332,6 +357,21 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-y-2 space-y-0">
               <CardTitle className="text-base">{t("videos.title")}</CardTitle>
               <div className="flex flex-wrap items-center gap-2">
+                {actionableIds.length > 0 && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={allActionableSelected}
+                      onChange={toggleSelectAll}
+                      disabled={busy}
+                      data-testid="select-all"
+                      aria-label={t("videos.selectAll")}
+                    />
+                    {t("videos.selectAll")}
+                  </label>
+                )}
                 {selectedIds.length > 0 && (
                   <>
                     <span className="text-xs text-muted-foreground">

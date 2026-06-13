@@ -25,8 +25,8 @@ export function ReviewList() {
   const { data, error, isLoading } = useSWR<DiscoveredResponse>(
     "/api/videos?status=discovered",
   );
-  // 記「取消勾選」而非「勾選」:預設全勾,資料載入前後語意一致
-  const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(new Set());
+  // 預設全不選(opt-in):勾選要分析的;沒勾的在確認時一律略過
+  const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -34,10 +34,10 @@ export function ReviewList() {
     () => (data?.groups ?? []).flatMap((g) => g.videos.map((v) => v.id)),
     [data],
   );
-  const selected = allIds.filter((id) => !unchecked.has(id));
+  const selected = allIds.filter((id) => checked.has(id));
 
   function toggle(id: string) {
-    setUnchecked((prev) => {
+    setChecked((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -45,12 +45,12 @@ export function ReviewList() {
     });
   }
 
-  function setMany(ids: string[], checked: boolean) {
-    setUnchecked((prev) => {
+  function setMany(ids: string[], select: boolean) {
+    setChecked((prev) => {
       const next = new Set(prev);
       for (const id of ids) {
-        if (checked) next.delete(id);
-        else next.add(id);
+        if (select) next.add(id);
+        else next.delete(id);
       }
       return next;
     });
@@ -60,7 +60,7 @@ export function ReviewList() {
     setSubmitting(true);
     setMessage(null);
     try {
-      const skipped = allIds.filter((id) => unchecked.has(id));
+      const skipped = allIds.filter((id) => !checked.has(id));
       if (skipped.length) {
         await apiFetch("/api/videos/skip", {
           method: "POST",
@@ -154,7 +154,7 @@ export function ReviewList() {
                   <input
                     type="checkbox"
                     className="h-4 w-4 accent-primary"
-                    checked={!unchecked.has(video.id)}
+                    checked={checked.has(video.id)}
                     onChange={() => toggle(video.id)}
                   />
                   {video.thumbnail_url && (

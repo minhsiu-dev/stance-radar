@@ -161,6 +161,7 @@
       "selectedCount": "{count} selected",
       "analyzeSelected": "Analyze selected",
       "skipSelected": "Skip selected",
+      "selectAll": "Select all",
       "analyze": "Analyze",
       "retry": "Retry",
       "reanalyze": "Re-analyze",

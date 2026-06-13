@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -67,35 +67,59 @@ function renderList(fetcher = vi.fn().mockResolvedValue(response)) {
 }
 
 describe("ReviewList", () => {
-  it("checks everything by default and counts selection", async () => {
+  it("starts with nothing selected (opt-in) so the count is zero", async () => {
     renderList();
     expect(await screen.findByText("Video 1")).toBeInTheDocument();
     const boxes = screen.getAllByRole("checkbox");
     expect(boxes).toHaveLength(3);
-    for (const box of boxes) expect(box).toBeChecked();
+    for (const box of boxes) expect(box).not.toBeChecked();
     expect(
-      screen.getByRole("button", { name: "Analyze selected (3)" }),
+      screen.getByRole("button", { name: "Analyze selected (0)" }),
     ).toBeInTheDocument();
   });
 
-  it("unchecking a video updates the confirm count", async () => {
+  it("checking a video updates the confirm count", async () => {
     renderList();
     await screen.findByText("Video 1");
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    expect(
+      screen.getByRole("button", { name: "Analyze selected (1)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("select all per channel group", async () => {
+    renderList();
+    await screen.findByText("Video 1");
+    // 第一個頻道群組(Alpha)有 2 部影片
+    fireEvent.click(screen.getAllByRole("button", { name: "Select all" })[0]);
     expect(
       screen.getByRole("button", { name: "Analyze selected (2)" }),
     ).toBeInTheDocument();
   });
 
-  it("deselect all per channel group", async () => {
+  it("confirming with nothing selected skips all discovered videos and analyzes none", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ success: true, data: {} }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
     renderList();
     await screen.findByText("Video 1");
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Deselect all" })[0],
-    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Analyze selected (0)" }));
+
+    await waitFor(() => {
+      const skipCall = fetchMock.mock.calls.find(([url]) => url === "/api/videos/skip");
+      expect(skipCall).toBeTruthy();
+      expect(JSON.parse((skipCall![1] as RequestInit).body as string).video_ids.sort()).toEqual(
+        ["v1", "v2", "v3"],
+      );
+    });
     expect(
-      screen.getByRole("button", { name: "Analyze selected (1)" }),
-    ).toBeInTheDocument();
+      fetchMock.mock.calls.some(([url]) => url === "/api/videos/analyze"),
+    ).toBe(false);
+    vi.unstubAllGlobals();
   });
 
   it("shows empty state when nothing is discovered", async () => {

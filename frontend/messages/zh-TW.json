@@ -161,6 +161,7 @@
       "selectedCount": "已選 {count} 部",
       "analyzeSelected": "分析選取",
       "skipSelected": "略過選取",
+      "selectAll": "全選",
       "analyze": "分析",
       "retry": "重試",
       "reanalyze": "重新分析",
