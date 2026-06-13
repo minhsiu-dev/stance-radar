@@ -1,4 +1,7 @@
+from datetime import datetime, timezone
+
 from tests.conftest import wait_refresh
+from app.models import Stance, Video, VideoStance
 
 
 async def seed_two_phase(api) -> tuple:
@@ -91,3 +94,25 @@ async def test_top_tickers_include_latest_stance(api):
     nvda = tickers["NVDA"]
     assert nvda["latest_stance"] == "sell"
     assert nvda["latest_date"] == "2026-05-25"
+
+
+async def test_latest_stance_newest_wins(api):
+    # seed_two_phase 已分析 alpha_vid_3 (AAPL buy, 2026-06-08)
+    # 直接插入一筆更舊的 AAPL neutral stance 到 alpha_vid_2 (2026-05-25)
+    # 斷言 latest_stance 仍為 "buy"(較新的 alpha_vid_3 獲勝)
+    app, client = await seed_two_phase(api)
+
+    async with app.state.sessionmaker() as s:
+        s.add(VideoStance(
+            video_id="alpha_vid_2",
+            ticker="AAPL",
+            stance=Stance.neutral,
+            summary="older view",
+        ))
+        await s.commit()
+
+    resp = await client.get("/api/channels/UC_fake_alpha")
+    assert resp.status_code == 200
+    tickers = {t["ticker"]: t for t in resp.json()["data"]["top_tickers"]}
+    assert tickers["AAPL"]["latest_stance"] == "buy"
+    assert tickers["AAPL"]["latest_date"] == "2026-06-08"

@@ -159,7 +159,7 @@ async def channel_detail(
                 Video.published_at,
                 func.row_number().over(
                     partition_by=VideoStance.ticker,
-                    order_by=Video.published_at.desc(),
+                    order_by=[Video.published_at.desc(), VideoStance.video_id.desc()],
                 ).label("rn"),
             )
             .join(Video, Video.id == VideoStance.video_id)
@@ -186,8 +186,8 @@ async def channel_detail(
             {
                 "ticker": row.ticker, "videos": row.videos,
                 "buy": row.buy, "neutral": row.neutral, "sell": row.sell,
-                "latest_stance": latest_map.get(row.ticker, (None, None))[0],
-                "latest_date": latest_map.get(row.ticker, (None, None))[1],
+                "latest_stance": (ls := latest_map.get(row.ticker, (None, None)))[0],
+                "latest_date": ls[1],
             }
             for row in top_rows
         ],
