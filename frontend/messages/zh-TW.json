@@ -18,6 +18,12 @@
     "empty": "查無結果，試試輸入 AAPL 之類的代號。",
     "fallback": "搜尋暫時無法使用,僅顯示已提及"
   },
+  "Settings": {
+    "open": "設定",
+    "hideAmounts": "隱藏金額",
+    "theme": "深色模式",
+    "language": "語言"
+  },
   "Dashboard": {
     "latest": "最新影片",
     "trending": { "title": "熱門提及" },
@@ -32,11 +38,6 @@
       "empty": "還沒有持股",
       "emptyCta": "前往持股頁新增",
       "loadError": "績效資料載入失敗:{message}"
-    },
-    "news": {
-      "title": "持股新聞",
-      "generalTitle": "市場新聞",
-      "empty": "暫無新聞"
     },
     "leaderboard": {
       "title": "頻道準確度排行",
@@ -135,9 +136,20 @@
       "skipped": "已略過",
       "failed": "分析失敗",
       "no_transcript": "無字幕",
-      "pending": "排隊中",
-      "topTickers": "最常提及股票",
-      "noTickers": "尚無提及紀錄"
+      "pending": "排隊中"
+    },
+    "topTickers": {
+      "title": "最常提及股票",
+      "empty": "尚無資料",
+      "ticker": "股票",
+      "mentions": "提及",
+      "videoCount": "{count} 部影片",
+      "distribution": "立場分佈",
+      "latest": "最新立場"
+    },
+    "tabs": {
+      "videos": "影片",
+      "scorecard": "記分板"
     },
     "videos": {
       "title": "影片",
@@ -152,6 +164,8 @@
       "empty": "沒有影片。",
       "actionFailed": "操作失敗:{message}",
       "queued": "已排入分析佇列",
+      "loadMore": "載入更多",
+      "loaded": "已載入 {loaded} / {total}",
       "status": {
         "discovered": "待挑選",
         "pending": "排隊中",
@@ -182,9 +196,39 @@
     "overview": {
       "latestQuarter": "最近一季",
       "ytStance": "YouTube 立場 (近 {days} 天)",
+      "ytStanceAll": "YouTube 立場 (全部)",
+      "windowAll": "全部",
       "revenue": "營收",
       "netIncome": "淨利",
       "eps": "EPS"
+    },
+    "analyst": {
+      "title": "分析師目標價",
+      "count": "{count} 位分析師",
+      "low": "低",
+      "mean": "均",
+      "high": "高",
+      "upside": "vs 現價",
+      "strongBuy": "強力買進",
+      "buy": "買進",
+      "hold": "持有",
+      "sell": "賣出",
+      "strongSell": "強力賣出"
+    },
+    "growth": {
+      "title": "最新一季成長",
+      "metric": "指標",
+      "value": "數值",
+      "qoq": "季增",
+      "yoy": "年增",
+      "revenue": "營收",
+      "grossProfit": "毛利",
+      "operatingIncome": "營業利益",
+      "netIncome": "淨利",
+      "marginsTitle": "利潤率趨勢",
+      "grossMargin": "毛利率",
+      "operatingMargin": "營益率",
+      "netMargin": "淨利率"
     },
     "financials": {
       "quarterly": "季報",

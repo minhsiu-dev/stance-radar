@@ -8,19 +8,20 @@ test("golden path: add channel → review → analyze → dashboard → stock �
     .fill("UC_fake_alpha UC_fake_beta");
   await page.getByRole("button", { name: /^add$/i }).click();
   await expect(page.getByText(/added|already exists/i)).toBeVisible();
-  // 「Added …」= 全新狀態,discover 一定會產出待挑選影片;
-  // 「Already exists …」= 重複執行,影片早已分析完 → 挑選頁是空的
-  const freshAdd = await page.getByText(/^added /i).isVisible();
 
-  // 2. Review page: confirm the default all-checked selection
+  // 2. Review page: confirm the default all-checked selection.
+  // discover 是 add 之後的背景工作,挑選頁可能還沒灌入影片;不要依賴「Added vs
+  // Already exists」這條會閃現/被重繪覆蓋的訊息判斷狀態(會 race),改成直接輪詢
+  // 挑選頁:出現 confirm 按鈕就按、若是空的(代表早已分析過)就跳過。
   await page.goto("/en/review");
   const confirmButton = page.getByRole("button", { name: /analyze selected/i });
-  if (freshAdd) {
-    await expect(async () => {
-      await page.reload();
-      await expect(confirmButton).toBeVisible({ timeout: 2_000 });
-    }).toPass({ timeout: 30_000 });
-  }
+  const emptyState = page.getByText(/no videos awaiting review/i);
+  await expect(async () => {
+    await page.reload();
+    await expect(confirmButton.or(emptyState).first()).toBeVisible({
+      timeout: 2_000,
+    });
+  }).toPass({ timeout: 30_000 });
   if (await confirmButton.isVisible()) {
     await confirmButton.click();
     await expect(page).toHaveURL(/\/en\/?$/, { timeout: 10_000 });
@@ -48,7 +49,9 @@ test("golden path: add channel → review → analyze → dashboard → stock �
   await page.goto("/en/channels");
   await page.getByRole("link", { name: "頻道 Alpha" }).click();
   await expect(page).toHaveURL(/\/en\/channels\/UC_fake_alpha/);
-  await expect(page.getByText("Most mentioned stocks")).toBeVisible();
+  await expect(page.getByText("Most mentioned")).toBeVisible();
+  // Videos tab is the default tab; its list shows the analyzed video + badge
+  await expect(page.getByRole("tab", { name: /videos/i })).toBeVisible();
   await expect(page.getByText("AAPL 財報解讀")).toBeVisible();
   await expect(page.getByText(/^analyzed$/i).first()).toBeVisible();
 });

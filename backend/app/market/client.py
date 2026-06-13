@@ -2,7 +2,7 @@ import asyncio
 import logging
 import math
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from typing import Literal, Protocol
 
 from app.market.cache import TTLCache
@@ -71,12 +71,18 @@ class FinancialReport:
 
 
 @dataclass(frozen=True)
-class NewsItem:
-    ticker: str
-    title: str
-    url: str
-    publisher: str | None
-    published_at: str  # ISO 8601
+class AnalystData:
+    target_low: float | None
+    target_mean: float | None
+    target_high: float | None
+    analyst_count: int | None
+    recommendations: dict[str, int]  # strongBuy/buy/hold/sell/strongSell
+
+
+_EMPTY_ANALYST = AnalystData(
+    target_low=None, target_mean=None, target_high=None,
+    analyst_count=None, recommendations={},
+)
 
 
 class MarketClient(Protocol):
@@ -90,7 +96,7 @@ class MarketClient(Protocol):
     async def get_daily_history(
         self, tickers: list[str], start: date, end: date
     ) -> dict[str, list[Candle]]: ...
-    async def get_news(self, ticker: str) -> list[NewsItem]: ...
+    async def get_analyst(self, ticker: str) -> AnalystData: ...
 
 
 class YFinanceMarketClient:
@@ -100,7 +106,7 @@ class YFinanceMarketClient:
         self._exists_cache = TTLCache(ttl_seconds=86400)    # 1 天
         self._search_cache = TTLCache(ttl_seconds=300)      # 5 分鐘
         self._financials_cache = TTLCache(ttl_seconds=86400) # 24 小時,財報一季才變一次
-        self._news_cache = TTLCache(ttl_seconds=900)        # 15 分鐘
+        self._analyst_cache = TTLCache(ttl_seconds=86400)  # 24 小時
 
     async def get_summary(self, ticker: str) -> StockSummary:
         cached = self._summary_cache.get(ticker)
@@ -314,49 +320,41 @@ class YFinanceMarketClient:
             ]
         return out
 
-    async def get_news(self, ticker: str) -> list[NewsItem]:
-        cached = self._news_cache.get(ticker)
+    async def get_analyst(self, ticker: str) -> AnalystData:
+        cached = self._analyst_cache.get(ticker)
         if cached is not None:
             return cached
-        items = await asyncio.to_thread(self._fetch_news, ticker)
-        self._news_cache.set(ticker, items)
-        return items
+        data = await asyncio.to_thread(self._fetch_analyst, ticker)
+        self._analyst_cache.set(ticker, data)
+        return data
 
-    def _fetch_news(self, ticker: str) -> list[NewsItem]:
+    def _fetch_analyst(self, ticker: str) -> AnalystData:
         import yfinance as yf
 
         try:
-            raw = yf.Ticker(ticker).news or []
+            t = yf.Ticker(ticker)
+            info = t.info or {}
+            recs: dict[str, int] = {}
+            df = t.recommendations_summary
+            if df is not None and not df.empty and "period" in df.columns:
+                current = df[df["period"] == "0m"]
+                if not current.empty:
+                    row = current.iloc[0]
+                    recs = {
+                        k: int(row[k])
+                        for k in ("strongBuy", "buy", "hold", "sell", "strongSell")
+                        if k in current.columns and row[k] == row[k]
+                    }
+            return AnalystData(
+                target_low=info.get("targetLowPrice"),
+                target_mean=info.get("targetMeanPrice"),
+                target_high=info.get("targetHighPrice"),
+                analyst_count=info.get("numberOfAnalystOpinions"),
+                recommendations=recs,
+            )
         except Exception:
-            # 失敗回空並由呼叫端 cache 15 分鐘:新聞非核心,寧可暫時沒新聞
-            # 也不要每次頁面載入都重打掛掉的上游
-            logger.warning("news fetch failed for %s", ticker, exc_info=True)
-            return []
-        out: list[NewsItem] = []
-        for item in raw:
-            # yfinance ≥0.2.50 把欄位包在 content 裡;舊版攤平在最外層
-            content = item.get("content") or item
-            title = content.get("title")
-            url = (
-                (content.get("canonicalUrl") or {}).get("url")
-                or content.get("link")
-            )
-            publisher = (
-                (content.get("provider") or {}).get("displayName")
-                or content.get("publisher")
-            )
-            published = content.get("pubDate")
-            if published is None and content.get("providerPublishTime") is not None:
-                published = datetime.fromtimestamp(
-                    content["providerPublishTime"], timezone.utc
-                ).isoformat()
-            if not title or not url or not published:
-                continue
-            out.append(NewsItem(
-                ticker=ticker.upper(), title=title, url=url,
-                publisher=publisher, published_at=str(published).replace("Z", "+00:00"),  # 統一 offset 寫法,讓字串排序可靠
-            ))
-        return out[:10]
+            logger.warning("analyst fetch failed for %s", ticker, exc_info=True)
+            return _EMPTY_ANALYST
 
 
 _RANGE_TO_DAYS = {"1m": 22, "3m": 65, "6m": 130, "ytd": 110, "1y": 260, "3y": 780, "5y": 1300}
@@ -499,17 +497,16 @@ class FakeMarketClient:
             out[ticker] = candles
         return out
 
-    async def get_news(self, ticker: str) -> list[NewsItem]:
+    async def get_analyst(self, ticker: str) -> AnalystData:
         if ticker not in self.KNOWN:
-            return []
-        offset = sum(ord(c) for c in ticker) % 12
-        return [
-            NewsItem(
-                ticker=ticker,
-                title=f"{self.KNOWN[ticker]} fake headline {i}",
-                url=f"https://news.example.com/{ticker.lower()}/{i}",
-                publisher="Fake Wire",
-                published_at=f"2026-06-{10 - i:02d}T{offset:02d}:00:00+00:00",
-            )
-            for i in (1, 2)
-        ]
+            return _EMPTY_ANALYST
+        base = float(100 + sum(ord(c) for c in ticker) % 150)
+        return AnalystData(
+            target_low=round(base * 0.85, 2),
+            target_mean=round(base * 1.1, 2),
+            target_high=round(base * 1.35, 2),
+            analyst_count=20 + sum(ord(c) for c in ticker) % 20,
+            recommendations={
+                "strongBuy": 8, "buy": 10, "hold": 5, "sell": 2, "strongSell": 1,
+            },
+        )

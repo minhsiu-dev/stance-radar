@@ -1,0 +1,16 @@
+# 磁碟受限環境(如 CI 沙箱)的 opt-in override:用 frontend/Dockerfile.e2e
+# 打包 host 已 build 好的 .next/standalone,避免容器內 ~1GB 的 npm ci。
+#
+# 用法(比預設 e2e 流程多帶這個 -f,並先在 host build 過 frontend):
+#   cd frontend && API_URL=http://api:8000 npm run build && cd ..
+#   docker compose -p stance-e2e \
+#     -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.e2e.lowdisk.yml \
+#     up -d --build
+#
+# 注意:next rewrites() 的 API_URL 是在 `next build` 時固化進 standalone 的,
+# 所以 host build 一定要帶 API_URL=http://api:8000,否則會 fallback 到
+# localhost:8000,容器內連不到 api(runtime env 對 standalone 不會重新生效)。
+services:
+  frontend:
+    build:
+      dockerfile: Dockerfile.e2e

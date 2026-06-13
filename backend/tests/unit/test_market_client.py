@@ -272,48 +272,40 @@ async def test_fake_daily_history_unknown_ticker_returns_empty():
     assert out["ZZZZ"] == []
 
 
-async def test_fake_news_is_deterministic():
+async def test_fake_analyst_is_deterministic_and_complete():
     fake = FakeMarketClient()
-    items = await fake.get_news("AAPL")
-    assert len(items) == 2
-    assert all(n.ticker == "AAPL" and n.title and n.url for n in items)
-    assert items == await fake.get_news("AAPL")
-    assert await fake.get_news("ZZZZ") == []
+    a = await fake.get_analyst("AAPL")
+    assert a.target_low is not None and a.target_low < a.target_mean < a.target_high
+    assert a.analyst_count and a.analyst_count > 0
+    assert set(a.recommendations) == {"strongBuy", "buy", "hold", "sell", "strongSell"}
+    assert a == await fake.get_analyst("AAPL")
+    empty = await fake.get_analyst("ZZZZ")
+    assert empty.target_mean is None and empty.recommendations == {}
 
 
-async def test_yfinance_news_parses_both_formats(monkeypatch):
+async def test_yfinance_analyst_parses_info_and_recommendations(monkeypatch):
+    import pandas as pd
+
     from app.market.client import YFinanceMarketClient
-
-    raw = [
-        {  # 新版:包在 content 裡,pubDate 用 Z 結尾
-            "content": {
-                "title": "New format headline",
-                "canonicalUrl": {"url": "https://n.test/new"},
-                "provider": {"displayName": "NewWire"},
-                "pubDate": "2026-06-12T01:00:00Z",
-            }
-        },
-        {  # 舊版:攤平 + epoch 秒
-            "title": "Old format headline",
-            "link": "https://n.test/old",
-            "publisher": "OldWire",
-            "providerPublishTime": 1765500000,
-        },
-        {"content": {"title": "no url → skipped"}},
-    ]
 
     class FakeTicker:
         def __init__(self, ticker):
-            self.news = raw
+            self.info = {
+                "targetLowPrice": 100.0, "targetMeanPrice": 150.0,
+                "targetHighPrice": 200.0, "numberOfAnalystOpinions": 30,
+            }
+            self.recommendations_summary = pd.DataFrame([
+                {"period": "0m", "strongBuy": 10, "buy": 12, "hold": 6,
+                 "sell": 1, "strongSell": 1},
+                {"period": "-1m", "strongBuy": 9, "buy": 11, "hold": 7,
+                 "sell": 2, "strongSell": 1},
+            ])
 
     import yfinance
 
     monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
-    items = YFinanceMarketClient()._fetch_news("aapl")
-    assert [n.url for n in items] == ["https://n.test/new", "https://n.test/old"]
-    new, old = items
-    assert new.publisher == "NewWire" and old.publisher == "OldWire"
-    assert new.ticker == "AAPL"
-    # Z 已標準化成 +00:00 → 與 epoch 轉出的格式可比較排序
-    assert new.published_at.endswith("+00:00")
-    assert old.published_at.endswith("+00:00")
+    a = YFinanceMarketClient()._fetch_analyst("aapl")
+    assert a.target_mean == 150.0 and a.analyst_count == 30
+    assert a.recommendations == {
+        "strongBuy": 10, "buy": 12, "hold": 6, "sell": 1, "strongSell": 1,
+    }

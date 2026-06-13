@@ -149,6 +149,36 @@ async def channel_detail(
         .limit(5)
     )).all()
 
+    top_tickers = [row.ticker for row in top_rows]
+    latest_map: dict[str, tuple[str, str]] = {}
+    if top_tickers:
+        ranked = (
+            select(
+                VideoStance.ticker,
+                VideoStance.stance,
+                Video.published_at,
+                func.row_number().over(
+                    partition_by=VideoStance.ticker,
+                    order_by=[Video.published_at.desc(), VideoStance.video_id.desc()],
+                ).label("rn"),
+            )
+            .join(Video, Video.id == VideoStance.video_id)
+            .where(
+                Video.channel_id == channel_id,
+                VideoStance.ticker.in_(top_tickers),
+            )
+            .subquery()
+        )
+        latest_rows = (await session.execute(
+            select(ranked.c.ticker, ranked.c.stance, ranked.c.published_at)
+            .where(ranked.c.rn == 1)
+        )).all()
+        latest_map = {
+            ticker: (stance.value if hasattr(stance, "value") else stance,
+                     published_at.date().isoformat())
+            for ticker, stance, published_at in latest_rows
+        }
+
     return ok({
         **channel_to_dict(channel),
         "status_counts": status_counts,
@@ -156,6 +186,8 @@ async def channel_detail(
             {
                 "ticker": row.ticker, "videos": row.videos,
                 "buy": row.buy, "neutral": row.neutral, "sell": row.sell,
+                "latest_stance": (ls := latest_map.get(row.ticker, (None, None)))[0],
+                "latest_date": ls[1],
             }
             for row in top_rows
         ],

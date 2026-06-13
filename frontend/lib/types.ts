@@ -202,6 +202,8 @@ export interface ChannelTickerStat {
   buy: number;
   neutral: number;
   sell: number;
+  latest_stance: StanceValue | null;
+  latest_date: string | null;
 }
 
 export interface ChannelDetailDto extends ChannelItem {
@@ -364,15 +366,10 @@ export interface PerformanceRangeResponse {
   qqq: PerformanceSeries;
 }
 
-export interface NewsItemDto {
-  ticker: string;
-  title: string;
-  url: string;
-  publisher: string | null;
-  published_at: string;
-}
-
-export interface NewsResponse {
-  scope: "holdings" | "general";
-  items: NewsItemDto[];
+export interface AnalystData {
+  target_low: number | null;
+  target_mean: number | null;
+  target_high: number | null;
+  analyst_count: number | null;
+  recommendations: Record<string, number>;
 }

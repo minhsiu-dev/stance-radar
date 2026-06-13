@@ -128,6 +128,16 @@ async def stock_financials(
     return ok([asdict(r) for r in reports])
 
 
+@router.get("/{ticker}/analyst")
+async def stock_analyst(ticker: str, market: MarketClient = Depends(get_market)):
+    try:
+        data = await market.get_analyst(ticker.upper())
+    except Exception:
+        logger.exception("analyst fetch failed for %s", ticker)
+        return fail("分析師資料暫時無法取得,稍後再試", status_code=502)
+    return ok(asdict(data))
+
+
 @router.get("/{ticker}/candles")
 async def stock_candles(
     ticker: str,
@@ -159,7 +169,7 @@ async def stock_candles(
 @router.get("/{ticker}/stance-summary")
 async def stance_summary(
     ticker: str,
-    days: int = Query(90, ge=1, le=365),
+    days: int = Query(90, ge=1, le=3650),
     session: AsyncSession = Depends(get_session),
 ):
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)

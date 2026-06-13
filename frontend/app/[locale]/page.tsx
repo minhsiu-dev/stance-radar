@@ -1,12 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import { AutoRefreshHint } from "@/components/auto-refresh-hint";
-import { FeedList } from "@/components/feed-list";
-import { NewsCard } from "@/components/news-card";
+import { FeedSection } from "@/components/feed-section";
 import { PendingReviewBanner } from "@/components/pending-review-banner";
 import { PerformanceCards } from "@/components/performance-cards";
 import { RefreshButton } from "@/components/refresh-button";
 import { StanceFlips } from "@/components/stance-flips";
-import { TrendingStocks } from "@/components/trending-stocks";
 
 export default async function DashboardPage() {
   const t = await getTranslations("Dashboard");
@@ -23,9 +21,7 @@ export default async function DashboardPage() {
       <PendingReviewBanner />
       <PerformanceCards />
       <StanceFlips />
-      <NewsCard />
-      <TrendingStocks />
-      <FeedList />
+      <FeedSection />
     </div>
   );
 }

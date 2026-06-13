@@ -4,6 +4,7 @@ import { getMessages, setRequestLocale } from "next-intl/server";
 import { fontVariables } from "@/app/layout";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/app-shell";
+import { PrivacyProvider } from "@/components/privacy-provider";
 import { SWRProvider } from "@/components/swr-provider";
 import { routing } from "@/i18n/routing";
 
@@ -39,7 +40,9 @@ export default async function LocaleLayout({
         >
           <NextIntlClientProvider messages={messages}>
             <SWRProvider>
-              <AppShell>{children}</AppShell>
+              <PrivacyProvider>
+                <AppShell>{children}</AppShell>
+              </PrivacyProvider>
             </SWRProvider>
           </NextIntlClientProvider>
         </ThemeProvider>

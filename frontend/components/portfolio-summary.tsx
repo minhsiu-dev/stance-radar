@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { masked, usePrivacy } from "@/components/privacy-provider";
 import type { HoldingsResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ function Stat({
 
 export function PortfolioSummary() {
   const t = useTranslations("Portfolio.totals");
+  const { hideAmounts } = usePrivacy();
   const { data } = useSWR<HoldingsResponse>("/api/portfolio/holdings");
 
   if (!data) {
@@ -40,20 +42,20 @@ export function PortfolioSummary() {
   }
   const { totals } = data;
   const plPositive = (totals.unrealized_pl ?? 0) >= 0;
+  const plValue =
+    totals.unrealized_pl == null
+      ? "—"
+      : totals.unrealized_pl_percent == null
+        ? money(totals.unrealized_pl)
+        : `${money(totals.unrealized_pl)} (${plPositive ? "+" : ""}${totals.unrealized_pl_percent.toFixed(1)}%)`;
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      <Stat label={t("marketValue")} value={money(totals.market_value)} />
-      <Stat label={t("costBasis")} value={money(totals.cost_basis)} />
+      <Stat label={t("marketValue")} value={masked(hideAmounts, money(totals.market_value))} />
+      <Stat label={t("costBasis")} value={masked(hideAmounts, money(totals.cost_basis))} />
       <Stat
         label={t("unrealizedPl")}
-        value={
-          totals.unrealized_pl == null
-            ? "—"
-            : totals.unrealized_pl_percent == null
-              ? money(totals.unrealized_pl)
-              : `${money(totals.unrealized_pl)} (${plPositive ? "+" : ""}${totals.unrealized_pl_percent.toFixed(1)}%)`
-        }
-        valueClass={cn(
+        value={masked(hideAmounts, plValue)}
+        valueClass={hideAmounts ? undefined : cn(
           totals.unrealized_pl != null &&
             (plPositive
               ? "text-emerald-600 dark:text-emerald-400"

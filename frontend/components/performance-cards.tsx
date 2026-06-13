@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { masked, usePrivacy } from "@/components/privacy-provider";
 import type { PerfChanges, PerformanceSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -70,6 +71,7 @@ function PerfCard({
 
 export function PerformanceCards() {
   const t = useTranslations("Dashboard.performance");
+  const { hideAmounts } = usePrivacy();
   const { data, error } = useSWR<PerformanceSummary>(
     "/api/portfolio/performance/summary",
   );
@@ -93,7 +95,7 @@ export function PerformanceCards() {
       {data.portfolio ? (
         <PerfCard
           title={t("portfolio")}
-          headline={money(data.portfolio.total_value)}
+          headline={masked(hideAmounts, money(data.portfolio.total_value))}
           changes={data.portfolio.changes}
         />
       ) : (

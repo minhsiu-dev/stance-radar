@@ -18,6 +18,12 @@
     "empty": "No results. Try a ticker like AAPL.",
     "fallback": "Network error, showing mentioned only"
   },
+  "Settings": {
+    "open": "Settings",
+    "hideAmounts": "Hide amounts",
+    "theme": "Dark mode",
+    "language": "Language"
+  },
   "Dashboard": {
     "latest": "Latest videos",
     "trending": { "title": "Trending" },
@@ -32,11 +38,6 @@
       "empty": "No holdings yet",
       "emptyCta": "Add some on the portfolio page",
       "loadError": "Failed to load performance: {message}"
-    },
-    "news": {
-      "title": "Holdings news",
-      "generalTitle": "Market news",
-      "empty": "No news right now"
     },
     "leaderboard": {
       "title": "Channel accuracy leaderboard",
@@ -135,9 +136,20 @@
       "skipped": "Skipped",
       "failed": "Failed",
       "no_transcript": "No transcript",
-      "pending": "Queued",
-      "topTickers": "Most mentioned stocks",
-      "noTickers": "No mentions yet"
+      "pending": "Queued"
+    },
+    "topTickers": {
+      "title": "Most mentioned",
+      "empty": "No data yet",
+      "ticker": "Ticker",
+      "mentions": "Mentions",
+      "videoCount": "{count} videos",
+      "distribution": "Stance mix",
+      "latest": "Latest"
+    },
+    "tabs": {
+      "videos": "Videos",
+      "scorecard": "Scorecard"
     },
     "videos": {
       "title": "Videos",
@@ -152,6 +164,8 @@
       "empty": "No videos.",
       "actionFailed": "Action failed: {message}",
       "queued": "Queued for analysis",
+      "loadMore": "Load more",
+      "loaded": "{loaded} of {total} loaded",
       "status": {
         "discovered": "Awaiting review",
         "pending": "Queued",
@@ -182,9 +196,39 @@
     "overview": {
       "latestQuarter": "Latest quarter",
       "ytStance": "YouTube stance (last {days}d)",
+      "ytStanceAll": "YouTube stance (all time)",
+      "windowAll": "All",
       "revenue": "Revenue",
       "netIncome": "Net income",
       "eps": "EPS"
+    },
+    "analyst": {
+      "title": "Analyst targets",
+      "count": "{count} analysts",
+      "low": "Low",
+      "mean": "Mean",
+      "high": "High",
+      "upside": "vs price",
+      "strongBuy": "Strong buy",
+      "buy": "Buy",
+      "hold": "Hold",
+      "sell": "Sell",
+      "strongSell": "Strong sell"
+    },
+    "growth": {
+      "title": "Growth (latest quarter)",
+      "metric": "Metric",
+      "value": "Value",
+      "qoq": "QoQ",
+      "yoy": "YoY",
+      "revenue": "Revenue",
+      "grossProfit": "Gross profit",
+      "operatingIncome": "Operating income",
+      "netIncome": "Net income",
+      "marginsTitle": "Margin trends",
+      "grossMargin": "Gross",
+      "operatingMargin": "Operating",
+      "netMargin": "Net"
     },
     "financials": {
       "quarterly": "Quarterly",

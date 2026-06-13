@@ -290,3 +290,23 @@ async def test_intraday_candles_still_use_market_client(api):
     body = resp.json()
     assert resp.status_code == 200 and body["success"]
     assert all(isinstance(c["time"], int) for c in body["data"])
+
+
+async def test_analyst_endpoint_returns_targets(api):
+    app, client = api
+    resp = await client.get("/api/stocks/AAPL/analyst")
+    body = resp.json()
+    assert resp.status_code == 200 and body["success"]
+    data = body["data"]
+    assert data["target_mean"] is not None
+    assert "strongBuy" in data["recommendations"]
+
+    resp = await client.get("/api/stocks/ZZZZ/analyst")
+    assert resp.json()["data"]["target_mean"] is None
+
+
+async def test_stance_summary_accepts_long_window(api):
+    app, client = api
+    resp = await client.get("/api/stocks/AAPL/stance-summary?days=3650")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["window_days"] == 3650
