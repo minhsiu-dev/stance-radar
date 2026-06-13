@@ -169,7 +169,7 @@ async def stock_candles(
 @router.get("/{ticker}/stance-summary")
 async def stance_summary(
     ticker: str,
-    days: int = Query(90, ge=1, le=365),
+    days: int = Query(90, ge=1, le=3650),
     session: AsyncSession = Depends(get_session),
 ):
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)

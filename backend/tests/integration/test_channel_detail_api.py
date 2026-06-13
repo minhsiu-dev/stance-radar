@@ -71,3 +71,23 @@ async def test_channel_list_includes_video_counts(api):
     by_id = {c["id"]: c for c in resp.json()["data"]}
     assert by_id["UC_fake_alpha"]["video_counts"] == {"analyzed": 2, "skipped": 1}
     assert by_id["UC_fake_beta"]["video_counts"] == {"discovered": 3}
+
+
+async def test_top_tickers_include_latest_stance(api):
+    # seed_two_phase 分析了 alpha_vid_3 (AAPL buy, 2026-06-08)
+    # 以及 alpha_vid_2 (NVDA sell, 2026-05-25);alpha_vid_1 被 skip
+    app, client = await seed_two_phase(api)
+    resp = await client.get("/api/channels/UC_fake_alpha")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+
+    tickers = {t["ticker"]: t for t in data["top_tickers"]}
+    assert "AAPL" in tickers
+    aapl = tickers["AAPL"]
+    assert aapl["latest_stance"] == "buy"
+    assert aapl["latest_date"] == "2026-06-08"
+
+    assert "NVDA" in tickers
+    nvda = tickers["NVDA"]
+    assert nvda["latest_stance"] == "sell"
+    assert nvda["latest_date"] == "2026-05-25"

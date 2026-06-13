@@ -303,3 +303,10 @@ async def test_analyst_endpoint_returns_targets(api):
 
     resp = await client.get("/api/stocks/ZZZZ/analyst")
     assert resp.json()["data"]["target_mean"] is None
+
+
+async def test_stance_summary_accepts_long_window(api):
+    app, client = api
+    resp = await client.get("/api/stocks/AAPL/stance-summary?days=3650")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["window_days"] == 3650
