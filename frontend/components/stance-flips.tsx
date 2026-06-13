@@ -86,7 +86,7 @@ function FlipRow({ flip }: { flip: FlipItem }) {
 export function StanceFlips() {
   const t = useTranslations("Dashboard.flips");
   const { data, isLoading } = useSWR<FlipsResponse>(
-    "/api/insights/flips?days=30",
+    "/api/insights/flips?days=30&reversals_only=true",
   );
 
   if (isLoading) {
