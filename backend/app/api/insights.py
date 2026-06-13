@@ -55,13 +55,20 @@ def _point_to_dict(point: StancePoint) -> dict:
 async def stance_flips(
     days: int = Query(30, ge=1, le=365),
     limit: int = Query(20, ge=1, le=100),
+    reversals_only: bool = Query(False),
     session: AsyncSession = Depends(get_session),
 ):
-    """近 N 天內發生的立場轉變(偵測需要全部歷史,過濾只看 curr 的時間)。"""
+    """近 N 天內發生的立場轉變(偵測需要全部歷史,過濾只看 curr 的時間)。
+
+    reversals_only=True 時只留 buy↔sell 反轉(排除進出 neutral)。過濾在 limit
+    之前做,否則 limit 會先砍掉、漏掉較舊的反轉。
+    """
     points = await _load_stance_points(session)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     flips = [
-        f for f in detect_flips(points) if f.curr.published_at >= cutoff
+        f for f in detect_flips(points)
+        if f.curr.published_at >= cutoff
+        and (not reversals_only or f.is_reversal)
     ][:limit]
     return ok({
         "window_days": days,

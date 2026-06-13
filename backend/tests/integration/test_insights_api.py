@@ -54,6 +54,48 @@ async def test_flips_window_excludes_old_flips(api, sessionmaker):
     assert resp.json()["data"]["items"] == []
 
 
+async def _seed_reversal_and_neutral_flip(sessionmaker) -> None:
+    """ch1:AAPL buy→sell(reversal);TSLA buy→neutral(非反轉,但也是 flip)。"""
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(
+            id="ch1", title="頻道一", thumbnail_url="", uploads_playlist_id="UU1",
+        ))
+        for vid, day_offset, ticker, stance in (
+            ("v_a1", 40, "AAPL", Stance.buy),
+            ("v_a2", 2, "AAPL", Stance.sell),
+            ("v_t1", 20, "TSLA", Stance.buy),
+            ("v_t2", 3, "TSLA", Stance.neutral),
+        ):
+            s.add(Video(
+                id=vid, channel_id="ch1", title=f"title {vid}",
+                published_at=now - timedelta(days=day_offset),
+                thumbnail_url="", duration_seconds=60,
+                status=VideoStatus.analyzed,
+            ))
+            s.add(VideoStance(
+                video_id=vid, ticker=ticker, stance=stance, summary="s",
+            ))
+        await s.commit()
+
+
+async def test_flips_reversals_only_excludes_neutral_flips(api, sessionmaker):
+    _, client = api
+    await _seed_reversal_and_neutral_flip(sessionmaker)
+
+    # 預設:兩個 flip 都回(AAPL 反轉 + TSLA 進 neutral)
+    allf = (await client.get("/api/insights/flips?days=30")).json()["data"]["items"]
+    assert {f["ticker"] for f in allf} == {"AAPL", "TSLA"}
+
+    # reversals_only:只留 buy↔sell 反轉
+    rev = (await client.get(
+        "/api/insights/flips?days=30&reversals_only=true"
+    )).json()["data"]["items"]
+    assert len(rev) == 1
+    assert rev[0]["ticker"] == "AAPL"
+    assert rev[0]["is_reversal"] is True
+
+
 async def test_scorecard_unknown_channel_404(api):
     _, client = api
     resp = await client.get("/api/channels/nope/scorecard")
