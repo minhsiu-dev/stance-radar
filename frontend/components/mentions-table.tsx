@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
-import { ArrowUpRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { StanceBadge } from "@/components/stance-badge";
@@ -138,7 +137,6 @@ export function MentionsTable({
             <TableHead>{t("columns.channel")}</TableHead>
             <TableHead>{t("columns.quote")}</TableHead>
             <TableHead>{t("columns.stance")}</TableHead>
-            <TableHead className="w-16 text-right">{t("columns.open")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody ref={bodyRef}>
@@ -217,16 +215,12 @@ export function MentionsTable({
                 </HoverCard>
               </TableCell>
               <TableCell>
-                <StanceBadge stance={m.stance} confidence={m.confidence} />
-              </TableCell>
-              <TableCell className="text-right">
                 <Link
                   href={`/videos/${m.video_id}?ticker=${ticker}`}
-                  aria-label={t("columns.open")}
-                  className="inline-flex items-center justify-end text-muted-foreground hover:text-foreground"
                   onClick={(e) => e.stopPropagation()}
+                  className="inline-block transition-opacity hover:opacity-80"
                 >
-                  <ArrowUpRight className="h-4 w-4" />
+                  <StanceBadge stance={m.stance} confidence={m.confidence} />
                 </Link>
               </TableCell>
             </TableRow>

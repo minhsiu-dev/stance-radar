@@ -283,8 +283,7 @@
       "date": "Date",
       "channel": "Channel",
       "quote": "Quote",
-      "stance": "Stance",
-      "open": "Open"
+      "stance": "Stance"
     },
     "filter": {
       "stance": "Stance",

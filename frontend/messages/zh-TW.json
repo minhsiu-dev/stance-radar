@@ -283,8 +283,7 @@
       "date": "日期",
       "channel": "頻道",
       "quote": "原句",
-      "stance": "立場",
-      "open": "開啟"
+      "stance": "立場"
     },
     "filter": {
       "stance": "立場",

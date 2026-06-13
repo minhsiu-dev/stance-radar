@@ -106,10 +106,10 @@ describe("MentionsTable", () => {
     openSpy.mockRestore();
   });
 
-  it("ArrowUpRight link goes to the internal video page", async () => {
+  it("stance badge links to the internal video page", async () => {
     setup();
     await screen.findByText(/I'm bullish on Google/);
-    const link = screen.getByRole("link", { name: /Open/i });
+    const link = screen.getByRole("link", { name: /Buy/i });
     expect(link.getAttribute("href")).toContain("/videos/v1");
     expect(link.getAttribute("href")).toContain("ticker=GOOGL");
     expect(link.getAttribute("href")).not.toContain("youtube.com");
