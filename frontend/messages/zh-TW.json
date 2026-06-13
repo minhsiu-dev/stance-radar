@@ -164,6 +164,8 @@
       "empty": "沒有影片。",
       "actionFailed": "操作失敗:{message}",
       "queued": "已排入分析佇列",
+      "loadMore": "載入更多",
+      "loaded": "已載入 {loaded} / {total}",
       "status": {
         "discovered": "待挑選",
         "pending": "排隊中",

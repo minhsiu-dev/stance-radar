@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
+import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
 import { ExternalLink, Play, Zap, ZapOff } from "lucide-react";
 import { ChannelScorecard } from "@/components/channel-scorecard";
@@ -33,6 +34,7 @@ import type {
   VideoStatus,
 } from "@/lib/types";
 
+const PAGE_SIZE = 50;
 const STAT_ORDER: VideoStatus[] = [
   "analyzed", "discovered", "pending", "failed", "no_transcript", "skipped",
 ];
@@ -80,13 +82,33 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
   const [busy, setBusy] = useState(false);
 
   const detailKey = `/api/channels/${channelId}`;
-  const videosKey =
-    `/api/channels/${channelId}/videos?page=1&page_size=50` +
-    (statusFilter === "all" ? "" : `&status=${statusFilter}`);
   const { data: detail, error: detailError } =
     useSWR<ChannelDetailDto>(detailKey);
-  const { data: videos, error: videosError } =
-    useSWR<ChannelVideosResponse>(videosKey);
+
+  // 影片清單分頁載入:一次 50 部,按「載入更多」往後抓
+  const getVideosKey = useMemo(
+    () =>
+      (pageIndex: number, previous: ChannelVideosResponse | null) => {
+        if (previous && previous.items.length < PAGE_SIZE) return null;
+        return (
+          `/api/channels/${channelId}/videos?page=${pageIndex + 1}&page_size=${PAGE_SIZE}` +
+          (statusFilter === "all" ? "" : `&status=${statusFilter}`)
+        );
+      },
+    [channelId, statusFilter],
+  );
+  const {
+    data: videoPages,
+    error: videosError,
+    size,
+    setSize,
+    isValidating,
+    mutate: mutateVideos,
+  } = useSWRInfinite<ChannelVideosResponse>(getVideosKey);
+  const videoItems = (videoPages ?? []).flatMap((p) => p.items);
+  const videosTotal = videoPages?.[0]?.total ?? 0;
+  const videosLoaded = videoPages !== undefined;
+  const hasMore = videoItems.length < videosTotal;
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -106,10 +128,15 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         method: "PATCH",
         body: JSON.stringify({ auto_analyze: !detail.auto_analyze }),
       });
-      await mutate(
-        (key) =>
-          typeof key === "string" && key.startsWith("/api/channels"),
-      );
+      // 注意:filter 版 mutate 會「跳過」$inf$ 開頭的 useSWRInfinite key
+      // (SWR 2.x 內部行為),所以影片清單要用 hook 綁定的 mutate 另外刷新。
+      await Promise.all([
+        mutate(
+          (key) =>
+            typeof key === "string" && key.startsWith("/api/channels"),
+        ),
+        mutateVideos(),
+      ]);
     } catch (err) {
       setMessage(
         t("videos.actionFailed", {
@@ -132,13 +159,19 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
       });
       setSelected(new Set());
       if (path === "analyze") setMessage(t("videos.queued"));
-      await mutate(
-        (key) =>
-          typeof key === "string" &&
-          (key.startsWith(`/api/channels/${channelId}`) ||
-            key.startsWith("/api/videos") ||
-            key.startsWith("/api/jobs")),
-      );
+      // 注意:filter 版 mutate 會「跳過」$inf$ 開頭的 useSWRInfinite key
+      // (SWR 2.x 內部行為),predicate 永遠看不到影片清單的 infinite key,
+      // 所以必須用 hook 綁定的 mutateVideos() 另外刷新(會重抓已載入的各頁)。
+      await Promise.all([
+        mutate(
+          (key) =>
+            typeof key === "string" &&
+            (key.startsWith(`/api/channels/${channelId}`) ||
+              key.startsWith("/api/videos") ||
+              key.startsWith("/api/jobs")),
+        ),
+        mutateVideos(),
+      ]);
     } catch (err) {
       setMessage(
         t("videos.actionFailed", {
@@ -304,12 +337,12 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
                   {t("loadError", { message: videosError.message })}
                 </p>
               )}
-              {videos && videos.items.length === 0 && (
+              {videosLoaded && videoItems.length === 0 && (
                 <p className="py-6 text-center text-sm text-muted-foreground">
                   {t("videos.empty")}
                 </p>
               )}
-              {(videos?.items ?? []).map((video) => (
+              {videoItems.map((video) => (
                 <VideoRow
                   key={video.id}
                   video={video}
@@ -319,6 +352,26 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
                   busy={busy}
                 />
               ))}
+              {videosLoaded && videoItems.length > 0 && (
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <span className="text-xs text-muted-foreground">
+                    {t("videos.loaded", {
+                      loaded: videoItems.length,
+                      total: videosTotal,
+                    })}
+                  </span>
+                  {hasMore && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isValidating}
+                      onClick={() => setSize(size + 1)}
+                    >
+                      {t("videos.loadMore")}
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
