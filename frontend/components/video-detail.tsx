@@ -45,14 +45,14 @@ export function VideoDetail({ videoId }: { videoId: string }) {
       <div data-testid="video-sticky" className="sticky top-14 z-30 bg-background pb-2">
         <div
           data-testid="video-sizer"
-          className="mx-auto transition-[max-width] duration-75"
+          className="mx-auto transition-[max-width] duration-150"
           style={{ maxWidth: `${100 - shrink * 55}%` }}
         >
           <YouTubePlayer ref={playerRef} videoId={data.video.id} />
         </div>
         <div
-          className="overflow-hidden transition-all duration-75"
-          style={{ maxHeight: `${(1 - shrink) * 80}px`, opacity: 1 - shrink }}
+          className="overflow-hidden transition-[max-height,opacity] duration-150"
+          style={{ maxHeight: `${(1 - shrink) * 120}px`, opacity: 1 - shrink }}
         >
           <h1 className="mt-2 text-2xl font-semibold tracking-tight leading-snug line-clamp-2">
             {data.video.title}

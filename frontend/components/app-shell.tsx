@@ -9,7 +9,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <nav className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-3 sm:gap-6 sm:px-4">
+        <nav className="mx-auto flex max-w-6xl items-center gap-3 px-3 h-14 sm:gap-6 sm:px-4">
           <Link href="/" className="shrink-0 font-semibold">
             {t("brand")}
           </Link>
