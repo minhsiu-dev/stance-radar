@@ -87,7 +87,7 @@ export function VideoCard({
             {item.stances.map((s) => (
               <Link
                 key={s.ticker}
-                href={`/videos/${item.video_id}?ticker=${s.ticker}`}
+                href={`/stocks/${s.ticker}?video=${item.video_id}`}
                 title={s.summary}
                 className={cn(
                   "transition-transform hover:-translate-y-px",

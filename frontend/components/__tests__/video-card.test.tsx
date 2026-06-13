@@ -46,10 +46,11 @@ describe("VideoCard", () => {
     expect(title.getAttribute("href")).not.toContain("youtube.com");
   });
 
-  it("links a stance tag to the video page with a ?ticker query", () => {
+  it("links a stance tag to the stock's mentions, deep-linking the video", () => {
     wrap(ITEM);
     const tag = screen.getByTitle("Bullish AAPL");
-    expect(tag.getAttribute("href")).toContain("/videos/vid9");
-    expect(tag.getAttribute("href")).toContain("ticker=AAPL");
+    expect(tag.getAttribute("href")).toContain("/stocks/AAPL");
+    expect(tag.getAttribute("href")).toContain("video=vid9");
+    expect(tag.getAttribute("href")).not.toContain("/videos/vid9");
   });
 });
