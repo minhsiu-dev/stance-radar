@@ -35,10 +35,12 @@ export function PriceChart({
   ticker,
   hoveredVideoId,
   onSelectVideo,
+  height = 380,
 }: {
   ticker: string;
   hoveredVideoId?: string | null;
   onSelectVideo?: (videoId: string) => void;
+  height?: number;
 }) {
   const tErr = useTranslations("Errors");
   const [range, setRange] = useState<RangeKey>("1y");
@@ -63,7 +65,7 @@ export function PriceChart({
     if (!el || !candles || candles.length === 0) return;
 
     const chart = createChart(el, {
-      height: 380,
+      height,
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
@@ -217,9 +219,9 @@ export function PriceChart({
           {tErr("candlesLoad", { message: error.message })}
         </p>
       )}
-      {isLoading && <Skeleton className="h-[380px] w-full" />}
+      {isLoading && <Skeleton style={{ height }} className="w-full" />}
       <div className="relative">
-        <div ref={containerRef} className="h-[380px] w-full" />
+        <div ref={containerRef} style={{ height }} className="w-full" />
         {tooltip && (
           <div
             className="pointer-events-none absolute z-10 max-w-xs rounded border bg-popover p-2 text-xs shadow"

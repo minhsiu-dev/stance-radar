@@ -13,6 +13,7 @@ import { PriceChart } from "@/components/price-chart";
 import { StockHeader } from "@/components/stock-header";
 import { OverviewTab } from "@/components/overview-tab";
 import { MentionsTab } from "@/components/mentions-tab";
+import { useScrollShrink } from "@/lib/use-scroll-shrink";
 
 export function StockView({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.tabs");
@@ -21,18 +22,26 @@ export function StockView({ ticker }: { ticker: string }) {
   const [tab, setTab] = useState(deepLinkVideo ? "mentions" : "overview");
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(deepLinkVideo);
   const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
+  const shrink = useScrollShrink(240);
+  const chartHeight = Math.round(380 - shrink * 240);
 
   return (
-    <div className="space-y-8">
-      <StockHeader ticker={ticker} />
-      <PriceChart
-        ticker={ticker}
-        hoveredVideoId={hoveredVideoId}
-        onSelectVideo={(id) => {
-          setSelectedVideoId(id);
-          setTab("mentions");
-        }}
-      />
+    <div className="space-y-6">
+      <div
+        data-testid="stock-sticky"
+        className="sticky top-14 z-30 space-y-2 bg-background pb-2"
+      >
+        <StockHeader ticker={ticker} compact={shrink > 0.6} />
+        <PriceChart
+          ticker={ticker}
+          height={chartHeight}
+          hoveredVideoId={hoveredVideoId}
+          onSelectVideo={(id) => {
+            setSelectedVideoId(id);
+            setTab("mentions");
+          }}
+        />
+      </div>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">{t("overview")}</TabsTrigger>

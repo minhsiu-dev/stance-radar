@@ -14,7 +14,13 @@ import {
 import type { StockSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function StockHeader({ ticker }: { ticker: string }) {
+export function StockHeader({
+  ticker,
+  compact = false,
+}: {
+  ticker: string;
+  compact?: boolean;
+}) {
   const t = useTranslations("Stock.header");
   const { data, error, isLoading } = useSWR<StockSummary>(
     `/api/stocks/${ticker}`,
@@ -31,6 +37,25 @@ export function StockHeader({ ticker }: { ticker: string }) {
   if (!data) return null;
 
   const up = (data.change ?? 0) >= 0;
+
+  if (compact) {
+    return (
+      <div className="flex items-baseline gap-3">
+        <span className="text-lg font-semibold">{data.ticker}</span>
+        <span className="font-mono tabular-nums">{formatNumber(data.price)}</span>
+        <span
+          className={cn(
+            "text-sm",
+            up
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-rose-600 dark:text-rose-400",
+          )}
+        >
+          {formatPercent(data.change_percent)}
+        </span>
+      </div>
+    );
+  }
 
   const peLabel =
     data.forward_pe == null ? t("peRatio") : t("peLabelTF");

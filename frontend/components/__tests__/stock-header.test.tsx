@@ -46,6 +46,27 @@ describe("StockHeader external link", () => {
   });
 });
 
+describe("StockHeader compact mode", () => {
+  it("shows ticker + price on one line and omits the full stats labels", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      ...base, pe_ratio: 27.5, forward_pe: null,
+    });
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
+          <StockHeader ticker="AAPL" compact />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
+    expect(await screen.findByText("AAPL")).toBeInTheDocument();
+    expect(screen.getByText("100.00")).toBeInTheDocument();
+    expect(screen.queryByText("Mkt Cap")).toBeNull();
+    // change_percent is positive (1) → formatPercent should prefix exactly one "+"
+    expect(screen.getByText(/^\+\d.*%/)).toBeInTheDocument();
+    expect(screen.queryByText(/\+\+/)).toBeNull();
+  });
+});
+
 describe("StockHeader P/E rendering", () => {
   it("shows trailing/forward pair when forward_pe present", async () => {
     const fetcher = vi.fn().mockResolvedValue({

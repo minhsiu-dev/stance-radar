@@ -12,11 +12,13 @@ let capturedMentionsSelectedVideoId: string | null = "untouched";
 vi.mock("next-intl", () => ({
   useTranslations: () => (k: string) => k,
 }));
+vi.mock("@/lib/use-scroll-shrink", () => ({ useScrollShrink: () => 0 }));
 vi.mock("@/components/price-chart", () => ({
   PriceChart: (props: {
     ticker?: string;
     hoveredVideoId?: string | null;
     onSelectVideo?: (id: string) => void;
+    height?: number;
   }) => {
     capturedPriceChartProps.push({
       hoveredVideoId: props.hoveredVideoId,
@@ -63,6 +65,11 @@ describe("StockView", () => {
     render(<StockView ticker="AAPL" />);
     expect(screen.getByTestId("chart")).toBeInTheDocument();
     expect(screen.getByTestId("overview")).toBeInTheDocument();
+  });
+
+  it("wraps header + chart in a sticky container", () => {
+    render(<StockView ticker="AAPL" />);
+    expect(screen.getByTestId("stock-sticky").className).toContain("sticky");
   });
 
   it("switches to Mentions tab", () => {
