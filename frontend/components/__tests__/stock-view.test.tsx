@@ -13,8 +13,10 @@ let capturedMentionsSelectedVideoId: string | null = "untouched";
 vi.mock("next-intl", () => ({
   useTranslations: () => (k: string) => k,
 }));
-vi.mock("@/lib/use-sticky-collapse", () => ({
-  useStickyCollapse: () => ({ sentinelRef: { current: null }, collapsed: false }),
+vi.mock("@/components/floating-dock", () => ({
+  FloatingDock: ({ children }: { children: (s: { floating: boolean }) => React.ReactNode }) => (
+    <div data-testid="floating-dock">{children({ floating: false })}</div>
+  ),
 }));
 vi.mock("@/components/price-chart", () => ({
   PriceChart: (props: {
@@ -71,12 +73,12 @@ describe("StockView", () => {
     expect(screen.getByTestId("overview")).toBeInTheDocument();
   });
 
-  it("wraps header + chart in a sticky container", () => {
+  it("wraps header + chart in a FloatingDock", () => {
     render(<StockView ticker="AAPL" />);
-    expect(screen.getByTestId("stock-sticky").className).toContain("sticky");
+    expect(screen.getByTestId("floating-dock")).toBeInTheDocument();
   });
 
-  it("passes full height 380 to PriceChart when not collapsed", () => {
+  it("passes full height 380 to PriceChart when docked (floating:false)", () => {
     render(<StockView ticker="AAPL" />);
     expect(capturedPriceChartProps.at(-1)?.height).toBe(380);
   });
