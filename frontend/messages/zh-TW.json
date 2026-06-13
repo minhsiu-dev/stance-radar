@@ -136,9 +136,20 @@
       "skipped": "已略過",
       "failed": "分析失敗",
       "no_transcript": "無字幕",
-      "pending": "排隊中",
-      "topTickers": "最常提及股票",
-      "noTickers": "尚無提及紀錄"
+      "pending": "排隊中"
+    },
+    "topTickers": {
+      "title": "最常提及股票",
+      "empty": "尚無資料",
+      "ticker": "股票",
+      "mentions": "提及",
+      "videoCount": "{count} 部影片",
+      "distribution": "立場分佈",
+      "latest": "最新立場"
+    },
+    "tabs": {
+      "videos": "影片",
+      "scorecard": "記分板"
     },
     "videos": {
       "title": "影片",

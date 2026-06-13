@@ -136,9 +136,20 @@
       "skipped": "Skipped",
       "failed": "Failed",
       "no_transcript": "No transcript",
-      "pending": "Queued",
-      "topTickers": "Most mentioned stocks",
-      "noTickers": "No mentions yet"
+      "pending": "Queued"
+    },
+    "topTickers": {
+      "title": "Most mentioned",
+      "empty": "No data yet",
+      "ticker": "Ticker",
+      "mentions": "Mentions",
+      "videoCount": "{count} videos",
+      "distribution": "Stance mix",
+      "latest": "Latest"
+    },
+    "tabs": {
+      "videos": "Videos",
+      "scorecard": "Scorecard"
     },
     "videos": {
       "title": "Videos",

@@ -5,10 +5,17 @@ import useSWR, { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
 import { ExternalLink, Play, Zap, ZapOff } from "lucide-react";
 import { ChannelScorecard } from "@/components/channel-scorecard";
+import { ChannelTopTickers } from "@/components/channel-top-tickers";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -220,119 +227,106 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 md:grid-cols-6">
-        {visibleStats.map((status) => (
-          <Card key={status} className="bg-card/50">
-            <CardContent className="p-4">
-              <p className="font-mono text-3xl font-semibold tabular-nums">
-                {detail.status_counts[status] ?? 0}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t(`stats.${status}`)}
-              </p>
+      <ChannelTopTickers rows={detail.top_tickers} />
+
+      <Tabs defaultValue="videos">
+        <TabsList>
+          <TabsTrigger value="videos">{t("tabs.videos")}</TabsTrigger>
+          <TabsTrigger value="scorecard">{t("tabs.scorecard")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="videos" className="space-y-6">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 md:grid-cols-6">
+            {visibleStats.map((status) => (
+              <Card key={status} className="bg-card/50">
+                <CardContent className="p-4">
+                  <p className="font-mono text-3xl font-semibold tabular-nums">
+                    {detail.status_counts[status] ?? 0}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t(`stats.${status}`)}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <Card>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-y-2 space-y-0">
+              <CardTitle className="text-base">{t("videos.title")}</CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedIds.length > 0 && (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      {t("videos.selectedCount", { count: selectedIds.length })}
+                    </span>
+                    <Button
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => act("analyze", selectedIds)}
+                    >
+                      {t("videos.analyzeSelected")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => act("skip", selectedIds)}
+                    >
+                      {t("videos.skipSelected")}
+                    </Button>
+                  </>
+                )}
+                <Select
+                  value={statusFilter}
+                  onValueChange={(v) => setStatusFilter((v as string) ?? "all")}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder={t("videos.filterAll")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("videos.filterAll")}</SelectItem>
+                    {STAT_ORDER.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {t(`videos.status.${status}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              {message && (
+                <p className="pb-2 text-sm text-muted-foreground">{message}</p>
+              )}
+              {videosError && (
+                <p className="text-sm text-red-500">
+                  {t("loadError", { message: videosError.message })}
+                </p>
+              )}
+              {videos && videos.items.length === 0 && (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  {t("videos.empty")}
+                </p>
+              )}
+              {(videos?.items ?? []).map((video) => (
+                <VideoRow
+                  key={video.id}
+                  video={video}
+                  checked={selected.has(video.id)}
+                  onToggle={() => toggle(video.id)}
+                  onAct={act}
+                  busy={busy}
+                />
+              ))}
             </CardContent>
           </Card>
-        ))}
-      </div>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("stats.topTickers")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {detail.top_tickers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {t("stats.noTickers")}
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-4">
-              {detail.top_tickers.map((stat) => (
-                <div key={stat.ticker} className="flex items-center gap-2">
-                  <span className="font-medium">{stat.ticker}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {stat.buy > 0 && `▲${stat.buy} `}
-                    {stat.neutral > 0 && `•${stat.neutral} `}
-                    {stat.sell > 0 && `▼${stat.sell}`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <ChannelScorecard channelId={channelId} />
-
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-y-2 space-y-0">
-          <CardTitle className="text-base">{t("videos.title")}</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            {selectedIds.length > 0 && (
-              <>
-                <span className="text-xs text-muted-foreground">
-                  {t("videos.selectedCount", { count: selectedIds.length })}
-                </span>
-                <Button
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => act("analyze", selectedIds)}
-                >
-                  {t("videos.analyzeSelected")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => act("skip", selectedIds)}
-                >
-                  {t("videos.skipSelected")}
-                </Button>
-              </>
-            )}
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => setStatusFilter((v as string) ?? "all")}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder={t("videos.filterAll")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("videos.filterAll")}</SelectItem>
-                {STAT_ORDER.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {t(`videos.status.${status}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-1">
-          {message && (
-            <p className="pb-2 text-sm text-muted-foreground">{message}</p>
-          )}
-          {videosError && (
-            <p className="text-sm text-red-500">
-              {t("loadError", { message: videosError.message })}
-            </p>
-          )}
-          {videos && videos.items.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              {t("videos.empty")}
-            </p>
-          )}
-          {(videos?.items ?? []).map((video) => (
-            <VideoRow
-              key={video.id}
-              video={video}
-              checked={selected.has(video.id)}
-              onToggle={() => toggle(video.id)}
-              onAct={act}
-              busy={busy}
-            />
-          ))}
-        </CardContent>
-      </Card>
+        <TabsContent value="scorecard">
+          <ChannelScorecard channelId={channelId} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
