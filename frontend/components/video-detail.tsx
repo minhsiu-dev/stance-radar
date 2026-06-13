@@ -10,7 +10,7 @@ import { YouTubePlayer, type YouTubePlayerHandle } from "@/components/youtube-pl
 import { VideoMentions } from "@/components/video-mentions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/format";
-import { useScrollShrink } from "@/lib/use-scroll-shrink";
+import { useStickyCollapse } from "@/lib/use-sticky-collapse";
 import type { VideoDetailResponse } from "@/lib/types";
 
 export function VideoDetail({ videoId }: { videoId: string }) {
@@ -18,7 +18,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   const playerRef = useRef<YouTubePlayerHandle>(null);
   const searchParams = useSearchParams();
   const initialTicker = searchParams.get("ticker");
-  const shrink = useScrollShrink(220);
+  const { sentinelRef, collapsed } = useStickyCollapse();
 
   const { data, error } = useSWR<VideoDetailResponse>(`/api/videos/${videoId}`);
 
@@ -41,18 +41,19 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
+      <div ref={sentinelRef} aria-hidden className="pointer-events-none absolute left-0 top-48 h-px w-px" />
       <div data-testid="video-sticky" className="sticky top-14 z-30 bg-background pb-2">
         <div
           data-testid="video-sizer"
-          className="mx-auto transition-[max-width] duration-150"
-          style={{ maxWidth: `${100 - shrink * 55}%` }}
+          className="mx-auto transition-[max-width] duration-200"
+          style={{ maxWidth: collapsed ? "45%" : "100%" }}
         >
           <YouTubePlayer ref={playerRef} videoId={data.video.id} />
         </div>
         <div
-          className="overflow-hidden transition-[max-height,opacity] duration-150"
-          style={{ maxHeight: `${(1 - shrink) * 120}px`, opacity: 1 - shrink }}
+          className="overflow-hidden transition-[max-height,opacity] duration-200"
+          style={{ maxHeight: collapsed ? 0 : 120, opacity: collapsed ? 0 : 1 }}
         >
           <h1 className="mt-2 text-2xl font-semibold tracking-tight leading-snug line-clamp-2">
             {data.video.title}

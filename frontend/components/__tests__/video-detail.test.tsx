@@ -8,7 +8,9 @@ vi.mock("@/components/youtube-player", () => ({
   YouTubePlayer: () => <div data-testid="yt-player-mock" />,
 }));
 
-vi.mock("@/lib/use-scroll-shrink", () => ({ useScrollShrink: () => 1 }));
+vi.mock("@/lib/use-sticky-collapse", () => ({
+  useStickyCollapse: () => ({ sentinelRef: { current: null }, collapsed: true }),
+}));
 
 // 預設無 ?ticker
 vi.mock("next/navigation", async (orig) => ({
