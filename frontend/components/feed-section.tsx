@@ -1,11 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { FeedList, NO_FILTERS, type FeedFilters } from "@/components/feed-list";
+import { FeedList, NO_FILTERS, toggleTicker, type FeedFilters } from "@/components/feed-list";
+import { DiscussedStrip } from "@/components/discussed-strip";
 
-// Feed 篩選狀態的擁有者。ticker 篩選由 feed 內的下拉 + 可移除 chip 控制。
 export function FeedSection() {
   const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
-
-  return <FeedList filters={filters} onFiltersChange={setFilters} />;
+  const toggle = (ticker: string) =>
+    setFilters((f) => ({ ...f, tickers: toggleTicker(f.tickers, ticker) }));
+  return (
+    <div className="space-y-4">
+      <DiscussedStrip selected={filters.tickers} onToggle={toggle} />
+      <FeedList filters={filters} onFiltersChange={setFilters} />
+    </div>
+  );
 }

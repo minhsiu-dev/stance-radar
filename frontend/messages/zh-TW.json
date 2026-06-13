@@ -84,8 +84,12 @@
         "allTickers": "全部股票",
         "allStances": "全部立場",
         "holdingsOnly": "只看持股",
-        "active": "篩選中:"
+        "active": "篩選中:",
+        "tickersSelected": "已選 {count} 檔"
       }
+    },
+    "discussed": {
+      "title": "最新被最多討論的股票"
     }
   },
   "Channels": {

@@ -14,6 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { VideoCard } from "@/components/video-card";
@@ -29,12 +35,18 @@ const PAGE_SIZE = 20;
 
 export interface FeedFilters {
   channelId: string;
-  ticker: string;
+  tickers: string[];
   stance: StanceValue | "all";
   holdingsOnly: boolean;
 }
 
-export const NO_FILTERS: FeedFilters = { channelId: "all", ticker: "all", stance: "all", holdingsOnly: false };
+export const NO_FILTERS: FeedFilters = { channelId: "all", tickers: [], stance: "all", holdingsOnly: false };
+
+export function toggleTicker(tickers: string[], ticker: string): string[] {
+  return tickers.includes(ticker)
+    ? tickers.filter((t) => t !== ticker)
+    : [...tickers, ticker];
+}
 
 function feedQuery(page: number, filters: FeedFilters): string {
   const params = new URLSearchParams({
@@ -42,7 +54,7 @@ function feedQuery(page: number, filters: FeedFilters): string {
     page_size: String(PAGE_SIZE),
   });
   if (filters.channelId !== "all") params.set("channel_id", filters.channelId);
-  if (filters.ticker !== "all") params.set("ticker", filters.ticker);
+  for (const tk of filters.tickers) params.append("ticker", tk);
   if (filters.stance !== "all") params.set("stance", filters.stance);
   if (filters.holdingsOnly) params.set("holdings_only", "true");
   return `/api/feed?${params.toString()}`;
@@ -100,22 +112,37 @@ function FeedFilterBar({
           ))}
         </SelectContent>
       </Select>
-      <Select
-        value={filters.ticker}
-        onValueChange={(v) => onChange({ ...filters, ticker: v ?? "all" })}
-      >
-        <SelectTrigger className="w-28 sm:w-32" data-testid="feed-filter-ticker">
-          <SelectValue placeholder={t("allTickers")} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">{t("allTickers")}</SelectItem>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          // base-ui 用 render 取代 Radix 的 asChild
+          render={
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-28 justify-start sm:w-32"
+              data-testid="feed-filter-ticker"
+            />
+          }
+        >
+          {filters.tickers.length === 0
+            ? t("allTickers")
+            : t("tickersSelected", { count: filters.tickers.length })}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="max-h-72 overflow-y-auto">
           {(stocks ?? []).map((s) => (
-            <SelectItem key={s.ticker} value={s.ticker}>
+            <DropdownMenuCheckboxItem
+              key={s.ticker}
+              checked={filters.tickers.includes(s.ticker)}
+              closeOnClick={false}
+              onCheckedChange={() =>
+                onChange({ ...filters, tickers: toggleTicker(filters.tickers, s.ticker) })
+              }
+            >
               {s.ticker}
-            </SelectItem>
+            </DropdownMenuCheckboxItem>
           ))}
-        </SelectContent>
-      </Select>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Select
         value={filters.stance}
         onValueChange={(v) =>
@@ -132,19 +159,21 @@ function FeedFilterBar({
           <SelectItem value="sell">{tStance("sell")}</SelectItem>
         </SelectContent>
       </Select>
-      {filters.ticker !== "all" && (
+      {filters.tickers.map((tk) => (
         <button
+          key={tk}
           type="button"
           data-testid="active-ticker-chip"
-          aria-label={`${t("active")} ${filters.ticker}`}
-          onClick={() => onChange({ ...filters, ticker: "all" })}
+          aria-label={`${t("active")} ${tk}`}
+          onClick={() =>
+            onChange({ ...filters, tickers: filters.tickers.filter((x) => x !== tk) })
+          }
           className="inline-flex items-center gap-1.5 rounded-full border border-primary bg-primary/10 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-primary/20"
         >
-          <span className="text-muted-foreground">{t("active")}</span>
-          <span className="font-mono font-semibold tracking-tight">{filters.ticker}</span>
+          <span className="font-mono font-semibold tracking-tight">{tk}</span>
           <X className="h-3 w-3" />
         </button>
-      )}
+      ))}
     </div>
   );
 }
@@ -164,8 +193,8 @@ export function FeedList({
   );
   // 高亮集合:選了 ticker → 只亮該 ticker;只開 holdingsOnly → 亮持股;否則不變暗
   const highlightSet: Set<string> | null =
-    filters.ticker !== "all"
-      ? new Set([filters.ticker])
+    filters.tickers.length > 0
+      ? new Set(filters.tickers)
       : filters.holdingsOnly
         ? heldSet
         : null;
@@ -186,7 +215,7 @@ export function FeedList({
   const reachedEnd = last ? last.items.length < PAGE_SIZE : false;
   const filtersActive =
     filters.channelId !== "all" ||
-    filters.ticker !== "all" ||
+    filters.tickers.length > 0 ||
     filters.stance !== "all" ||
     filters.holdingsOnly;
 

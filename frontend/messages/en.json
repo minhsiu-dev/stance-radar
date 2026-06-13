@@ -84,8 +84,12 @@
         "allTickers": "All stocks",
         "allStances": "All stances",
         "holdingsOnly": "Holdings only",
-        "active": "Filtering:"
+        "active": "Filtering:",
+        "tickersSelected": "{count} selected"
       }
+    },
+    "discussed": {
+      "title": "Most discussed"
     }
   },
   "Channels": {

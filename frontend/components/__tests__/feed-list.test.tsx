@@ -23,6 +23,7 @@ const messages = {
         allStances: "All stances",
         holdingsOnly: "Holdings only",
         active: "Filtering:",
+        tickersSelected: "{count} selected",
       },
     },
     empty: { prompt: "", linkLabel: "channels", hint: "" },
@@ -112,36 +113,49 @@ describe("FeedList holdings-only chip", () => {
     });
   });
 
-  it("shows a removable active-ticker chip that clears the ticker filter when clicked", async () => {
+  it("emits one ticker query param per selected ticker", async () => {
     const fetcher = vi.fn().mockImplementation((key: string) => {
+      if (key.startsWith("/api/channels") || key.startsWith("/api/stocks")) return Promise.resolve([]);
       if (key.startsWith("/api/portfolio/holdings"))
         return Promise.resolve({ holdings: [], totals: HOLDINGS_TOTALS });
-      if (key.startsWith("/api/channels")) return Promise.resolve([]);
-      if (key.startsWith("/api/stocks"))
-        return Promise.resolve([{ ticker: "NVDA", mention_count: 3 }]);
-      return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
+      return Promise.resolve({ items: [], total: 0, page: 1, page_size: PAGE_SIZE });
     });
-
     render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <SWRConfig value={{ fetcher, provider: () => new Map() }}>
-          <ControlledFeedList initial={{ ...NO_FILTERS, ticker: "NVDA" }} />
+          <ControlledFeedList initial={{ ...NO_FILTERS, tickers: ["AAPL", "NVDA"] }} />
         </SWRConfig>
       </NextIntlClientProvider>,
     );
+    await waitFor(() => {
+      expect(
+        fetcher.mock.calls.some(
+          ([u]: string[]) => u.includes("ticker=AAPL") && u.includes("ticker=NVDA"),
+        ),
+      ).toBe(true);
+    });
+  });
 
+  it("removes a ticker when its chip is clicked", async () => {
+    const fetcher = vi.fn().mockImplementation((key: string) => {
+      if (key.startsWith("/api/channels") || key.startsWith("/api/stocks")) return Promise.resolve([]);
+      if (key.startsWith("/api/portfolio/holdings"))
+        return Promise.resolve({ holdings: [], totals: HOLDINGS_TOTALS });
+      return Promise.resolve({ items: [], total: 0, page: 1, page_size: PAGE_SIZE });
+    });
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
+          <ControlledFeedList initial={{ ...NO_FILTERS, tickers: ["AAPL"] }} />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
     const chip = await screen.findByTestId("active-ticker-chip");
-    expect(chip.textContent).toContain("NVDA");
-
+    expect(chip.textContent).toContain("AAPL");
     fireEvent.click(chip);
-
-    // 移除後 chip 消失,且 feed 重新以無 ticker 條件抓取
     await waitFor(() => {
       expect(screen.queryByTestId("active-ticker-chip")).toBeNull();
     });
-    expect(
-      fetcher.mock.calls.some(([url]: string[]) => !url.includes("ticker=") && url.includes("/api/feed")),
-    ).toBe(true);
   });
 
   it("does not render chip when holdings list is empty", async () => {
