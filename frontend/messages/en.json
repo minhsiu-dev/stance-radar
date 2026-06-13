@@ -44,7 +44,8 @@
       "title": "Stance flips",
       "window": "last {days} days",
       "reversal": "Reversal",
-      "reversalHint": "Same channel flipped between buy and sell on the same stock"
+      "reversalHint": "Same channel flipped between buy and sell on the same stock",
+      "empty": "No reversals in this window"
     },
     "performance": {
       "portfolio": "My portfolio",

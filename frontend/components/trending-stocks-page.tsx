@@ -31,7 +31,7 @@ export function TrendingStocksPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+        <h2 className="text-2xl font-semibold tracking-tight">{t("title")}</h2>
         <div className="flex flex-wrap gap-4">
           <WindowSelect label={t("freshness")} value={fresh} onChange={setFresh} t={t} />
           <WindowSelect label={t("countWindow")} value={count} onChange={setCount} t={t} />

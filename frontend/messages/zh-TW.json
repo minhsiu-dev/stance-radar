@@ -44,7 +44,8 @@
       "title": "立場轉變",
       "window": "近 {days} 天",
       "reversal": "多空反轉",
-      "reversalHint": "同一頻道對同一檔股票,從買進直接翻到賣出(或反向)"
+      "reversalHint": "同一頻道對同一檔股票,從買進直接翻到賣出(或反向)",
+      "empty": "這個區間沒有反轉訊號"
     },
     "performance": {
       "portfolio": "我的組合",
