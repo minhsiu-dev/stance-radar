@@ -126,7 +126,8 @@
       "removeFailed": "刪除失敗",
       "removePrompt": "移除「{name}」?其影片與分析資料將一併刪除。",
       "pendingBadge": "{count} 部待挑選",
-      "autoBadge": "自動分析"
+      "autoBadge": "自動分析",
+      "analyzedCount": "{count} 部已分析"
     }
   },
   "Review": {

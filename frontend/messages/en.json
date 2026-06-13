@@ -126,7 +126,8 @@
       "removeFailed": "Delete failed",
       "removePrompt": "Remove \"{name}\"? Its videos and analysis will also be deleted.",
       "pendingBadge": "{count} awaiting review",
-      "autoBadge": "Auto-analyze"
+      "autoBadge": "Auto-analyze",
+      "analyzedCount": "{count} analyzed"
     }
   },
   "Review": {

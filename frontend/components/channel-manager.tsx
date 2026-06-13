@@ -37,6 +37,7 @@ export function ChannelManager() {
       {message && <p className="text-sm text-muted-foreground">{message}</p>}
       {(channels ?? []).map((channel) => {
         const pending = channel.video_counts?.discovered ?? 0;
+        const analyzed = channel.video_counts?.analyzed ?? 0;
         return (
           <Card key={channel.id}>
             <CardContent className="flex items-center gap-4 p-4">
@@ -56,7 +57,10 @@ export function ChannelManager() {
                   {channel.title}
                 </Link>
                 <p className="text-xs text-muted-foreground">
-                  {channel.id} ·{" "}
+                  {channel.id}
+                  <span className="mx-1 opacity-60">·</span>
+                  {t("list.analyzedCount", { count: analyzed })}
+                  <span className="mx-1 opacity-60">·</span>
                   {channel.last_refreshed_at
                     ? t("list.lastUpdated", {
                         date: formatDate(channel.last_refreshed_at),
