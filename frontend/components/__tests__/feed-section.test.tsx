@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
@@ -127,5 +127,58 @@ describe("FeedSection", () => {
     expect(nvda).toHaveAttribute("aria-pressed", "true");
     expect(nvda.className).toContain("border-primary");
     expect(meta.className).toContain("opacity-40");
+  });
+
+  it("reverse-sync: selecting META via the feed ticker dropdown activates the META pill", async () => {
+    // Fetcher returns META in both /api/stocks (for dropdown) and /api/stocks/trending (for pills)
+    const fetcher = vi.fn().mockImplementation((key: string) => {
+      if (key.startsWith("/api/stocks/trending"))
+        return Promise.resolve([
+          { ticker: "META", mention_count: 3, last_mentioned_at: "2026-06-11T00:00:00Z" },
+        ]);
+      if (key.startsWith("/api/portfolio/holdings"))
+        return Promise.resolve({ holdings: [], totals: HOLDINGS_TOTALS });
+      if (key.startsWith("/api/channels")) return Promise.resolve([]);
+      if (key.startsWith("/api/stocks"))
+        return Promise.resolve([{ ticker: "META", mention_count: 3 }]);
+      return Promise.resolve({
+        items: [
+          {
+            video_id: "v1",
+            title: "Video 1",
+            thumbnail_url: "",
+            published_at: "2026-06-10T00:00:00Z",
+            status: "analyzed",
+            error_message: null,
+            dropped_tickers: [],
+            channel: { id: "c", title: "ch" },
+            stances: [{ ticker: "META", stance: "buy", confidence: null, summary: "META summary" }],
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: PAGE_SIZE,
+      });
+    });
+    wrap(fetcher);
+
+    // Wait for META pill to appear
+    const metaPill = await screen.findByRole("button", { name: /META/ });
+    expect(metaPill).toHaveAttribute("aria-pressed", "false");
+
+    // Open the ticker dropdown by mousedown on the trigger
+    const tickerTrigger = await screen.findByTestId("feed-filter-ticker");
+    fireEvent.mouseDown(tickerTrigger);
+
+    // Click the META option in the popup (portal renders to body, screen still finds it)
+    // base-ui Select item requires pointerdown (sets allowMouseSelectionRef=true) before click
+    const metaOption = await screen.findByRole("option", { name: "META" });
+    fireEvent.pointerDown(metaOption, { pointerType: "mouse" });
+    fireEvent.click(metaOption, { detail: 1 });
+
+    // The META pill should now be active
+    await waitFor(() => {
+      expect(metaPill).toHaveAttribute("aria-pressed", "true");
+    });
   });
 });
