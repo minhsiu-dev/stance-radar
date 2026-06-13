@@ -2,62 +2,37 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import { PriceChart } from "@/components/price-chart";
 import { StockHeader } from "@/components/stock-header";
 import { OverviewTab } from "@/components/overview-tab";
 import { MentionsTab } from "@/components/mentions-tab";
-import { FloatingDock } from "@/components/floating-dock";
 
 export function StockView({ ticker }: { ticker: string }) {
-  const t = useTranslations("Stock.tabs");
-  const tc = useTranslations("Common");
   const params = useSearchParams();
   const deepLinkVideo = params.get("video");
-  const [tab, setTab] = useState(deepLinkVideo ? "mentions" : "overview");
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(deepLinkVideo);
   const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
 
   return (
     <div className="space-y-6">
-      <FloatingDock floatingWidth={360} dragLabel={tc("dragHandle")} closeLabel={tc("close")}>
-        {({ floating }) => (
-          <div className="space-y-2">
-            <StockHeader ticker={ticker} compact={floating} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div>
+          <div className="space-y-2 lg:sticky lg:top-14">
+            <StockHeader ticker={ticker} />
             <PriceChart
               ticker={ticker}
-              height={floating ? 180 : 380}
               hoveredVideoId={hoveredVideoId}
-              onSelectVideo={(id) => {
-                setSelectedVideoId(id);
-                setTab("mentions");
-              }}
+              onSelectVideo={setSelectedVideoId}
             />
           </div>
-        )}
-      </FloatingDock>
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="overview">{t("overview")}</TabsTrigger>
-          <TabsTrigger value="mentions">{t("mentions")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview">
-          <OverviewTab ticker={ticker} />
-        </TabsContent>
-        <TabsContent value="mentions">
-          <MentionsTab
-            ticker={ticker}
-            selectedVideoId={selectedVideoId}
-            onRowHover={setHoveredVideoId}
-          />
-        </TabsContent>
-      </Tabs>
+        </div>
+        <MentionsTab
+          ticker={ticker}
+          selectedVideoId={selectedVideoId}
+          onRowHover={setHoveredVideoId}
+        />
+      </div>
+      <OverviewTab ticker={ticker} />
     </div>
   );
 }

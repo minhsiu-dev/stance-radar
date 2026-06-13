@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 
 // Mutable spy containers shared between mock factories and tests
 const capturedPriceChartProps: Array<{
@@ -10,14 +10,6 @@ const capturedPriceChartProps: Array<{
 let capturedMentionsRowHover: ((id: string | null) => void) | null = null;
 let capturedMentionsSelectedVideoId: string | null = "untouched";
 
-vi.mock("next-intl", () => ({
-  useTranslations: () => (k: string) => k,
-}));
-vi.mock("@/components/floating-dock", () => ({
-  FloatingDock: ({ children }: { children: (s: { floating: boolean }) => React.ReactNode }) => (
-    <div data-testid="floating-dock">{children({ floating: false })}</div>
-  ),
-}));
 vi.mock("@/components/price-chart", () => ({
   PriceChart: (props: {
     ticker?: string;
@@ -67,74 +59,36 @@ describe("StockView", () => {
     searchParamsValue.current = new URLSearchParams();
   });
 
-  it("renders chart above tabs and overview by default", () => {
+  it("renders chart, mentions, and overview all at once (no tabs)", () => {
     render(<StockView ticker="AAPL" />);
     expect(screen.getByTestId("chart")).toBeInTheDocument();
-    expect(screen.getByTestId("overview")).toBeInTheDocument();
-  });
-
-  it("wraps header + chart in a FloatingDock", () => {
-    render(<StockView ticker="AAPL" />);
-    expect(screen.getByTestId("floating-dock")).toBeInTheDocument();
-  });
-
-  it("passes full height 380 to PriceChart when docked (floating:false)", () => {
-    render(<StockView ticker="AAPL" />);
-    expect(capturedPriceChartProps.at(-1)?.height).toBe(380);
-  });
-
-  it("switches to Mentions tab", () => {
-    render(<StockView ticker="AAPL" />);
-    fireEvent.click(screen.getByRole("tab", { name: "mentions" }));
     expect(screen.getByTestId("mentions")).toBeInTheDocument();
+    expect(screen.getByTestId("overview")).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).toBeNull();
   });
 
-  it("row hover from mentions tab propagates to chart hoveredVideoId", async () => {
+  it("row hover from mentions propagates to chart hoveredVideoId", () => {
     const { rerender } = render(<StockView ticker="AAPL" />);
-
-    // Switch to Mentions tab to mount MentionsTab
-    fireEvent.click(screen.getByRole("tab", { name: "mentions" }));
-
-    // Initial hoveredVideoId should be null
     expect(capturedPriceChartProps.at(-1)?.hoveredVideoId).toBeNull();
-
-    // Simulate row hover from MentionsTab calling onRowHover
     expect(capturedMentionsRowHover).not.toBeNull();
-    act(() => {
-      capturedMentionsRowHover!("vid-42");
-    });
-
-    // Force re-render so parent state propagates to PriceChart props
+    act(() => capturedMentionsRowHover!("vid-42"));
     rerender(<StockView ticker="AAPL" />);
     expect(capturedPriceChartProps.at(-1)?.hoveredVideoId).toBe("vid-42");
   });
 
-  it("opens the Mentions tab with the deep-linked video selected", () => {
+  it("marker click from chart propagates selectedVideoId to mentions", () => {
+    const { rerender } = render(<StockView ticker="AAPL" />);
+    const onSelectVideo = capturedPriceChartProps.at(-1)?.onSelectVideo;
+    expect(onSelectVideo).toBeDefined();
+    act(() => onSelectVideo!("vid-77"));
+    rerender(<StockView ticker="AAPL" />);
+    expect(capturedMentionsSelectedVideoId).toBe("vid-77");
+  });
+
+  it("deep-links ?video= to the selected mention row", () => {
     searchParamsValue.current = new URLSearchParams("video=vid-99");
     render(<StockView ticker="AAPL" />);
     expect(screen.getByTestId("mentions")).toBeInTheDocument();
     expect(capturedMentionsSelectedVideoId).toBe("vid-99");
-  });
-
-  it("marker click from chart propagates selectedVideoId to mentions tab", async () => {
-    const { rerender } = render(<StockView ticker="AAPL" />);
-
-    // PriceChart is mounted unconditionally (above Tabs), so its props are
-    // captured on initial render — no need to switch tabs first.
-    const onSelectVideo = capturedPriceChartProps.at(-1)?.onSelectVideo;
-    expect(onSelectVideo).toBeDefined();
-
-    // Calling onSelectVideo should ALSO auto-switch the active tab to mentions.
-    act(() => {
-      onSelectVideo!("vid-77");
-    });
-
-    // Re-render to flush state updates.
-    rerender(<StockView ticker="AAPL" />);
-
-    // The mentions tab content must now be visible (auto-switch happened).
-    expect(screen.getByTestId("mentions")).toBeInTheDocument();
-    // And the selected video id must have been propagated to MentionsTab.
-    expect(capturedMentionsSelectedVideoId).toBe("vid-77");
   });
 });
