@@ -183,9 +183,24 @@
     "overview": {
       "latestQuarter": "最近一季",
       "ytStance": "YouTube 立場 (近 {days} 天)",
+      "ytStanceAll": "YouTube 立場 (全部)",
+      "windowAll": "全部",
       "revenue": "營收",
       "netIncome": "淨利",
       "eps": "EPS"
+    },
+    "analyst": {
+      "title": "分析師目標價",
+      "count": "{count} 位分析師",
+      "low": "低",
+      "mean": "均",
+      "high": "高",
+      "upside": "vs 現價",
+      "strongBuy": "強力買進",
+      "buy": "買進",
+      "hold": "持有",
+      "sell": "賣出",
+      "strongSell": "強力賣出"
     },
     "growth": {
       "title": "最新一季成長",

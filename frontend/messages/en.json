@@ -183,9 +183,24 @@
     "overview": {
       "latestQuarter": "Latest quarter",
       "ytStance": "YouTube stance (last {days}d)",
+      "ytStanceAll": "YouTube stance (all time)",
+      "windowAll": "All",
       "revenue": "Revenue",
       "netIncome": "Net income",
       "eps": "EPS"
+    },
+    "analyst": {
+      "title": "Analyst targets",
+      "count": "{count} analysts",
+      "low": "Low",
+      "mean": "Mean",
+      "high": "High",
+      "upside": "vs price",
+      "strongBuy": "Strong buy",
+      "buy": "Buy",
+      "hold": "Hold",
+      "sell": "Sell",
+      "strongSell": "Strong sell"
     },
     "growth": {
       "title": "Growth (latest quarter)",
