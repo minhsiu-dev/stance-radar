@@ -8,8 +8,10 @@ vi.mock("@/components/youtube-player", () => ({
   YouTubePlayer: () => <div data-testid="yt-player-mock" />,
 }));
 
-vi.mock("@/lib/use-sticky-collapse", () => ({
-  useStickyCollapse: () => ({ sentinelRef: { current: null }, collapsed: true }),
+vi.mock("@/components/floating-dock", () => ({
+  FloatingDock: ({ children }: { children: (s: { floating: boolean }) => React.ReactNode }) => (
+    <div data-testid="floating-dock">{children({ floating: false })}</div>
+  ),
 }));
 
 // 預設無 ?ticker
@@ -79,11 +81,9 @@ describe("VideoDetail", () => {
     expect(await screen.findByText("Video not found")).toBeInTheDocument();
   });
 
-  it("renders the player in a sticky wrapper that shrinks at full progress", async () => {
+  it("wraps the player in a FloatingDock", async () => {
     wrap(vi.fn().mockResolvedValue(DATA));
-    const wrapper = await screen.findByTestId("video-sticky");
-    expect(wrapper.className).toContain("sticky");
-    const sizer = screen.getByTestId("video-sizer") as HTMLElement;
-    expect(sizer.style.maxWidth).toBe("45%"); // 100 - 1*55
+    expect(await screen.findByTestId("floating-dock")).toBeInTheDocument();
+    expect(screen.getByTestId("yt-player-mock")).toBeInTheDocument();
   });
 });
