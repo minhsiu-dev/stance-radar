@@ -130,3 +130,41 @@ async def test_analyze_empty_list_400(api):
     app, client = api
     resp = await client.post("/api/videos/analyze", json={"video_ids": []})
     assert resp.status_code == 400
+
+
+async def test_video_detail_groups_mentions_by_ticker(api):
+    app, client = api
+    await add_channels_and_discover(app, client)
+    # 拿一部會被分析成 analyzed 的影片
+    await analyze(client, app, ["alpha_vid_3"])
+    feed = (await client.get("/api/feed")).json()["data"]
+    vid = feed["items"][0]["video_id"]
+
+    resp = await client.get(f"/api/videos/{vid}")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+
+    assert data["video"]["id"] == vid
+    assert data["video"]["channel"]["id"]  # 有帶頻道
+    assert data["video"]["status"] == "analyzed"
+
+    groups = data["groups"]
+    assert len(groups) >= 1
+    g = groups[0]
+    assert set(g) >= {"ticker", "stance", "summary", "confidence", "mentions"}
+    assert len(g["mentions"]) >= 1
+    m = g["mentions"][0]
+    assert set(m) >= {
+        "start_seconds", "quote", "stance", "confidence",
+        "time_horizon", "is_conditional", "condition",
+    }
+    # 組內依秒數遞增
+    secs = [x["start_seconds"] for x in g["mentions"]]
+    assert secs == sorted(secs)
+
+
+async def test_video_detail_unknown_id_404(api):
+    app, client = api
+    resp = await client.get("/api/videos/does_not_exist")
+    assert resp.status_code == 404
+    assert resp.json()["success"] is False

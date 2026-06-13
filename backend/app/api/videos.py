@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_runner, get_session
 from app.envelope import fail, ok
-from app.models import JobKind, Video, VideoStatus
+from app.models import JobKind, Mention, Video, VideoStance, VideoStatus
 from app.pipeline.refresh import RefreshRunner
 
 router = APIRouter(prefix="/api/videos")
@@ -110,3 +110,67 @@ async def skip_videos(
         video.status = VideoStatus.skipped
     await session.commit()
     return ok({"skipped": len(videos)})
+
+
+@router.get("/{video_id}")
+async def video_detail(
+    video_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    video = (await session.execute(
+        select(Video)
+        .options(selectinload(Video.channel))
+        .where(Video.id == video_id)
+    )).scalar_one_or_none()
+    if video is None:
+        return fail(f"影片不存在:{video_id}", status_code=404)
+
+    mentions = (await session.execute(
+        select(Mention)
+        .where(Mention.video_id == video_id)
+        .order_by(Mention.start_seconds.asc())
+    )).scalars().all()
+    stances = (await session.execute(
+        select(VideoStance).where(VideoStance.video_id == video_id)
+    )).scalars().all()
+    stance_by_ticker = {s.ticker: s for s in stances}
+
+    groups: dict[str, dict] = {}
+    for m in mentions:
+        group = groups.get(m.ticker)
+        if group is None:
+            vs = stance_by_ticker.get(m.ticker)
+            group = groups[m.ticker] = {
+                "ticker": m.ticker,
+                "stance": vs.stance.value if vs else m.stance.value,
+                "summary": vs.summary if vs else None,
+                "confidence": vs.confidence if vs else None,
+                "mentions": [],
+            }
+        group["mentions"].append({
+            "start_seconds": m.start_seconds,
+            "quote": m.quote,
+            "stance": m.stance.value,
+            "confidence": m.confidence,
+            "time_horizon": m.time_horizon,
+            "is_conditional": m.is_conditional,
+            "condition": m.condition,
+        })
+
+    # 群組依「首次提及秒數」排序(mentions 已按秒數遞增)
+    ordered = sorted(groups.values(), key=lambda g: g["mentions"][0]["start_seconds"])
+    return ok({
+        "video": {
+            "id": video.id,
+            "title": video.title,
+            "channel": {
+                "id": video.channel.id,
+                "title": video.channel.title,
+                "thumbnail_url": video.channel.thumbnail_url,
+            },
+            "published_at": video.published_at.isoformat(),
+            "duration_seconds": video.duration_seconds,
+            "status": video.status.value,
+        },
+        "groups": ordered,
+    })
