@@ -13,7 +13,7 @@ import { PriceChart } from "@/components/price-chart";
 import { StockHeader } from "@/components/stock-header";
 import { OverviewTab } from "@/components/overview-tab";
 import { MentionsTab } from "@/components/mentions-tab";
-import { useScrollShrink } from "@/lib/use-scroll-shrink";
+import { useStickyCollapse } from "@/lib/use-sticky-collapse";
 
 export function StockView({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.tabs");
@@ -22,16 +22,17 @@ export function StockView({ ticker }: { ticker: string }) {
   const [tab, setTab] = useState(deepLinkVideo ? "mentions" : "overview");
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(deepLinkVideo);
   const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
-  const shrink = useScrollShrink(240);
-  const chartHeight = Math.round(380 - shrink * 240);
+  const { sentinelRef, collapsed } = useStickyCollapse();
+  const chartHeight = collapsed ? 150 : 380;
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
+      <div ref={sentinelRef} aria-hidden className="pointer-events-none absolute left-0 top-48 h-px w-px" />
       <div
         data-testid="stock-sticky"
         className="sticky top-14 z-30 space-y-2 bg-background pb-2"
       >
-        <StockHeader ticker={ticker} compact={shrink > 0.6} />
+        <StockHeader ticker={ticker} compact={collapsed} />
         <PriceChart
           ticker={ticker}
           height={chartHeight}

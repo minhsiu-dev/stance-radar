@@ -221,7 +221,7 @@ export function PriceChart({
       )}
       {isLoading && <Skeleton style={{ height }} className="w-full" />}
       <div className="relative">
-        <div ref={containerRef} style={{ height }} className="w-full" />
+        <div ref={containerRef} style={{ height }} className="w-full transition-[height] duration-200" />
         {tooltip && (
           <div
             className="pointer-events-none absolute z-10 max-w-xs rounded border bg-popover p-2 text-xs shadow"

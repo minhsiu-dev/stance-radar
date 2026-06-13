@@ -5,6 +5,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 const capturedPriceChartProps: Array<{
   hoveredVideoId?: string | null;
   onSelectVideo?: (id: string) => void;
+  height?: number;
 }> = [];
 let capturedMentionsRowHover: ((id: string | null) => void) | null = null;
 let capturedMentionsSelectedVideoId: string | null = "untouched";
@@ -12,7 +13,9 @@ let capturedMentionsSelectedVideoId: string | null = "untouched";
 vi.mock("next-intl", () => ({
   useTranslations: () => (k: string) => k,
 }));
-vi.mock("@/lib/use-scroll-shrink", () => ({ useScrollShrink: () => 0 }));
+vi.mock("@/lib/use-sticky-collapse", () => ({
+  useStickyCollapse: () => ({ sentinelRef: { current: null }, collapsed: false }),
+}));
 vi.mock("@/components/price-chart", () => ({
   PriceChart: (props: {
     ticker?: string;
@@ -23,6 +26,7 @@ vi.mock("@/components/price-chart", () => ({
     capturedPriceChartProps.push({
       hoveredVideoId: props.hoveredVideoId,
       onSelectVideo: props.onSelectVideo,
+      height: props.height,
     });
     return <div data-testid="chart" />;
   },
@@ -70,6 +74,11 @@ describe("StockView", () => {
   it("wraps header + chart in a sticky container", () => {
     render(<StockView ticker="AAPL" />);
     expect(screen.getByTestId("stock-sticky").className).toContain("sticky");
+  });
+
+  it("passes full height 380 to PriceChart when not collapsed", () => {
+    render(<StockView ticker="AAPL" />);
+    expect(capturedPriceChartProps.at(-1)?.height).toBe(380);
   });
 
   it("switches to Mentions tab", () => {
