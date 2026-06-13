@@ -19,7 +19,7 @@ async def feed(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     channel_id: str | None = Query(None),
-    ticker: str | None = Query(None),
+    ticker: list[str] | None = Query(None),
     stance: str | None = Query(None),
     holdings_only: bool = Query(False),
     session: AsyncSession = Depends(get_session),
@@ -42,7 +42,9 @@ async def feed(
     if ticker or stance:
         stance_conditions = [VideoStance.video_id == Video.id]
         if ticker:
-            stance_conditions.append(VideoStance.ticker == ticker.upper())
+            stance_conditions.append(
+                VideoStance.ticker.in_([t.upper() for t in ticker])
+            )
         if stance:
             try:
                 stance_conditions.append(VideoStance.stance == Stance(stance))
