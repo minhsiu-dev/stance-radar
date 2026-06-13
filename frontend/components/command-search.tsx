@@ -169,7 +169,7 @@ export function CommandSearch() {
                   <span className="font-mono">{s.ticker}</span>
                   <StanceMiniBar stances={s.stances} className="h-1.5 w-16" />
                   <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-                    {t("mentionCount", { count: s.channel_count })}
+                    {t("channelCount", { count: s.channel_count })}
                   </span>
                 </CommandItem>
               ))}

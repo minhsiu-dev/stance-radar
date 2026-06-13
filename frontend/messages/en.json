@@ -25,6 +25,7 @@
     "placeholder": "Search ticker or company…",
     "mentioned": "Mentioned by your channels",
     "mentionCount": "{count, plural, one {# mention} other {# mentions}}",
+    "channelCount": "{count, plural, one {# channel} other {# channels}}",
     "all": "All stocks",
     "recent": "Recent",
     "trending": "Trending",
@@ -274,8 +275,7 @@
     "mentionsHeading": "Mentions & stances",
     "mentionCount": "{count} mentions",
     "jumpHint": "Click a timestamp to jump there",
-    "noMentions": "No U.S. stock mentions detected in this video",
-    "viewStock": "Stock page"
+    "noMentions": "No U.S. stock mentions detected in this video"
   },
   "Mentions": {
     "title": "All mentions",

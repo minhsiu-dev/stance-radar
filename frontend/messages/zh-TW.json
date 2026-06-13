@@ -25,6 +25,7 @@
     "placeholder": "搜尋股票代號或公司名…",
     "mentioned": "已被你的頻道提及",
     "mentionCount": "{count} 次提及",
+    "channelCount": "{count} 個頻道",
     "all": "全部股票",
     "recent": "最近瀏覽",
     "trending": "熱門個股",
@@ -274,8 +275,7 @@
     "mentionsHeading": "提及與立場",
     "mentionCount": "{count} 次提及",
     "jumpHint": "點時間碼可跳到影片該處",
-    "noMentions": "這部影片沒有偵測到美股提及",
-    "viewStock": "個股頁"
+    "noMentions": "這部影片沒有偵測到美股提及"
   },
   "Mentions": {
     "title": "逐筆提及",
