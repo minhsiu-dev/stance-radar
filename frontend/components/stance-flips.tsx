@@ -48,23 +48,19 @@ function FlipRow({ flip }: { flip: FlipItem }) {
           {flip.ticker}
         </Link>
         <span className="flex items-center gap-1.5">
-          <a
-            href={`https://www.youtube.com/watch?v=${flip.prev.video_id}`}
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href={`/videos/${flip.prev.video_id}?ticker=${flip.ticker}`}
             title={`${formatDate(flip.prev.published_at)} · ${flip.prev.video_title}`}
           >
             <StanceBadge stance={flip.prev.stance} />
-          </a>
+          </Link>
           <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-          <a
-            href={`https://www.youtube.com/watch?v=${flip.curr.video_id}`}
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href={`/videos/${flip.curr.video_id}?ticker=${flip.ticker}`}
             title={flip.curr.summary}
           >
             <StanceBadge stance={flip.curr.stance} />
-          </a>
+          </Link>
         </span>
         {flip.is_reversal && (
           <span

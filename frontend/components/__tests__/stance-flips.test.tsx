@@ -59,6 +59,19 @@ describe("StanceFlips", () => {
     expect(screen.getByText("Reversal")).toBeInTheDocument();
   });
 
+  it("links prev/curr stance badges to the internal video page with ?ticker", async () => {
+    renderFlips([flip]);
+    const links = await screen.findAllByRole("link");
+    const videoLinks = links.filter((a) =>
+      (a.getAttribute("href") ?? "").includes("/videos/"),
+    );
+    expect(videoLinks.length).toBeGreaterThanOrEqual(2);
+    for (const a of videoLinks) {
+      expect(a.getAttribute("href")).toContain("ticker=");
+      expect(a.getAttribute("href")).not.toContain("youtube.com");
+    }
+  });
+
   it("renders nothing when there are no flips", async () => {
     renderFlips([]);
     // loading skeleton 會先短暫顯示標題;等資料 resolve 後 section 整個不顯示
