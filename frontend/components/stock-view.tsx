@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   Tabs,
@@ -14,14 +14,12 @@ import { StockHeader } from "@/components/stock-header";
 import { OverviewTab } from "@/components/overview-tab";
 import { MentionsTab } from "@/components/mentions-tab";
 
-const FinancialsTab = dynamic(
-  () => import("@/components/financials-tab").then((m) => m.FinancialsTab),
-  { ssr: false },
-);
-
 export function StockView({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.tabs");
-  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
+  const params = useSearchParams();
+  const deepLinkVideo = params.get("video");
+  const [tab, setTab] = useState(deepLinkVideo ? "mentions" : "overview");
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(deepLinkVideo);
   const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
 
   return (
@@ -30,13 +28,15 @@ export function StockView({ ticker }: { ticker: string }) {
       <PriceChart
         ticker={ticker}
         hoveredVideoId={hoveredVideoId}
-        onSelectVideo={setSelectedVideoId}
+        onSelectVideo={(id) => {
+          setSelectedVideoId(id);
+          setTab("mentions");
+        }}
       />
-      <Tabs defaultValue="overview">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">{t("overview")}</TabsTrigger>
           <TabsTrigger value="mentions">{t("mentions")}</TabsTrigger>
-          <TabsTrigger value="financials">{t("financials")}</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
           <OverviewTab ticker={ticker} />
@@ -47,9 +47,6 @@ export function StockView({ ticker }: { ticker: string }) {
             selectedVideoId={selectedVideoId}
             onRowHover={setHoveredVideoId}
           />
-        </TabsContent>
-        <TabsContent value="financials">
-          <FinancialsTab ticker={ticker} />
         </TabsContent>
       </Tabs>
     </div>

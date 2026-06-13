@@ -44,8 +44,9 @@ vi.mock("@/components/mentions-tab", () => ({
     return <div data-testid="mentions" />;
   },
 }));
-vi.mock("@/components/financials-tab", () => ({
-  FinancialsTab: () => <div data-testid="financials" />,
+const searchParamsValue = vi.hoisted(() => ({ current: new URLSearchParams() }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => searchParamsValue.current,
 }));
 
 import { StockView } from "@/components/stock-view";
@@ -55,6 +56,7 @@ describe("StockView", () => {
     capturedPriceChartProps.length = 0;
     capturedMentionsRowHover = null;
     capturedMentionsSelectedVideoId = "untouched";
+    searchParamsValue.current = new URLSearchParams();
   });
 
   it("renders chart above tabs and overview by default", () => {
@@ -89,25 +91,32 @@ describe("StockView", () => {
     expect(capturedPriceChartProps.at(-1)?.hoveredVideoId).toBe("vid-42");
   });
 
+  it("opens the Mentions tab with the deep-linked video selected", () => {
+    searchParamsValue.current = new URLSearchParams("video=vid-99");
+    render(<StockView ticker="AAPL" />);
+    expect(screen.getByTestId("mentions")).toBeInTheDocument();
+    expect(capturedMentionsSelectedVideoId).toBe("vid-99");
+  });
+
   it("marker click from chart propagates selectedVideoId to mentions tab", async () => {
     const { rerender } = render(<StockView ticker="AAPL" />);
 
-    // Switch to Mentions tab to mount MentionsTab
-    fireEvent.click(screen.getByRole("tab", { name: "mentions" }));
-
-    // Initial selectedVideoId should be null
-    expect(capturedMentionsSelectedVideoId).toBeNull();
-
-    // Grab onSelectVideo from the latest PriceChart render
+    // PriceChart is mounted unconditionally (above Tabs), so its props are
+    // captured on initial render — no need to switch tabs first.
     const onSelectVideo = capturedPriceChartProps.at(-1)?.onSelectVideo;
     expect(onSelectVideo).toBeDefined();
 
+    // Calling onSelectVideo should ALSO auto-switch the active tab to mentions.
     act(() => {
       onSelectVideo!("vid-77");
     });
 
-    // Re-render to flush state update
+    // Re-render to flush state updates.
     rerender(<StockView ticker="AAPL" />);
+
+    // The mentions tab content must now be visible (auto-switch happened).
+    expect(screen.getByTestId("mentions")).toBeInTheDocument();
+    // And the selected video id must have been propagated to MentionsTab.
     expect(capturedMentionsSelectedVideoId).toBe("vid-77");
   });
 });
