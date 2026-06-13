@@ -39,7 +39,7 @@
   },
   "Dashboard": {
     "latest": "Latest videos",
-    "viewAll": "View all →",
+    "viewAll": "View all",
     "recentStocks": { "title": "Recently discussed", "week": "This week", "month": "This month", "quarter": "3M", "empty": "No stocks discussed in this period", "channelCount": "{count, plural, one {# channel} other {# channels}}", "viewAll": "View all" },
     "flips": {
       "title": "Stance flips",

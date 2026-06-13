@@ -42,7 +42,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
     <div className="space-y-4">
       <YouTubePlayer ref={playerRef} videoId={data.video.id} />
       <div className="space-y-1">
-        <h1 className="text-xl font-semibold leading-snug">{data.video.title}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight leading-snug line-clamp-2">{data.video.title}</h1>
         <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <Link href={`/channels/${data.video.channel.id}`} className="font-medium text-foreground/70 hover:underline">
             {data.video.channel.title}

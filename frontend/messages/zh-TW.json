@@ -39,7 +39,7 @@
   },
   "Dashboard": {
     "latest": "最新影片",
-    "viewAll": "看全部 →",
+    "viewAll": "查看全部",
     "recentStocks": { "title": "最新被討論的股票", "week": "本週", "month": "本月", "quarter": "3個月", "empty": "這段期間沒有被討論的股票", "channelCount": "{count} 個頻道", "viewAll": "查看全部" },
     "flips": {
       "title": "立場轉變",
