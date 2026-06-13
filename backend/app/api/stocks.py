@@ -178,7 +178,7 @@ async def stance_summary(
 ):
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     rows = (await session.execute(
-        select(VideoStance.stance, func.count(VideoStance.video_id))
+        select(VideoStance.stance, func.count(Video.channel_id.distinct()))
         .join(Video, VideoStance.video_id == Video.id)
         .where(VideoStance.ticker == ticker.upper())
         .where(Video.published_at >= cutoff)

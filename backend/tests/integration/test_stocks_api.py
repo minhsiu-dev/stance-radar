@@ -341,3 +341,37 @@ async def test_stance_summary_accepts_long_window(api):
     resp = await client.get("/api/stocks/AAPL/stance-summary?days=3650")
     assert resp.status_code == 200
     assert resp.json()["data"]["window_days"] == 3650
+
+
+@pytest.mark.asyncio
+async def test_stance_summary_counts_distinct_channels(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Stance, Video, VideoStance, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        # Channel A: two BUY videos on TSLA → must count once for buy
+        s.add(Channel(id="cA", title="A", thumbnail_url="", uploads_playlist_id="UUA"))
+        for i in range(2):
+            s.add(Video(id=f"a{i}", channel_id="cA", title="t",
+                        published_at=now - timedelta(days=1), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(VideoStance(video_id=f"a{i}", ticker="TSLA",
+                              stance=Stance.buy, summary="s"))
+        # Channel B: one BUY + one SELL on TSLA → counts in BOTH buckets
+        s.add(Channel(id="cB", title="B", thumbnail_url="", uploads_playlist_id="UUB"))
+        s.add(Video(id="b0", channel_id="cB", title="t",
+                    published_at=now - timedelta(days=1), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(VideoStance(video_id="b0", ticker="TSLA", stance=Stance.buy, summary="s"))
+        s.add(Video(id="b1", channel_id="cB", title="t",
+                    published_at=now - timedelta(days=1), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(VideoStance(video_id="b1", ticker="TSLA", stance=Stance.sell, summary="s"))
+        await s.commit()
+
+    body = (await client.get("/api/stocks/TSLA/stance-summary")).json()["data"]
+    assert body["buy"] == 2     # channel A (once, despite 2 videos) + channel B
+    assert body["sell"] == 1    # channel B
+    assert body["neutral"] == 0
