@@ -158,7 +158,7 @@
     },
     "tabs": {
       "videos": "Videos",
-      "scorecard": "Scorecard"
+      "scorecard": "Latest mentions"
     },
     "videos": {
       "title": "Videos",
@@ -287,10 +287,10 @@
     "conditional": "Conditional: {condition}"
   },
   "Scorecard": {
-    "title": "Scorecard",
+    "title": "Latest mentions",
     "description": "Price change after each buy/sell call, vs {benchmark}. For reference only — not investment advice.",
     "loading": "Computing — fetching price history…",
-    "loadError": "Failed to load scorecard: {message}",
+    "loadError": "Failed to load latest mentions: {message}",
     "empty": "No buy/sell stances to score yet.",
     "afterDays": "{days}d after call",
     "vsBenchmark": "excess {value}",

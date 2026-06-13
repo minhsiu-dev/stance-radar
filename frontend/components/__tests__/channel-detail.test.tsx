@@ -39,7 +39,7 @@ const messages = {
     },
     tabs: {
       videos: "Videos tab",
-      scorecard: "Scorecard tab",
+      scorecard: "Latest mentions",
     },
     videos: {
       title: "Videos",
@@ -77,7 +77,7 @@ const messages = {
     stance: { buy: "Buy", sell: "Sell", neutral: "Neutral" },
   },
   Scorecard: {
-    title: "Scorecard",
+    title: "Latest mentions",
     description: "vs {benchmark}",
     loading: "Computing…",
     loadError: "Failed: {message}",
@@ -214,9 +214,16 @@ describe("ChannelDetail", () => {
     expect(screen.getByTestId("stance-bar-AAPL")).toBeInTheDocument();
   });
 
+  it("defaults to the scorecard (最新提及) tab", async () => {
+    renderDetail();
+    // scorecard panel should be visible without clicking a tab:
+    expect(await screen.findByTestId("channel-scorecard")).toBeInTheDocument();
+  });
+
   it("lists videos with status labels and recovery action for skipped", async () => {
     renderDetail();
-    // 預設分頁是 videos,影片清單直接可見
+    // switch to videos tab first (scorecard is now the default)
+    fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
     expect(await screen.findByText("Analyzed video")).toBeInTheDocument();
     expect(screen.getByText("Skipped video")).toBeInTheDocument();
     // "Skipped" 同時出現在統計卡與 badge → 用 getAllByText
@@ -229,6 +236,8 @@ describe("ChannelDetail", () => {
 
   it("loads videos in pages of 50 with a load-more button", async () => {
     const fetcher = renderDetail(pagedVideos(120));
+    // switch to videos tab first (scorecard is now the default)
+    fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
     // 第一頁:50 部影片 + 計數器 + 載入更多按鈕
     expect(await screen.findByText("Video 1")).toBeInTheDocument();
     expect(screen.getByText("Video 50")).toBeInTheDocument();
@@ -264,6 +273,8 @@ describe("ChannelDetail", () => {
 
   it("select-all toggles every actionable loaded video at once", async () => {
     renderDetail(pagedVideos(3)); // 3 discovered videos
+    // switch to videos tab first (scorecard is now the default)
+    fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
     expect(await screen.findByText("Video 1")).toBeInTheDocument();
 
     const selectAll = screen.getByTestId("select-all");
@@ -282,6 +293,8 @@ describe("ChannelDetail", () => {
 
   it("hides load-more when every video is loaded", async () => {
     renderDetail(); // 預設 fixture:total 2、items 2
+    // switch to videos tab first (scorecard is now the default)
+    fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
     expect(await screen.findByText("Analyzed video")).toBeInTheDocument();
     expect(screen.getByText("2 of 2 loaded")).toBeInTheDocument();
     expect(
@@ -300,6 +313,8 @@ describe("ChannelDetail", () => {
       }),
     );
     const fetcher = renderDetail(pagedVideos(1));
+    // switch to videos tab first (scorecard is now the default)
+    fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
     expect(await screen.findByText("Video 1")).toBeInTheDocument();
     const videoCalls = () =>
       fetcher.mock.calls.filter(
@@ -344,6 +359,8 @@ describe("ChannelDetail", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderDetail(pagedVideos(1));
+    // switch to videos tab first (scorecard is now the default)
+    fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
     const btn = await screen.findByRole("button", { name: "Load older videos" });
     fireEvent.click(btn);
 
@@ -378,6 +395,8 @@ describe("ChannelDetail", () => {
       }),
     );
     renderDetail(pagedVideos(1));
+    // switch to videos tab first (scorecard is now the default)
+    fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Load older videos" }),
     );
@@ -386,12 +405,12 @@ describe("ChannelDetail", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the scorecard only after switching to its tab", async () => {
+  it("shows video list only after switching to the videos tab", async () => {
     renderDetail();
+    // scorecard is the default — videos content not yet visible
+    expect(await screen.findByTestId("channel-scorecard")).toBeInTheDocument();
+    expect(screen.queryByText("Analyzed video")).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("tab", { name: "Videos tab" }));
     expect(await screen.findByText("Analyzed video")).toBeInTheDocument();
-    // scorecard 內容藏在非預設分頁
-    expect(screen.queryByText("No calls yet.")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Scorecard tab" }));
-    expect(await screen.findByText("No calls yet.")).toBeInTheDocument();
   });
 });

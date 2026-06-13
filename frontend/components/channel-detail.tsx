@@ -331,7 +331,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
 
       <ChannelTopTickers rows={detail.top_tickers} />
 
-      <Tabs defaultValue="videos">
+      <Tabs defaultValue="scorecard">
         <TabsList>
           <TabsTrigger value="videos">{t("tabs.videos")}</TabsTrigger>
           <TabsTrigger value="scorecard">{t("tabs.scorecard")}</TabsTrigger>

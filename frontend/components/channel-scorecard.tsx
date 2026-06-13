@@ -122,7 +122,9 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.calls.map((call) => (
+                  {[...data.calls]
+                    .sort((a, b) => (a.published_at < b.published_at ? 1 : -1))
+                    .map((call) => (
                     <TableRow key={`${call.video_id}-${call.ticker}`}>
                       <TableCell className="whitespace-nowrap tabular-nums">
                         <Link
