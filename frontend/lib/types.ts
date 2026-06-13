@@ -373,3 +373,33 @@ export interface AnalystData {
   analyst_count: number | null;
   recommendations: Record<string, number>;
 }
+
+export interface VideoDetailMention {
+  start_seconds: number;
+  quote: string;
+  stance: StanceValue;
+  confidence: ConfidenceValue | null;
+  time_horizon: TimeHorizonValue | null;
+  is_conditional: boolean | null;
+  condition: string | null;
+}
+
+export interface VideoDetailGroup {
+  ticker: string;
+  stance: StanceValue;
+  summary: string | null;
+  confidence: ConfidenceValue | null;
+  mentions: VideoDetailMention[];
+}
+
+export interface VideoDetailResponse {
+  video: {
+    id: string;
+    title: string;
+    channel: { id: string; title: string; thumbnail_url: string };
+    published_at: string;
+    duration_seconds: number | null;
+    status: VideoStatus;
+  };
+  groups: VideoDetailGroup[];
+}
