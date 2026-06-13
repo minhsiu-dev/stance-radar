@@ -8,7 +8,7 @@ export type VideoStatus =
   | "no_transcript"
   | "failed"
   | "skipped";
-export type JobKind = "discover" | "analyze";
+export type JobKind = "discover" | "analyze" | "load_older";
 
 export interface Envelope<T> {
   success: boolean;

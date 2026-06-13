@@ -31,6 +31,7 @@ import type {
   ChannelDetailDto,
   ChannelVideoItem,
   ChannelVideosResponse,
+  JobInfo,
   VideoStatus,
 } from "@/lib/types";
 
@@ -169,6 +170,48 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
             (key.startsWith(`/api/channels/${channelId}`) ||
               key.startsWith("/api/videos") ||
               key.startsWith("/api/jobs")),
+        ),
+        mutateVideos(),
+      ]);
+    } catch (err) {
+      setMessage(
+        t("videos.actionFailed", {
+          message: err instanceof Error ? err.message : "?",
+        }),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadOlder() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await apiFetch<{ job_id: number; created: boolean }>(
+        `/api/channels/${channelId}/load-older`,
+        { method: "POST" },
+      );
+      // 已有其他工作在跑(後端回 created:false)→ 提示稍後再試,不刷新
+      if (res && res.created === false) {
+        setMessage(t("videos.loadOlderBusy"));
+        return;
+      }
+      // 輪詢 /api/jobs/current 直到 load_older 工作不再 running(單工模型,
+      // 上面拿到 created:true 表示這個就是當前工作)。用 apiFetch 直接打,
+      // 測試可用 mocked fetch 驅動(回非 running 即立刻結束)。
+      for (let i = 0; i < 150; i++) {
+        const job = await apiFetch<JobInfo | null>("/api/jobs/current");
+        if (!job || job.status !== "running") break;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      // 注意:filter 版 mutate 會跳過 useSWRInfinite 的 $inf$ key,
+      // 影片清單要用 hook 綁定的 mutateVideos() 另外刷新。
+      await Promise.all([
+        mutate(
+          (key) =>
+            typeof key === "string" &&
+            key.startsWith(`/api/channels/${channelId}`),
         ),
         mutateVideos(),
       ]);
@@ -352,14 +395,16 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
                   busy={busy}
                 />
               ))}
-              {videosLoaded && videoItems.length > 0 && (
-                <div className="flex items-center justify-center gap-3 pt-2">
-                  <span className="text-xs text-muted-foreground">
-                    {t("videos.loaded", {
-                      loaded: videoItems.length,
-                      total: videosTotal,
-                    })}
-                  </span>
+              {videosLoaded && (
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                  {videoItems.length > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {t("videos.loaded", {
+                        loaded: videoItems.length,
+                        total: videosTotal,
+                      })}
+                    </span>
+                  )}
                   {hasMore && (
                     <Button
                       size="sm"
@@ -370,6 +415,15 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
                       {t("videos.loadMore")}
                     </Button>
                   )}
+                  {/* 較舊的影片可能不在目前 DB 分頁內,故按鈕永遠顯示 */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={loadOlder}
+                  >
+                    {busy ? t("videos.loadingOlder") : t("videos.loadOlder")}
+                  </Button>
                 </div>
               )}
             </CardContent>

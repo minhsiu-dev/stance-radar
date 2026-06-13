@@ -56,6 +56,9 @@ const messages = {
       queued: "Queued for analysis",
       loadMore: "Load more",
       loaded: "{loaded} of {total} loaded",
+      loadOlder: "Load older videos",
+      loadingOlder: "Loading…",
+      loadOlderBusy: "Another update is running, try again shortly",
       status: {
         discovered: "Awaiting review",
         pending: "Queued",
@@ -294,6 +297,74 @@ describe("ChannelDetail", () => {
     await waitFor(() => {
       expect(videoCalls()).toBeGreaterThan(before);
     });
+  });
+
+  it("POSTs to load-older and re-enables when the job finishes", async () => {
+    // POST /load-older → {job_id, created:true};/api/jobs/current → 非 running
+    // 讓 poll 立即結束。loadOlder 全程走 apiFetch → global fetch。
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/load-older")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ success: true, data: { job_id: 7, created: true } }),
+        });
+      }
+      // /api/jobs/current
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: { id: 7, kind: "load_older", status: "done", progress: {} },
+          }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderDetail(pagedVideos(1));
+    const btn = await screen.findByRole("button", { name: "Load older videos" });
+    fireEvent.click(btn);
+
+    // POST 應以正確 URL + method 打出
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) =>
+            typeof url === "string" &&
+            url === "/api/channels/UC_a/load-older" &&
+            (init as RequestInit | undefined)?.method === "POST",
+        ),
+      ).toBe(true);
+    });
+
+    // 工作完成後按鈕重新可用
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Load older videos" }),
+      ).not.toBeDisabled();
+    });
+  });
+
+  it("shows a busy message when load-older is rejected (created:false)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({ success: true, data: { job_id: 3, created: false } }),
+      }),
+    );
+    renderDetail(pagedVideos(1));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Load older videos" }),
+    );
+    expect(
+      await screen.findByText("Another update is running, try again shortly"),
+    ).toBeInTheDocument();
   });
 
   it("shows the scorecard only after switching to its tab", async () => {
