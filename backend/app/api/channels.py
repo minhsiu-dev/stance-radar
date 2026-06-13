@@ -267,6 +267,18 @@ async def update_channel(
     return ok(channel_to_dict(channel))
 
 
+@router.post("/{channel_id}/load-older")
+async def load_older(
+    channel_id: str,
+    session: AsyncSession = Depends(get_session),
+    runner: RefreshRunner = Depends(get_runner),
+):
+    if await session.get(Channel, channel_id) is None:
+        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+    job_id, created = await runner.start(JobKind.load_older, channel_id=channel_id)
+    return ok({"job_id": job_id, "created": created})
+
+
 @router.delete("/{channel_id}")
 async def delete_channel(
     channel_id: str, session: AsyncSession = Depends(get_session)

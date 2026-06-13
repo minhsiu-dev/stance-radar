@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -38,18 +39,23 @@ class RefreshRunner:
         self._start_lock = asyncio.Lock()
         self.current_task: asyncio.Task | None = None
 
-    async def start(self, kind: JobKind = JobKind.discover) -> tuple[int, bool]:
+    async def start(
+        self, kind: JobKind = JobKind.discover, channel_id: str | None = None
+    ) -> tuple[int, bool]:
         """回傳 (job_id, created)。created=False 表示已有 job 在跑。"""
         async with self._start_lock:
             async with self._deps.sessionmaker() as session:
                 job, created = await jobs.start_job(session, kind=kind.value)
                 job_id = job.id
             if created:
-                run = (
-                    self._run_discover
-                    if kind is JobKind.discover
-                    else self._run_analyze
-                )
+                if kind is JobKind.discover:
+                    run = self._run_discover
+                elif kind is JobKind.load_older:
+                    run = functools.partial(
+                        self._run_load_older, channel_id=channel_id
+                    )
+                else:
+                    run = self._run_analyze
                 self.current_task = asyncio.create_task(
                     self._run_safely(job_id, run)
                 )
@@ -159,6 +165,55 @@ class RefreshRunner:
             row.last_refreshed_at = utcnow()
             await session.commit()
             return len(new_videos)
+
+    async def _run_load_older(self, job_id: int, *, channel_id: str) -> None:
+        """為單一頻道載入更早的影片(walk past 已知區塊),一律進 discovered。"""
+        deps = self._deps
+        async with deps.sessionmaker() as session:
+            channel = await session.get(Channel, channel_id)
+        if channel is None:
+            await jobs.update_progress(deps.sessionmaker, job_id, {
+                "stage": "listing",
+                "channels_done": 1, "channels_total": 1, "discovered": 0,
+            })
+            return
+        discovered = await self._ingest_older_channel_videos(channel)
+        await jobs.update_progress(deps.sessionmaker, job_id, {
+            "stage": "listing",
+            "channels_done": 1, "channels_total": 1, "discovered": discovered,
+        })
+
+    async def _ingest_older_channel_videos(self, channel: Channel) -> int:
+        """載入該頻道較舊的未知影片,一律 status=discovered,回傳新增數。
+
+        老影片是使用者手動 backfill 的範圍,不走 auto_analyze,
+        永遠進 discovered 讓使用者挑選。
+        """
+        deps = self._deps
+        async with deps.sessionmaker() as session:
+            known_ids = set((await session.execute(
+                select(Video.id).where(Video.channel_id == channel.id)
+            )).scalars().all())
+            older_videos = await deps.youtube.list_older_uploads(
+                channel.uploads_playlist_id,
+                known_video_ids=known_ids,
+                limit=deps.settings.backfill_limit,
+            )
+            durations = (
+                await deps.youtube.get_durations([v.id for v in older_videos])
+                if older_videos else {}
+            )
+            for info in older_videos:
+                session.add(Video(
+                    id=info.id, channel_id=channel.id, title=info.title,
+                    published_at=info.published_at, thumbnail_url=info.thumbnail_url,
+                    duration_seconds=durations.get(info.id),
+                    status=VideoStatus.discovered,
+                ))
+            row = await session.get(Channel, channel.id)
+            row.last_refreshed_at = utcnow()
+            await session.commit()
+            return len(older_videos)
 
     async def _process_video(self, video_id: str) -> None:
         deps = self._deps
