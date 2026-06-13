@@ -167,10 +167,10 @@ export function CommandSearch() {
                   className="gap-3 [&_svg]:hidden"
                 >
                   <span className="font-mono">{s.ticker}</span>
-                  <StanceMiniBar stances={s.stances} className="h-1.5 w-16" />
                   <span className="ml-auto text-xs tabular-nums text-muted-foreground">
                     {t("channelCount", { count: s.channel_count })}
                   </span>
+                  <StanceMiniBar stances={s.stances} className="h-1.5 w-16" />
                 </CommandItem>
               ))}
             </CommandGroup>
