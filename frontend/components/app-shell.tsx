@@ -14,6 +14,18 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             {t("brand")}
           </Link>
           <Link
+            href="/"
+            className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
+          >
+            {t("home")}
+          </Link>
+          <Link
+            href="/videos"
+            className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
+          >
+            {t("videos")}
+          </Link>
+          <Link
             href="/portfolio"
             className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
           >
