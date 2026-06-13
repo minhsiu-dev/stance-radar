@@ -25,12 +25,6 @@ type RangeKey = (typeof RANGES)[number];
 
 const INTRADAY: ReadonlySet<RangeKey> = new Set(["1d", "5d"]);
 
-interface Tooltip {
-  x: number;
-  y: number;
-  lines: string[];
-}
-
 export function PriceChart({
   ticker,
   hoveredVideoId,
@@ -49,7 +43,6 @@ export function PriceChart({
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const markersByVideoId = useRef<Map<string, ChartMarker>>(new Map());
   const candleByTime = useRef<Map<string | number, CandleDto>>(new Map());
-  const [tooltip, setTooltip] = useState<Tooltip | null>(null);
 
   const { data: candles, error, isLoading } = useSWR<CandleDto[]>(
     `/api/stocks/${ticker}/candles?range=${range}`,
@@ -127,26 +120,6 @@ export function PriceChart({
     for (const c of candles) byTime.set(c.time, c);
     candleByTime.current = byTime;
 
-    const stanceById = new Map((stances ?? []).map((s) => [s.video_id, s]));
-
-    chart.subscribeCrosshairMove((param) => {
-      const time = param.time as string | number | undefined;
-      const hits = time != null ? markersByTime.get(time) : undefined;
-      if (!hits || !param.point) {
-        setTooltip(null);
-        return;
-      }
-      setTooltip({
-        x: param.point.x,
-        y: param.point.y,
-        lines: hits.map((m) => {
-          const s = stanceById.get(m.id);
-          return s
-            ? `${s.channel_title}:${s.video_title}(${s.stance})`
-            : m.id;
-        }),
-      });
-    });
     chart.subscribeClick((param) => {
       const time = param.time as string | number | undefined;
       const hits = time != null ? markersByTime.get(time) : undefined;
@@ -229,19 +202,7 @@ export function PriceChart({
         </p>
       )}
       {isLoading && <Skeleton style={{ height }} className="w-full" />}
-      <div className="relative">
-        <div ref={containerRef} style={{ height }} className="w-full transition-[height] duration-200" />
-        {tooltip && (
-          <div
-            className="pointer-events-none absolute z-10 max-w-xs rounded border bg-popover p-2 text-xs shadow"
-            style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}
-          >
-            {tooltip.lines.map((line) => (
-              <p key={line}>{line}</p>
-            ))}
-          </div>
-        )}
-      </div>
+      <div ref={containerRef} style={{ height }} className="w-full transition-[height] duration-200" />
     </div>
   );
 }
