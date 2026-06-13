@@ -97,7 +97,7 @@
     "title": "頻道管理",
     "add": {
       "title": "新增頻道",
-      "placeholder": "貼上頻道 ID、@handle 或 YouTube 連結(換行或逗號分隔)\n例:@handle 或 UCbta0n8i6Rljh0obO7HzG9A",
+      "placeholder": "貼上一個頻道 ID、@handle 或 YouTube 網址",
       "submit": "新增",
       "submitting": "新增中…",
       "addSuccess": "新增成功",

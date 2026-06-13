@@ -97,7 +97,7 @@
     "title": "Channel management",
     "add": {
       "title": "Add channel",
-      "placeholder": "Paste channel IDs, @handles, or YouTube URLs (newline- or comma-separated)\ne.g. @handle or UCbta0n8i6Rljh0obO7HzG9A",
+      "placeholder": "Paste a channel ID, @handle or YouTube URL",
       "submit": "Add",
       "submitting": "Adding…",
       "addSuccess": "Added successfully",
