@@ -43,7 +43,7 @@ export function PriceChart({
   height?: number;
 }) {
   const tErr = useTranslations("Errors");
-  const [range, setRange] = useState<RangeKey>("1y");
+  const [range, setRange] = useState<RangeKey>("6m");
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -65,8 +65,8 @@ export function PriceChart({
     if (!el || !candles || candles.length === 0) return;
 
     const chart = createChart(el, {
+      width: el.clientWidth,
       height,
-      autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: "#a1a1aa",
@@ -156,7 +156,16 @@ export function PriceChart({
     chartRef.current = chart;
     seriesRef.current = series;
 
+    // Reframe the chart to its container whenever the column width changes
+    // (window resize, lg breakpoint crossover, sidebar toggle).
+    const resizeObserver = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width) chart.applyOptions({ width });
+    });
+    resizeObserver.observe(el);
+
     return () => {
+      resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
