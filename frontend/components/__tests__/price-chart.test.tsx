@@ -3,10 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 
+const addSeriesSpy = vi.hoisted(() => vi.fn());
 vi.mock("lightweight-charts", () => {
   const series = { setData: vi.fn() };
   const chart = {
-    addSeries: () => series,
+    addSeries: (...args: unknown[]) => {
+      addSeriesSpy(...args);
+      return series;
+    },
+    priceScale: () => ({ applyOptions: vi.fn() }),
     timeScale: () => ({ fitContent: vi.fn(), applyOptions: vi.fn() }),
     subscribeCrosshairMove: vi.fn(),
     subscribeClick: vi.fn(),
@@ -17,7 +22,8 @@ vi.mock("lightweight-charts", () => {
   return {
     createChart: () => chart,
     createSeriesMarkers: vi.fn(),
-    CandlestickSeries: {},
+    CandlestickSeries: { kind: "candlestick" },
+    HistogramSeries: { kind: "histogram" },
     ColorType: { Solid: "solid" },
   };
 });
@@ -75,5 +81,19 @@ describe("PriceChart", () => {
     );
     const pct = await screen.findByText(/\+10\.00%/);
     expect(pct.className).toMatch(/emerald/);
+  });
+
+  it("adds a volume histogram series", async () => {
+    addSeriesSpy.mockClear();
+    mockApiFetch.mockImplementation(makeFetcher([100, 110]));
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ provider: () => new Map() }}>
+          <PriceChart ticker="AAPL" />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
+    await screen.findByText(/\+10\.00%/);
+    expect(addSeriesSpy).toHaveBeenCalledWith({ kind: "histogram" }, expect.anything());
   });
 });

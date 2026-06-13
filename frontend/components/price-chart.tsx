@@ -7,6 +7,7 @@ import {
   ColorType,
   createChart,
   createSeriesMarkers,
+  HistogramSeries,
   type IChartApi,
   type ISeriesApi,
   type UTCTimestamp,
@@ -87,6 +88,21 @@ export function PriceChart({
         high: c.high,
         low: c.low,
         close: c.close,
+      })),
+    );
+
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: "volume" },
+      priceScaleId: "volume",
+    });
+    chart.priceScale("volume").applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
+    });
+    volumeSeries.setData(
+      candles.map((c) => ({
+        time: (typeof c.time === "number" ? (c.time as UTCTimestamp) : c.time) as UTCTimestamp | string,
+        value: c.volume,
+        color: c.close >= c.open ? "rgba(34,197,94,0.5)" : "rgba(239,68,68,0.5)",
       })),
     );
 
