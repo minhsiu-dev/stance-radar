@@ -202,6 +202,8 @@ export interface ChannelTickerStat {
   buy: number;
   neutral: number;
   sell: number;
+  latest_stance: StanceValue | null;
+  latest_date: string | null;
 }
 
 export interface ChannelDetailDto extends ChannelItem {
@@ -364,6 +366,15 @@ export interface PerformanceRangeResponse {
   qqq: PerformanceSeries;
 }
 
+export interface AnalystData {
+  target_low: number | null;
+  target_mean: number | null;
+  target_high: number | null;
+  analyst_count: number | null;
+  recommendations: Record<string, number>;
+}
+
+// NOTE: NewsItemDto/NewsResponse 留到 homepage rework task 與 news-card.tsx 一起移除
 export interface NewsItemDto {
   ticker: string;
   title: string;

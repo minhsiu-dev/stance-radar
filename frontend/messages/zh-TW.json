@@ -18,6 +18,12 @@
     "empty": "查無結果，試試輸入 AAPL 之類的代號。",
     "fallback": "搜尋暫時無法使用,僅顯示已提及"
   },
+  "Settings": {
+    "open": "設定",
+    "hideAmounts": "隱藏金額",
+    "theme": "深色模式",
+    "language": "語言"
+  },
   "Dashboard": {
     "latest": "最新影片",
     "trending": { "title": "熱門提及" },

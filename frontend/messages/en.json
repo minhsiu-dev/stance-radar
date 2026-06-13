@@ -18,6 +18,12 @@
     "empty": "No results. Try a ticker like AAPL.",
     "fallback": "Network error, showing mentioned only"
   },
+  "Settings": {
+    "open": "Settings",
+    "hideAmounts": "Hide amounts",
+    "theme": "Dark mode",
+    "language": "Language"
+  },
   "Dashboard": {
     "latest": "Latest videos",
     "trending": { "title": "Trending" },
