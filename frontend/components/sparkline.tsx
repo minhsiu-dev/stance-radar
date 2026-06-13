@@ -13,10 +13,11 @@ export function Sparkline({ ticker }: { ticker: string }) {
   const span = max - min || 1;
   const W = 100;
   const H = 32;
+  const PAD = 3; // keep the peak/trough strokes off the top/bottom edges (no clipping)
   const points = closes
     .map((c, i) => {
       const x = (i / (closes.length - 1)) * W;
-      const y = H - ((c - min) / span) * H;
+      const y = PAD + (1 - (c - min) / span) * (H - 2 * PAD);
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(" ");

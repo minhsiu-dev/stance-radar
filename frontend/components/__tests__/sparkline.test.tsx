@@ -29,4 +29,15 @@ describe("Sparkline", () => {
     wrap([100]);
     expect(await screen.findByTestId("sparkline-empty")).toBeInTheDocument();
   });
+  it("keeps the peak and trough inside the box (no edge clipping)", async () => {
+    wrap([100, 110, 90, 105]); // contains both the max and the min
+    const line = await screen.findByTestId("sparkline-line");
+    const ys = line
+      .getAttribute("points")!
+      .split(" ")
+      .map((p) => Number(p.split(",")[1]));
+    // viewBox height is 32; with PAD=3 every y must sit within [3, 29]
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(3);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(29);
+  });
 });
