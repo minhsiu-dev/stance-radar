@@ -118,8 +118,11 @@ class Mention(Base):
     quote: Mapped[str] = mapped_column(Text)
     stance: Mapped[Stance] = mapped_column(_enum(Stance, "stance"))
     reasoning: Mapped[str] = mapped_column(Text)
+    # 舊格式:程式機械式抓的前後文(新影片改用 excerpt,這兩欄為 NULL)
     context_before: Mapped[str | None] = mapped_column(Text, nullable=True)
     context_after: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 新格式:提及附近的逐字稿原文(合成單段;舊資料為 NULL)
+    excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 立場細節(舊資料為 NULL):high|medium|low / short|long|unspecified
     confidence: Mapped[str | None] = mapped_column(String(8), nullable=True)
     time_horizon: Mapped[str | None] = mapped_column(String(16), nullable=True)

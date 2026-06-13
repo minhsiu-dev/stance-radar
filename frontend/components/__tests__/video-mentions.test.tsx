@@ -28,8 +28,8 @@ const GROUPS: VideoDetailGroup[] = [
     summary: "Bullish on AAPL",
     confidence: "high",
     mentions: [
-      { start_seconds: 134, quote: "still going up", stance: "buy", confidence: "high", time_horizon: null, is_conditional: null, condition: null },
-      { start_seconds: 662, quote: "watch earnings", stance: "neutral", confidence: null, time_horizon: null, is_conditional: null, condition: null },
+      { start_seconds: 134, quote: "still going up", excerpt: "raw words around 134", stance: "buy", confidence: "high", time_horizon: null, is_conditional: null, condition: null },
+      { start_seconds: 662, quote: "watch earnings", excerpt: null, stance: "neutral", confidence: null, time_horizon: null, is_conditional: null, condition: null },
     ],
   },
   {
@@ -38,7 +38,7 @@ const GROUPS: VideoDetailGroup[] = [
     summary: "Too expensive",
     confidence: "medium",
     mentions: [
-      { start_seconds: 330, quote: "valuation too high", stance: "sell", confidence: "medium", time_horizon: null, is_conditional: null, condition: null },
+      { start_seconds: 330, quote: "valuation too high", excerpt: null, stance: "sell", confidence: "medium", time_horizon: null, is_conditional: null, condition: null },
     ],
   },
 ];

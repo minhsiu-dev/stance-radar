@@ -268,5 +268,7 @@ async def test_refresh_pipeline_populates_mention_context(session, sessionmaker)
         )).scalars().all()
     assert mentions, "expected at least one mention for alpha_vid_3"
     aapl = next(m for m in mentions if m.ticker == "AAPL")
-    assert aapl.context_before == "今天來看蘋果的財報"
-    assert aapl.context_after == "以上是今天的內容"
+    # 新格式:excerpt 是錨點(12.5s)前後合成的單段原文,含錨點本身與前後鄰句
+    assert aapl.excerpt == "今天來看蘋果的財報 蘋果這季財報很強,我會買 以上是今天的內容"
+    assert aapl.context_before is None
+    assert aapl.context_after is None

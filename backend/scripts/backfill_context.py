@@ -1,4 +1,6 @@
-"""One-off backfill: recompute mention context with the segment-accumulation logic.
+"""One-off backfill: derive `mentions.excerpt` (the merged transcript passage shown
+on hover) for existing rows, without re-running the LLM. Recomputes from the
+re-fetched transcript + each mention's stored start_seconds.
 
 Usage:
     DATABASE_URL=postgresql+asyncpg://stance:stance@localhost:5432/stance_radar \
@@ -14,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.analysis.context import surrounding_segments
+from app.analysis.context import excerpt_around
 from app.models import Mention
 from app.transcripts.client import TranscriptNotAvailable, YouTubeTranscriptApiClient
 
@@ -50,14 +52,10 @@ async def main() -> None:
             continue
         async with sessionmaker() as session:
             for m in video_mentions:
-                before, after = surrounding_segments(
-                    transcript.segments,
-                    start_seconds=m.start_seconds,
-                    quote=m.quote,
-                )
                 row = await session.get(Mention, m.id)
-                row.context_before = before
-                row.context_after = after
+                row.excerpt = excerpt_around(
+                    transcript.segments, start_seconds=m.start_seconds,
+                )
             await session.commit()
         updated += 1
         logger.info("updated %s (%d mentions)", video_id, len(video_mentions))

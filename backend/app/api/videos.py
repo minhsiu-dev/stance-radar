@@ -150,6 +150,7 @@ async def video_detail(
         group["mentions"].append({
             "start_seconds": m.start_seconds,
             "quote": m.quote,
+            "excerpt": m.excerpt,
             "stance": m.stance.value,
             "confidence": m.confidence,
             "time_horizon": m.time_horizon,

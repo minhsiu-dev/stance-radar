@@ -152,7 +152,8 @@ def parse_cli_stdout(stdout: bytes) -> AnalysisResult:
 def _schema_hint() -> str:
     schema = json.dumps(ANALYSIS_TOOL["input_schema"], ensure_ascii=False)
     return (
-        "請只回一個 JSON 物件,符合下列 schema,不要任何 markdown 包裝、不要任何前後說明:\n"
+        "Return ONLY a single JSON object matching the schema below — no markdown "
+        "wrapping, and no text before or after it:\n"
         f"{schema}\n"
     )
 

@@ -31,6 +31,7 @@ const ROW = {
       quote: "I'm bullish on Google",
       context_before: "Let's talk about big tech.",
       context_after: "That's my take for now.",
+      excerpt: null,
       youtube_url: "https://www.youtube.com/watch?v=v1&t=42s",
     },
     {
@@ -38,6 +39,7 @@ const ROW = {
       quote: "Still adding to my Google position",
       context_before: null,
       context_after: null,
+      excerpt: "raw transcript words around the mention",
       youtube_url: "https://www.youtube.com/watch?v=v1&t=125s",
     },
   ],

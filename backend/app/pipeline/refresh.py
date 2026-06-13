@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.analysis.context import surrounding_segments
+from app.analysis.context import excerpt_around
 from app.analysis.llm import AnalysisError, LLMClient
 from app.analysis.tickers import TickerValidator
 from app.config import Settings
@@ -256,16 +256,14 @@ class RefreshRunner:
                     )
             for m in result.mentions:
                 if m.ticker in valid:
-                    before, after = surrounding_segments(
-                        transcript.segments,
-                        start_seconds=m.start_seconds,
-                        quote=m.quote,
+                    excerpt = excerpt_around(
+                        transcript.segments, start_seconds=m.start_seconds,
                     )
                     session.add(Mention(
                         video_id=video_id, ticker=m.ticker,
                         start_seconds=m.start_seconds, quote=m.quote,
                         stance=Stance(m.stance), reasoning=m.reasoning,
-                        context_before=before, context_after=after,
+                        excerpt=excerpt,
                         confidence=m.confidence, time_horizon=m.time_horizon,
                         is_conditional=m.is_conditional, condition=m.condition,
                     ))

@@ -5,6 +5,11 @@ import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { StanceBadge } from "@/components/stance-badge";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { Card } from "@/components/ui/card";
 import { formatSeconds } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -98,7 +103,23 @@ export function VideoMentions({
                         {formatSeconds(m.start_seconds)}
                       </button>
                       <StanceBadge stance={m.stance} confidence={m.confidence} />
-                      <span className="min-w-0 flex-1">{m.quote}</span>
+                      {m.excerpt ? (
+                        <HoverCard>
+                          <HoverCardTrigger
+                            delay={150}
+                            render={
+                              <span className="min-w-0 flex-1 cursor-help">
+                                {m.quote}
+                              </span>
+                            }
+                          />
+                          <HoverCardContent className="max-h-96 w-[min(480px,90vw)] overflow-y-auto text-sm leading-relaxed">
+                            {m.excerpt}
+                          </HoverCardContent>
+                        </HoverCard>
+                      ) : (
+                        <span className="min-w-0 flex-1">{m.quote}</span>
+                      )}
                     </li>
                   ))}
                 </ul>

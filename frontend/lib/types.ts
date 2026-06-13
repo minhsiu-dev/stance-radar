@@ -124,6 +124,7 @@ export interface MentionDetail {
   condition: string | null;
   context_before: string | null;
   context_after: string | null;
+  excerpt: string | null;
   youtube_url: string;
 }
 
@@ -388,6 +389,7 @@ export interface AnalystData {
 export interface VideoDetailMention {
   start_seconds: number;
   quote: string;
+  excerpt: string | null;
   stance: StanceValue;
   confidence: ConfidenceValue | null;
   time_horizon: TimeHorizonValue | null;

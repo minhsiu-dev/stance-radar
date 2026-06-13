@@ -219,6 +219,7 @@ async def test_mentions_endpoint_returns_context_columns(api, sessionmaker):
             video_id="v_ctx", ticker="AAPL", start_seconds=1.0,
             quote="q", stance=Stance.buy, reasoning="r",
             context_before="先前一句", context_after="後續一句",
+            excerpt="前後合成的一整段原文",
         ))
         await s.commit()
 
@@ -228,6 +229,7 @@ async def test_mentions_endpoint_returns_context_columns(api, sessionmaker):
     row = next(r for r in rows if r["video_id"] == "v_ctx")
     assert row["mentions"][0]["context_before"] == "先前一句"
     assert row["mentions"][0]["context_after"] == "後續一句"
+    assert row["mentions"][0]["excerpt"] == "前後合成的一整段原文"
 
 
 @pytest.mark.asyncio

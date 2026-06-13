@@ -24,6 +24,7 @@ _STATEMENTS = (
     "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS time_horizon VARCHAR(16)",
     "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS is_conditional BOOLEAN",
     "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS condition TEXT",
+    "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS excerpt TEXT",
     "ALTER TABLE video_stances ADD COLUMN IF NOT EXISTS confidence VARCHAR(8)",
 )
 

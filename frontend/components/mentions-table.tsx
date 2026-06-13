@@ -198,16 +198,24 @@ export function MentionsTable({
                             {t("conditional", { condition: d.condition })}
                           </p>
                         )}
-                        {d.context_before && (
-                          <p className="mb-2 text-muted-foreground">
-                            {d.context_before}
-                          </p>
-                        )}
-                        <p className="font-medium">{d.quote}</p>
-                        {d.context_after && (
-                          <p className="mt-2 text-muted-foreground">
-                            {d.context_after}
-                          </p>
+                        {d.excerpt ? (
+                          // 新格式:提及附近的逐字稿原文(單段連續文字)
+                          <p>{d.excerpt}</p>
+                        ) : (
+                          // 舊格式:程式機械式抓的前後文 + quote
+                          <>
+                            {d.context_before && (
+                              <p className="mb-2 text-muted-foreground">
+                                {d.context_before}
+                              </p>
+                            )}
+                            <p className="font-medium">{d.quote}</p>
+                            {d.context_after && (
+                              <p className="mt-2 text-muted-foreground">
+                                {d.context_after}
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
                     ))}
