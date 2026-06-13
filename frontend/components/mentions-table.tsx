@@ -136,7 +136,6 @@ export function MentionsTable({
           <TableRow>
             <TableHead>{t("columns.date")}</TableHead>
             <TableHead>{t("columns.channel")}</TableHead>
-            <TableHead>{t("columns.timestamp")}</TableHead>
             <TableHead>{t("columns.quote")}</TableHead>
             <TableHead>{t("columns.stance")}</TableHead>
             <TableHead className="w-16 text-right">{t("columns.open")}</TableHead>
@@ -155,24 +154,16 @@ export function MentionsTable({
                 {formatDate(m.published_at)}
               </TableCell>
               <TableCell>
-                <ChannelAvatar
-                  title={m.channel_title}
-                  thumbnail={m.channel_thumbnail}
-                />
-              </TableCell>
-              <TableCell className="font-mono">
-                <span className="flex flex-wrap gap-x-2 gap-y-1">
-                  {m.mentions.map((d) => (
-                    <Link
-                      key={d.start_seconds}
-                      href={`/videos/${m.video_id}?ticker=${ticker}`}
-                      className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {formatSeconds(d.start_seconds)}
-                    </Link>
-                  ))}
-                </span>
+                <Link
+                  href={`/channels/${m.channel_id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-block transition-opacity hover:opacity-80"
+                >
+                  <ChannelAvatar
+                    title={m.channel_title}
+                    thumbnail={m.channel_thumbnail}
+                  />
+                </Link>
               </TableCell>
               <TableCell className="max-w-80">
                 <HoverCard>

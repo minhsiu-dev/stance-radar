@@ -65,18 +65,18 @@ describe("MentionsTable", () => {
     expect(avatar.getAttribute("title")).toBe("Joseph Carlson");
   });
 
-  it("renders one row per video with all mention timestamps as deep links", async () => {
+  it("no longer renders standalone mention-timestamp deep links", async () => {
     setup();
     await screen.findByText(/I'm bullish on Google/);
-    const t1 = screen.getByRole("link", { name: "0:42" });
-    const t2 = screen.getByRole("link", { name: "2:05" });
-    for (const t of [t1, t2]) {
-      expect(t.getAttribute("href")).toContain("/videos/v1");
-      expect(t.getAttribute("href")).toContain("ticker=GOOGL");
-      expect(t.getAttribute("href")).not.toContain("youtube.com");
-    }
-    // 多筆提及仍只有一列(一個 stance badge)
-    expect(screen.getAllByText("Buy")).toHaveLength(1);
+    expect(screen.queryByRole("link", { name: "0:42" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "2:05" })).toBeNull();
+  });
+
+  it("links the channel avatar to the channel page", async () => {
+    setup();
+    await screen.findByText(/I'm bullish on Google/);
+    const link = screen.getByRole("link", { name: "Joseph Carlson" });
+    expect(link.getAttribute("href")).toContain("/channels/ch_abc");
   });
 
   it("shows +N indicator when a video has multiple mentions", async () => {

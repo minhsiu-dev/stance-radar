@@ -268,7 +268,6 @@
     "columns": {
       "date": "Date",
       "channel": "Channel",
-      "timestamp": "Timestamp",
       "quote": "Quote",
       "stance": "Stance",
       "open": "Open"

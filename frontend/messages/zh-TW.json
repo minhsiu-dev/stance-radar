@@ -268,7 +268,6 @@
     "columns": {
       "date": "日期",
       "channel": "頻道",
-      "timestamp": "時間點",
       "quote": "原句",
       "stance": "立場",
       "open": "開啟"
