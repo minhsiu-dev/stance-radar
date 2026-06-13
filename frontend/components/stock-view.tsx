@@ -17,7 +17,9 @@ export function StockView({ ticker }: { ticker: string }) {
     <div className="space-y-6">
       <StockHeader ticker={ticker} />
       <div className="grid gap-6 lg:grid-cols-2">
-        <div>
+        {/* min-w-0: let the grid item shrink below the chart's intrinsic
+            (fixed-px) width so the container actually resizes on width change. */}
+        <div className="min-w-0">
           <div className="lg:sticky lg:top-14">
             <PriceChart
               ticker={ticker}
@@ -26,11 +28,13 @@ export function StockView({ ticker }: { ticker: string }) {
             />
           </div>
         </div>
-        <MentionsTab
-          ticker={ticker}
-          selectedVideoId={selectedVideoId}
-          onRowHover={setHoveredVideoId}
-        />
+        <div className="min-w-0">
+          <MentionsTab
+            ticker={ticker}
+            selectedVideoId={selectedVideoId}
+            onRowHover={setHoveredVideoId}
+          />
+        </div>
       </div>
       <OverviewTab ticker={ticker} />
     </div>
