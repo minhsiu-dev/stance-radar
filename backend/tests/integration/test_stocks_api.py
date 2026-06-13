@@ -231,7 +231,7 @@ async def test_mentions_endpoint_returns_context_columns(api, sessionmaker):
 
 
 @pytest.mark.asyncio
-async def test_trending_uses_recency_weighted_score(api, sessionmaker):
+async def test_trending_ties_broken_by_recency(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
     from app.models import Channel, Mention, Stance, Video, VideoStatus
 
@@ -239,20 +239,17 @@ async def test_trending_uses_recency_weighted_score(api, sessionmaker):
     async with sessionmaker() as s:
         s.add(Channel(id="ch_t", title="ch_t", thumbnail_url="", uploads_playlist_id="UU_t"))
         now = datetime.now(timezone.utc)
-        # AAPL:10 天前被密集提及 5 次(score ≈ 5 × 0.5^(10/7) ≈ 1.86)
         s.add(Video(id="v_old", channel_id="ch_t", title="old",
                     published_at=now - timedelta(days=10), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
         for i in range(5):
             s.add(Mention(video_id="v_old", ticker="AAPL", start_seconds=float(i),
                           quote="q", stance=Stance.buy, reasoning="r"))
-        # NVDA:1 小時前被提 1 次(score ≈ 1.0)→ 不應僅因較新就贏過 AAPL
         s.add(Video(id="v_new", channel_id="ch_t", title="new",
                     published_at=now - timedelta(hours=1), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="v_new", ticker="NVDA", start_seconds=1.0,
                       quote="q", stance=Stance.buy, reasoning="r"))
-        # TSLA:80 天前被提 5 次,熱度幾乎衰減光(score ≈ 0.02)→ 墊底
         s.add(Video(id="v_stale", channel_id="ch_t", title="stale",
                     published_at=now - timedelta(days=80), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
@@ -261,14 +258,48 @@ async def test_trending_uses_recency_weighted_score(api, sessionmaker):
                           quote="q", stance=Stance.buy, reasoning="r"))
         await s.commit()
 
-    response = await client.get("/api/stocks/trending?limit=5")
-    assert response.status_code == 200
-    rows = response.json()["data"]
-    tickers = [row["ticker"] for row in rows]
-    # 密集且不算舊 > 單次新鮮 > 大量但過期
-    assert tickers == ["AAPL", "NVDA", "TSLA"]
-    assert rows[0]["mention_count"] == 5
-    assert rows[0]["score"] > rows[1]["score"] > rows[2]["score"]
+    rows = (await client.get("/api/stocks/trending?limit=5")).json()["data"]
+    # All single-channel → channel_count ties → ordered by most-recent mention
+    assert [r["ticker"] for r in rows] == ["NVDA", "AAPL", "TSLA"]
+    assert all(r["channel_count"] == 1 for r in rows)
+    assert rows[1]["mention_count"] == 5  # AAPL still reports its mention total
+
+
+@pytest.mark.asyncio
+async def test_trending_ranks_by_distinct_channel_count(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    _, client = api
+    async with sessionmaker() as s:
+        now = datetime.now(timezone.utc)
+        # 3 distinct channels each mention MSFT once
+        for n in range(3):
+            s.add(Channel(id=f"chm{n}", title=f"chm{n}", thumbnail_url="",
+                          uploads_playlist_id=f"UUm{n}"))
+            s.add(Video(id=f"vm{n}", channel_id=f"chm{n}", title="t",
+                        published_at=now - timedelta(days=1), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(Mention(video_id=f"vm{n}", ticker="MSFT", start_seconds=1.0,
+                          quote="q", stance=Stance.buy, reasoning="r"))
+        # 1 channel mentions GOOG 10 times (more mentions, fewer channels)
+        s.add(Channel(id="ch_solo", title="solo", thumbnail_url="",
+                      uploads_playlist_id="UUsolo"))
+        s.add(Video(id="v_solo", channel_id="ch_solo", title="t",
+                    published_at=now, thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        for i in range(10):
+            s.add(Mention(video_id="v_solo", ticker="GOOG", start_seconds=float(i),
+                          quote="q", stance=Stance.buy, reasoning="r"))
+        await s.commit()
+
+    rows = (await client.get("/api/stocks/trending?limit=5")).json()["data"]
+    by = {r["ticker"]: r for r in rows}
+    assert by["MSFT"]["channel_count"] == 3
+    assert by["GOOG"]["channel_count"] == 1
+    assert by["GOOG"]["mention_count"] == 10
+    # 3 channels outranks 1 channel despite GOOG having more mentions
+    assert rows.index(by["MSFT"]) < rows.index(by["GOOG"])
 
 
 async def test_daily_candles_served_from_price_store(api):

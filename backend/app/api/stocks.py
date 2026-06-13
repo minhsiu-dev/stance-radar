@@ -63,30 +63,34 @@ async def stocks_trending(
     days: int = Query(90, ge=1, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    """熱度 = Σ 0.5^(提及距今天數 / 7):次數與新鮮度兼顧,
-    避免「昨天被提 1 次」排在「本週被提 50 次」前面。"""
+    """排序鍵 = 不重複頻道數;同分用最近一次提及、再用 ticker。
+    score(時間衰減熱度)與 mention_count 仍回傳,供其他畫面使用。"""
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=days)
     rows = (await session.execute(
-        select(Mention.ticker, Video.published_at)
+        select(Mention.ticker, Video.channel_id, Video.published_at)
         .join(Video, Mention.video_id == Video.id)
         .where(Video.published_at >= cutoff)
     )).all()
     stats: dict[str, dict] = {}
-    for ticker, published_at in rows:
+    for ticker, channel_id, published_at in rows:
         age_days = max((now - published_at).total_seconds() / 86400, 0.0)
         entry = stats.setdefault(
-            ticker, {"count": 0, "score": 0.0, "last": published_at}
+            ticker,
+            {"count": 0, "channels": set(), "score": 0.0, "last": published_at},
         )
         entry["count"] += 1
+        entry["channels"].add(channel_id)
         entry["score"] += 0.5 ** (age_days / _TRENDING_HALF_LIFE_DAYS)
         entry["last"] = max(entry["last"], published_at)
     ranked = sorted(
-        stats.items(), key=lambda kv: (-kv[1]["score"], kv[0])
+        stats.items(),
+        key=lambda kv: (-len(kv[1]["channels"]), -kv[1]["last"].timestamp(), kv[0]),
     )[:limit]
     return ok([
         {
             "ticker": ticker,
+            "channel_count": len(entry["channels"]),
             "mention_count": entry["count"],
             "score": round(entry["score"], 4),
             "last_mentioned_at": entry["last"].isoformat(),
