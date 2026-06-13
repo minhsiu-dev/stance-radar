@@ -187,6 +187,21 @@
       "netIncome": "Net income",
       "eps": "EPS"
     },
+    "growth": {
+      "title": "Growth (latest quarter)",
+      "metric": "Metric",
+      "value": "Value",
+      "qoq": "QoQ",
+      "yoy": "YoY",
+      "revenue": "Revenue",
+      "grossProfit": "Gross profit",
+      "operatingIncome": "Operating income",
+      "netIncome": "Net income",
+      "marginsTitle": "Margin trends",
+      "grossMargin": "Gross",
+      "operatingMargin": "Operating",
+      "netMargin": "Net"
+    },
     "financials": {
       "quarterly": "Quarterly",
       "annual": "Annual",

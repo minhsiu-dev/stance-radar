@@ -187,6 +187,21 @@
       "netIncome": "淨利",
       "eps": "EPS"
     },
+    "growth": {
+      "title": "最新一季成長",
+      "metric": "指標",
+      "value": "數值",
+      "qoq": "季增",
+      "yoy": "年增",
+      "revenue": "營收",
+      "grossProfit": "毛利",
+      "operatingIncome": "營業利益",
+      "netIncome": "淨利",
+      "marginsTitle": "利潤率趨勢",
+      "grossMargin": "毛利率",
+      "operatingMargin": "營益率",
+      "netMargin": "淨利率"
+    },
     "financials": {
       "quarterly": "季報",
       "annual": "年報",

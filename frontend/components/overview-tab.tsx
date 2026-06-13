@@ -16,6 +16,7 @@ import type {
   StanceSummary,
   StockSummary,
 } from "@/lib/types";
+import { GrowthMargins } from "@/components/growth-margins";
 import { cn } from "@/lib/utils";
 
 function yoy(latest: number | null, prior: number | null): number | null {
@@ -93,6 +94,7 @@ export function OverviewTab({ ticker }: { ticker: string }) {
           <Bar label={tStance("sell")} count={summary.sell} max={maxStance} color="bg-orange-500" />
         </CardContent>
       </Card>
+      <GrowthMargins reports={financials} />
     </div>
   );
 }
