@@ -30,7 +30,6 @@
     "latest": "Latest videos",
     "viewAll": "View all →",
     "recentStocks": { "title": "Recently discussed" },
-    "trending": { "title": "Trending" },
     "flips": {
       "title": "Stance flips",
       "window": "last {days} days",
@@ -84,7 +83,8 @@
         "allChannels": "All channels",
         "allTickers": "All stocks",
         "allStances": "All stances",
-        "holdingsOnly": "Holdings only"
+        "holdingsOnly": "Holdings only",
+        "active": "Filtering:"
       }
     }
   },

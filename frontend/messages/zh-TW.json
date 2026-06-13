@@ -30,7 +30,6 @@
     "latest": "最新影片",
     "viewAll": "看全部 →",
     "recentStocks": { "title": "最新被討論的股票" },
-    "trending": { "title": "熱門提及" },
     "flips": {
       "title": "立場轉變",
       "window": "近 {days} 天",
@@ -84,7 +83,8 @@
         "allChannels": "全部頻道",
         "allTickers": "全部股票",
         "allStances": "全部立場",
-        "holdingsOnly": "只看持股"
+        "holdingsOnly": "只看持股",
+        "active": "篩選中:"
       }
     }
   },

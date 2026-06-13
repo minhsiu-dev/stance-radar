@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 import { VideoCard } from "@/components/video-card";
 import type {
   ChannelItem,
@@ -131,6 +132,19 @@ function FeedFilterBar({
           <SelectItem value="sell">{tStance("sell")}</SelectItem>
         </SelectContent>
       </Select>
+      {filters.ticker !== "all" && (
+        <button
+          type="button"
+          data-testid="active-ticker-chip"
+          aria-label={`${t("active")} ${filters.ticker}`}
+          onClick={() => onChange({ ...filters, ticker: "all" })}
+          className="inline-flex items-center gap-1.5 rounded-full border border-primary bg-primary/10 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-primary/20"
+        >
+          <span className="text-muted-foreground">{t("active")}</span>
+          <span className="font-mono font-semibold tracking-tight">{filters.ticker}</span>
+          <X className="h-3 w-3" />
+        </button>
+      )}
     </div>
   );
 }

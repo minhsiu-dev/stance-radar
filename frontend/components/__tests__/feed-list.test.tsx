@@ -22,6 +22,7 @@ const messages = {
         allTickers: "All stocks",
         allStances: "All stances",
         holdingsOnly: "Holdings only",
+        active: "Filtering:",
       },
     },
     empty: { prompt: "", linkLabel: "channels", hint: "" },
@@ -109,6 +110,38 @@ describe("FeedList holdings-only chip", () => {
         fetcher.mock.calls.some(([url]: string[]) => url.includes("holdings_only=true")),
       ).toBe(true);
     });
+  });
+
+  it("shows a removable active-ticker chip that clears the ticker filter when clicked", async () => {
+    const fetcher = vi.fn().mockImplementation((key: string) => {
+      if (key.startsWith("/api/portfolio/holdings"))
+        return Promise.resolve({ holdings: [], totals: HOLDINGS_TOTALS });
+      if (key.startsWith("/api/channels")) return Promise.resolve([]);
+      if (key.startsWith("/api/stocks"))
+        return Promise.resolve([{ ticker: "NVDA", mention_count: 3 }]);
+      return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
+    });
+
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
+          <ControlledFeedList initial={{ ...NO_FILTERS, ticker: "NVDA" }} />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
+
+    const chip = await screen.findByTestId("active-ticker-chip");
+    expect(chip.textContent).toContain("NVDA");
+
+    fireEvent.click(chip);
+
+    // 移除後 chip 消失,且 feed 重新以無 ticker 條件抓取
+    await waitFor(() => {
+      expect(screen.queryByTestId("active-ticker-chip")).toBeNull();
+    });
+    expect(
+      fetcher.mock.calls.some(([url]: string[]) => !url.includes("ticker=") && url.includes("/api/feed")),
+    ).toBe(true);
   });
 
   it("does not render chip when holdings list is empty", async () => {
