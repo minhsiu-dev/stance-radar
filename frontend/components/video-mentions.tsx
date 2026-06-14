@@ -49,10 +49,6 @@ export function VideoMentions({
 
   return (
     <section className="space-y-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold">{t("mentionsHeading")}</h2>
-        <span className="text-xs text-muted-foreground">{t("jumpHint")}</span>
-      </div>
       {groups.map((g) => {
         const isHighlight = g.ticker === initialTicker;
         const isOpen = !collapsed.has(g.ticker);

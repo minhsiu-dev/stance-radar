@@ -8,6 +8,7 @@ import { ExternalLink } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { YouTubePlayer, type YouTubePlayerHandle } from "@/components/youtube-player";
 import { VideoMentions } from "@/components/video-mentions";
+import { ReanalyzeButton } from "@/components/reanalyze-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/format";
 import type { VideoDetailResponse } from "@/lib/types";
@@ -18,7 +19,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   const searchParams = useSearchParams();
   const initialTicker = searchParams.get("ticker");
 
-  const { data, error } = useSWR<VideoDetailResponse>(`/api/videos/${videoId}`);
+  const { data, error, mutate } = useSWR<VideoDetailResponse>(`/api/videos/${videoId}`);
 
   if (error) {
     const notFound = (error as { status?: number }).status === 404;
@@ -66,11 +67,24 @@ export function VideoDetail({ videoId }: { videoId: string }) {
           </div>
         </div>
       </div>
-      <VideoMentions
-        groups={data.groups}
-        initialTicker={initialTicker}
-        onSeek={(s) => playerRef.current?.seekTo(s)}
-      />
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">{t("mentionsHeading")}</h2>
+          <div className="flex items-center gap-3">
+            {data.groups.length > 0 && (
+              <span className="hidden text-xs text-muted-foreground sm:inline">
+                {t("jumpHint")}
+              </span>
+            )}
+            <ReanalyzeButton videoId={data.video.id} onDone={() => mutate()} />
+          </div>
+        </div>
+        <VideoMentions
+          groups={data.groups}
+          initialTicker={initialTicker}
+          onSeek={(s) => playerRef.current?.seekTo(s)}
+        />
+      </section>
     </div>
   );
 }
