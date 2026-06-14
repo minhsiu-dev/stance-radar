@@ -245,7 +245,7 @@ async def test_quota_exceeded_fails_job_with_message(session, sessionmaker):
 
     class QuotaYouTube(FakeYouTubeClient):
         async def list_new_uploads(self, playlist_id, *, known_video_ids, limit):
-            raise QuotaExceededError("YouTube API quota 已用盡,明日重試")
+            raise QuotaExceededError("YouTube API quota exhausted, retry tomorrow")
 
     runner = make_runner(sessionmaker, youtube=QuotaYouTube())
     job_id, _ = await runner.start(JobKind.discover)

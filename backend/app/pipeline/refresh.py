@@ -72,7 +72,7 @@ class RefreshRunner:
         except Exception as exc:
             logger.exception("job %s failed", job_id)
             await jobs.finish_job(
-                self._deps.sessionmaker, job_id, error=f"更新失敗:{exc}"
+                self._deps.sessionmaker, job_id, error=f"Update failed: {exc}"
             )
 
     async def _run_discover(self, job_id: int) -> None:

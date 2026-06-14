@@ -57,7 +57,7 @@ async def fail_orphan_jobs(sessionmaker: async_sessionmaker[AsyncSession]) -> in
             .values(
                 status=JobStatus.failed,
                 finished_at=utcnow(),
-                error_message="伺服器重啟,任務中斷;請再按一次更新",
+                error_message="Server restarted, job interrupted; please trigger update again",
             )
         )
         await session.commit()

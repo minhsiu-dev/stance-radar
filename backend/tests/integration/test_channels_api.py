@@ -31,7 +31,7 @@ async def test_add_with_invalid_id_returns_400_but_adds_valid(api, session):
     assert resp.status_code == 400
     body = resp.json()
     assert body["success"] is False
-    assert body["data"]["failed"] == [{"id": "UC_bogus", "reason": "查無此頻道"}]
+    assert body["data"]["failed"] == [{"id": "UC_bogus", "reason": "Channel not found"}]
     assert [c["id"] for c in body["data"]["added"]] == ["UC_fake_alpha"]
     assert await session.get(Channel, "UC_fake_alpha") is not None
     await wait_refresh(app)
@@ -75,7 +75,7 @@ async def test_unknown_handle_fails(api):
     resp = await client.post("/api/channels", json={"channel_ids": "@nope"})
     assert resp.status_code == 400
     body = resp.json()
-    assert body["data"]["failed"] == [{"id": "@nope", "reason": "查無此頻道"}]
+    assert body["data"]["failed"] == [{"id": "@nope", "reason": "Channel not found"}]
     assert body["data"]["added"] == []
 
 

@@ -87,7 +87,7 @@ async def add_channels(
 ):
     tokens = parse_channel_ids(body.channel_ids)
     if not tokens:
-        return fail("沒有可解析的 channel ID", status_code=400)
+        return fail("No parseable channel ID", status_code=400)
 
     # 先把每個 token(ID / @handle / 連結)解析成 ChannelInfo
     added: list[dict] = []
@@ -103,7 +103,7 @@ async def add_channels(
                 else await youtube.resolve_channel_by_handle(value)
             )
         except ChannelNotFound:
-            failed.append({"id": token, "reason": "查無此頻道"})
+            failed.append({"id": token, "reason": "Channel not found"})
             continue
         except QuotaExceededError as exc:
             return fail(str(exc), status_code=503)
@@ -137,7 +137,7 @@ async def add_channels(
         # 部分失敗:400,但有效的照常加入(data 內含結果)
         return JSONResponse(
             status_code=400,
-            content={"success": False, "data": data, "error": "部分 channel ID 無效"},
+            content={"success": False, "data": data, "error": "Some channel IDs are invalid"},
         )
     return ok(data)
 
@@ -166,7 +166,7 @@ async def channel_detail(
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
-        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+        return fail(f"Channel {channel_id} not found", status_code=404)
 
     status_rows = (await session.execute(
         select(Video.status, func.count())
@@ -248,13 +248,13 @@ async def channel_videos(
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
-        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+        return fail(f"Channel {channel_id} not found", status_code=404)
     conditions = [Video.channel_id == channel_id]
     if status is not None:
         try:
             conditions.append(Video.status == VideoStatus(status))
         except ValueError:
-            return fail(f"未知的影片狀態:{status}", status_code=400)
+            return fail(f"Unknown video status: {status}", status_code=400)
 
     total = (await session.execute(
         select(func.count()).select_from(Video).where(*conditions)
@@ -305,7 +305,7 @@ async def update_channel(
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
-        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+        return fail(f"Channel {channel_id} not found", status_code=404)
     channel.auto_analyze = body.auto_analyze
     await session.commit()
     return ok(channel_to_dict(channel))
@@ -318,7 +318,7 @@ async def load_older(
     runner: RefreshRunner = Depends(get_runner),
 ):
     if await session.get(Channel, channel_id) is None:
-        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+        return fail(f"Channel {channel_id} not found", status_code=404)
     job_id, created = await runner.start(JobKind.load_older, channel_id=channel_id)
     return ok({"job_id": job_id, "created": created})
 
@@ -329,7 +329,7 @@ async def delete_channel(
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
-        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+        return fail(f"Channel {channel_id} not found", status_code=404)
     await session.delete(channel)
     await session.commit()
     return ok({"deleted": channel_id})

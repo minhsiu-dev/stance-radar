@@ -35,7 +35,7 @@ async def list_videos(
     try:
         wanted = VideoStatus(status)
     except ValueError:
-        return fail(f"未知的影片狀態:{status}", status_code=400)
+        return fail(f"Unknown video status: {status}", status_code=400)
     videos = (await session.execute(
         select(Video)
         .options(selectinload(Video.channel))
@@ -63,14 +63,14 @@ async def _load_videos(
     """整批驗證:任一 ID 無效就整批拒絕,不部分套用。"""
     ids = list(dict.fromkeys(raw_ids))
     if not ids:
-        return None, fail("video_ids 不可為空", status_code=400)
+        return None, fail("video_ids must not be empty", status_code=400)
     videos = (await session.execute(
         select(Video).where(Video.id.in_(ids))
     )).scalars().all()
     missing = set(ids) - {v.id for v in videos}
     if missing:
         return None, fail(
-            f"影片不存在:{', '.join(sorted(missing))}", status_code=404
+            f"Video not found: {', '.join(sorted(missing))}", status_code=404
         )
     return list(videos), None
 
@@ -104,7 +104,7 @@ async def skip_videos(
     analyzed = sorted(v.id for v in videos if v.status == VideoStatus.analyzed)
     if analyzed:
         return fail(
-            f"已分析的影片不可略過:{', '.join(analyzed)}", status_code=400
+            f"Analyzed videos cannot be skipped: {', '.join(analyzed)}", status_code=400
         )
     for video in videos:
         video.status = VideoStatus.skipped
@@ -123,7 +123,7 @@ async def video_detail(
         .where(Video.id == video_id)
     )).scalar_one_or_none()
     if video is None:
-        return fail(f"影片不存在:{video_id}", status_code=404)
+        return fail(f"Video not found: {video_id}", status_code=404)
 
     mentions = (await session.execute(
         select(Mention)

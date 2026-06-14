@@ -154,7 +154,7 @@ async def channel_scorecard(
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
-        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+        return fail(f"Channel {channel_id} not found", status_code=404)
     calls, total = await _channel_calls_page(session, channel_id, page, page_size)
     scorecard = await build_scorecard_page(store, calls, total, page, page_size)
     return ok(scorecard)

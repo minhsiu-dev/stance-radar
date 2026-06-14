@@ -77,9 +77,9 @@ async def add_transaction(
     ticker = body.ticker.upper().strip()
     today = datetime.now(timezone.utc).date()
     if body.executed_on > today:
-        return fail("交易日期不可在未來", status_code=422)
+        return fail("Transaction date cannot be in the future", status_code=422)
     if not await market.ticker_exists(ticker):
-        return fail(f"查無股票 {ticker}", status_code=422)
+        return fail(f"No stock found: {ticker}", status_code=422)
     tx = PortfolioTransaction(
         ticker=ticker, side=TransactionSide(body.side),
         shares=body.shares, price=body.price,
@@ -104,12 +104,12 @@ async def delete_transaction(
 ):
     tx = await session.get(PortfolioTransaction, tx_id)
     if tx is None:
-        return fail("查無此筆交易", status_code=404)
+        return fail("Transaction not found", status_code=404)
     remaining = [t for t in await _all_transactions(session) if t.id != tx_id]
     try:
         replay(remaining)
     except InvalidTransaction as exc:
-        return fail(f"刪除後交易紀錄不一致:{exc}", status_code=422)
+        return fail(f"Transaction records inconsistent after deletion: {exc}", status_code=422)
     await session.delete(tx)
     await session.commit()
     return ok({"deleted": True})
@@ -277,7 +277,7 @@ async def performance(
 ):
     if range_key not in PERFORMANCE_RANGES:
         return fail(
-            f"range 必須是 {', '.join(PERFORMANCE_RANGES)}", status_code=422
+            f"range must be one of {', '.join(PERFORMANCE_RANGES)}", status_code=422
         )
     held = await _held(session)
     today = datetime.now(timezone.utc).date()

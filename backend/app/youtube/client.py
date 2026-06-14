@@ -92,7 +92,7 @@ class DataAPIYouTubeClient:
                 for e in resp.json().get("error", {}).get("errors", [])
             ]
             if "quotaExceeded" in reasons:
-                raise QuotaExceededError("YouTube API quota 已用盡,明日重試")
+                raise QuotaExceededError("YouTube API quota exhausted, retry tomorrow")
         if resp.status_code != 200:
             raise YouTubeError(f"YouTube API {resp.status_code}: {resp.text[:300]}")
         return resp.json()

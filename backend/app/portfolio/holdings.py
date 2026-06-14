@@ -44,8 +44,8 @@ def replay(transactions: Sequence[TransactionLike]) -> dict[str, Holding]:
         else:
             if t.shares > shares:
                 raise InvalidTransaction(
-                    f"{t.executed_on.isoformat()} 賣出 {t.ticker} {t.shares} 股,"
-                    f"但當時僅持有 {shares} 股"
+                    f"{t.executed_on.isoformat()} sold {t.ticker} {t.shares} shares, "
+                    f"but only {shares} held at the time"
                 )
             avg = cost / shares
             shares -= t.shares
