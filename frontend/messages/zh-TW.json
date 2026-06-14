@@ -5,7 +5,8 @@
     "trending": "熱門個股",
     "videos": "最新影片",
     "portfolio": "持股狀態",
-    "channels": "頻道管理"
+    "channels": "頻道管理",
+    "openMenu": "開啟選單"
   },
   "Trending": {
     "title": "熱門個股",
@@ -219,14 +220,11 @@
       "mentions": "逐筆提及"
     },
     "overview": {
-      "latestQuarter": "最近一季",
       "financialsTitle": "財報",
       "ytStance": "YouTube 立場 · 頻道數 (近 {days} 天)",
       "ytStanceAll": "YouTube 立場 · 頻道數 (全部)",
       "windowAll": "全部",
-      "revenue": "營收",
-      "netIncome": "淨利",
-      "eps": "EPS"
+      "channelsLabel": "頻道 {count}"
     },
     "analyst": {
       "title": "分析師目標價",
@@ -274,7 +272,10 @@
     "mentionsHeading": "提及與立場",
     "mentionCount": "{count} 次提及",
     "jumpHint": "點時間碼可跳到影片該處",
-    "noMentions": "這部影片沒有偵測到美股提及"
+    "noMentions": "這部影片沒有偵測到美股提及",
+    "reanalyze": "重新分析",
+    "reanalyzing": "重新分析中…",
+    "reanalyzeFailed": "重新分析失敗"
   },
   "Mentions": {
     "title": "逐筆提及",

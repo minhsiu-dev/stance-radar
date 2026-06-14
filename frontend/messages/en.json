@@ -5,7 +5,8 @@
     "trending": "Trending stocks",
     "videos": "Latest videos",
     "portfolio": "Holdings",
-    "channels": "Channels"
+    "channels": "Channels",
+    "openMenu": "Open menu"
   },
   "Trending": {
     "title": "Trending stocks",
@@ -219,14 +220,11 @@
       "mentions": "Mentions"
     },
     "overview": {
-      "latestQuarter": "Latest quarter",
       "financialsTitle": "Financials",
       "ytStance": "YouTube stance · channels (last {days}d)",
       "ytStanceAll": "YouTube stance · channels (all time)",
       "windowAll": "All",
-      "revenue": "Revenue",
-      "netIncome": "Net income",
-      "eps": "EPS"
+      "channelsLabel": "{count} channels"
     },
     "analyst": {
       "title": "Analyst targets",
@@ -274,7 +272,10 @@
     "mentionsHeading": "Mentions & stances",
     "mentionCount": "{count} mentions",
     "jumpHint": "Click a timestamp to jump there",
-    "noMentions": "No U.S. stock mentions detected in this video"
+    "noMentions": "No U.S. stock mentions detected in this video",
+    "reanalyze": "Re-analyze",
+    "reanalyzing": "Re-analyzing…",
+    "reanalyzeFailed": "Re-analysis failed"
   },
   "Mentions": {
     "title": "All mentions",
