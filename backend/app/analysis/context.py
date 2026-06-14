@@ -1,9 +1,8 @@
 """Build a transcript excerpt around a mention's timestamp for hover display.
 
-`quote` 現在是模型寫的「精簡摘要」(不是逐字原句),所以前端 hover 要能看到實際
-講了什麼。這裡用模型回報的 start_seconds 當錨點,往前後各收約 80 字的原始字幕,
-合成「一整段連續文字」——不斷句、不分 before/after、不做重疊裁切(摘要與原文是
-兩種文本,沒有重複問題)。
+`quote` 是模型逐字摘錄的原句(可能截斷),hover 時再給更完整的上下文。這裡用模型
+回報的 start_seconds 當錨點,往前後各收約 80 字的原始字幕,合成「一整段連續文字」
+——不斷句、不分 before/after、不做重疊裁切。
 """
 from app.transcripts.client import TranscriptSegment
 

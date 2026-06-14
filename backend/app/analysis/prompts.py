@@ -29,8 +29,8 @@ Rules:
      Only label buy/sell when the speaker clearly expresses their own view or intent to act.
 4. Record one mention per occurrence: start_seconds is that sentence's start time (it \
    MUST align with the transcript — the frontend uses it to locate the original passage); \
-   quote is a ONE-SENTENCE concise summary of the mention — no filler, NOT a verbatim copy \
-   of the original sentence, just state what the speaker is saying about this stock; \
+   quote is the original sentence quoted VERBATIM from the transcript (may truncate to \
+   about 100 chars), do NOT paraphrase or summarize; \
    reasoning is a one-sentence explanation of the judgment.
 5. Also annotate each mention:
    - confidence: the speaker's conviction. high (heavy position/all-in/very certain), \
@@ -46,8 +46,8 @@ Rules:
    overall confidence.
 7. When there is no US-stock mention at all, report empty arrays for both mentions and stances.
 8. Language rules: write reasoning and summary in ENGLISH regardless of the transcript's \
-   language; write quote (the concise summary) and condition in the transcript's ORIGINAL \
-   language — do not translate them.
+   language; quote (the verbatim original sentence) and condition stay in the transcript's \
+   ORIGINAL language — do not translate them.
 """
 
 ANALYSIS_TOOL = {
@@ -65,7 +65,7 @@ ANALYSIS_TOOL = {
                         "start_seconds": {"type": "number"},
                         "quote": {
                             "type": "string",
-                            "description": "One-sentence concise summary of this mention in the transcript's original language; NOT a verbatim excerpt",
+                            "description": "The original sentence quoted verbatim from the transcript (may truncate to ~100 chars) in its original language; do NOT paraphrase or summarize",
                         },
                         "stance": {"type": "string", "enum": ["buy", "neutral", "sell"]},
                         "reasoning": {
