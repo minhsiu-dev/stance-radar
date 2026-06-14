@@ -48,6 +48,14 @@ conftest(`backend/tests/conftest.py`)會自動建 `stance_radar_test` 資料庫,
 cd /workspace/frontend && npx vitest run && npm run build
 ```
 
+注意:host 上的 `npm run build` 只是**驗證能不能編譯**,不會更新跑在 :3000 的容器。
+frontend 跟 backend 一樣是 `build:` 進 image、**沒有** source bind-mount(見
+`docker-compose.yml`),所以改完前端要 reflect 到 :3000 一定要 rebuild image 再重啟:
+
+```bash
+docker compose build frontend && docker compose up -d frontend
+```
+
 ## E2E
 
 預設流程(host 跑 Playwright):
