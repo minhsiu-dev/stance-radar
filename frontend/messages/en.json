@@ -303,10 +303,7 @@
     "loading": "Computing — fetching price history…",
     "loadError": "Failed to load latest mentions: {message}",
     "empty": "No buy/sell stances to score yet.",
-    "afterDays": "{days}d after call",
     "vsBenchmark": "excess {value}",
-    "winRate": "win rate {value}",
-    "sampleCount": "{count} calls",
     "noData": "no data",
     "columns": {
       "date": "Date",
