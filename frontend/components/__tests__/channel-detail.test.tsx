@@ -113,10 +113,7 @@ const messages = {
     loading: "Computing…",
     loadError: "Failed: {message}",
     empty: "No calls yet.",
-    afterDays: "{days}d after call",
     vsBenchmark: "excess {value}",
-    winRate: "win rate {value}",
-    sampleCount: "{count} calls",
     noData: "no data",
     columns: {
       date: "Date",
@@ -171,17 +168,13 @@ const videos = {
   ],
 };
 
-const emptyHorizon = {
-  count: 0, avg_return: null, avg_alpha: null, win_rate: null,
-};
 const scorecard = {
   horizons: [7, 30, 90],
   benchmark: "SPY",
-  aggregates: {
-    buy: { total: 0, horizons: { 7: emptyHorizon, 30: emptyHorizon, 90: emptyHorizon } },
-    sell: { total: 0, horizons: { 7: emptyHorizon, 30: emptyHorizon, 90: emptyHorizon } },
-  },
   calls: [],
+  total: 0,
+  page: 1,
+  page_size: 20,
 };
 
 function renderDetail(videosForKey?: (key: string) => unknown) {

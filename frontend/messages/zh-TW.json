@@ -303,10 +303,7 @@
     "loading": "計算中,需抓取歷史股價…",
     "loadError": "最新提及讀取失敗:{message}",
     "empty": "尚無 buy/sell 立場可評分。",
-    "afterDays": "call 後 {days} 天",
     "vsBenchmark": "超額 {value}",
-    "winRate": "勝率 {value}",
-    "sampleCount": "{count} 筆",
     "noData": "無資料",
     "columns": {
       "date": "日期",

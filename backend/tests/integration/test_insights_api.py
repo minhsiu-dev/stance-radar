@@ -108,21 +108,43 @@ async def test_scorecard_shape_with_fake_market(api, sessionmaker):
     resp = await client.get("/api/channels/ch1/scorecard")
     assert resp.status_code == 200
     data = resp.json()["data"]
-    assert data["benchmark"] == "SPY"
+    assert data["benchmark"] == "VOO"
     assert data["horizons"] == [7, 30, 90]
-    # neutral 不計;4 筆立場全是 buy/sell → 4 個 call
+    assert data["total"] == 4
+    assert data["page"] == 1
+    assert data["page_size"] == 20
+    assert "aggregates" not in data
+    # neutral excluded; 4 buy/sell stances → 4 calls on the first page
     assert len(data["calls"]) == 4
     call = data["calls"][0]
     assert set(call) >= {
         "video_id", "ticker", "stance", "returns", "alpha", "has_data",
     }
-    aggregates = data["aggregates"]
-    assert aggregates["buy"]["total"] == 3
-    assert aggregates["sell"]["total"] == 1
-    # FakeMarketClient 含 SPY benchmark → 已實現(returns 有值)的窗口 alpha 應有值
+    # FakeMarketClient has a VOO series → realized windows have alpha
     realized = [c for c in data["calls"] if c["returns"]["7"] is not None]
     assert realized
     assert all(c["alpha"]["7"] is not None for c in realized)
+
+
+async def test_scorecard_pagination(api, sessionmaker):
+    _, client = api
+    await seed_stances(sessionmaker)
+    p1 = (await client.get(
+        "/api/channels/ch1/scorecard?page=1&page_size=2"
+    )).json()["data"]
+    assert p1["total"] == 4
+    assert p1["page"] == 1
+    assert p1["page_size"] == 2
+    assert len(p1["calls"]) == 2
+    p2 = (await client.get(
+        "/api/channels/ch1/scorecard?page=2&page_size=2"
+    )).json()["data"]
+    assert p2["page"] == 2
+    assert len(p2["calls"]) == 2
+    # pages don't overlap (newest-first, distinct video/ticker keys)
+    k1 = {(c["video_id"], c["ticker"]) for c in p1["calls"]}
+    k2 = {(c["video_id"], c["ticker"]) for c in p2["calls"]}
+    assert k1.isdisjoint(k2)
 
 
 async def test_leaderboard_ranks_channels(api, sessionmaker):

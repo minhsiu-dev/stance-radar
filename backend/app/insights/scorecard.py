@@ -18,7 +18,8 @@ from app.market.store import PriceStore
 logger = logging.getLogger(__name__)
 
 HORIZONS = (7, 30, 90)
-BENCHMARK = "SPY"
+BENCHMARK = "SPY"  # aggregate/leaderboard path
+SCORECARD_BENCHMARK = "VOO"  # per-call paginated scorecard path
 _HISTORY_DAYS = 1827  # 5 年,涵蓋本工具的歷史 call
 
 
@@ -142,16 +143,28 @@ def aggregate(calls: list[CallScore]) -> dict:
     return out
 
 
-async def build_scorecard(
-    store: PriceStore,
-    raw_calls: list[dict],
-) -> dict:
-    """raw_calls:[{video_id, video_title, ticker, stance, confidence, summary,
-    published_at(datetime)}…],已含該頻道全部非 neutral 立場。"""
-    tickers = {c["ticker"] for c in raw_calls}
-    series_map = await fetch_price_series(store, tickers | {BENCHMARK})
-    benchmark = series_map.get(BENCHMARK)
+def _serialize_call(c: CallScore) -> dict:
+    return {
+        "video_id": c.video_id,
+        "video_title": c.video_title,
+        "ticker": c.ticker,
+        "stance": c.stance,
+        "confidence": c.confidence,
+        "summary": c.summary,
+        "published_at": c.published_at,
+        "entry_date": c.entry_date,
+        "entry_price": c.entry_price,
+        "returns": {str(h): c.returns.get(h) for h in HORIZONS},
+        "alpha": {str(h): c.alpha.get(h) for h in HORIZONS},
+        "has_data": c.has_data,
+    }
 
+
+def _score_calls(
+    raw_calls: list[dict],
+    series_map: dict[str, PriceSeries | None],
+    benchmark_series: PriceSeries | None,
+) -> list[CallScore]:
     calls: list[CallScore] = []
     for raw in raw_calls:
         published_dt = raw["published_at"]
@@ -165,29 +178,52 @@ async def build_scorecard(
             published_at=published_dt.isoformat(),
         )
         calls.append(score_call(
-            call, series_map.get(raw["ticker"]), benchmark, published_dt.date()
+            call, series_map.get(raw["ticker"]), benchmark_series,
+            published_dt.date(),
         ))
-
     calls.sort(key=lambda c: c.published_at, reverse=True)
+    return calls
+
+
+async def build_scorecard(
+    store: PriceStore,
+    raw_calls: list[dict],
+) -> dict:
+    """raw_calls:[{video_id, video_title, ticker, stance, confidence, summary,
+    published_at(datetime)}…],已含該頻道全部非 neutral 立場。"""
+    tickers = {c["ticker"] for c in raw_calls}
+    series_map = await fetch_price_series(store, tickers | {BENCHMARK})
+    calls = _score_calls(raw_calls, series_map, series_map.get(BENCHMARK))
     return {
         "horizons": list(HORIZONS),
         "benchmark": BENCHMARK,
         "aggregates": aggregate(calls),
-        "calls": [
-            {
-                "video_id": c.video_id,
-                "video_title": c.video_title,
-                "ticker": c.ticker,
-                "stance": c.stance,
-                "confidence": c.confidence,
-                "summary": c.summary,
-                "published_at": c.published_at,
-                "entry_date": c.entry_date,
-                "entry_price": c.entry_price,
-                "returns": {str(h): c.returns.get(h) for h in HORIZONS},
-                "alpha": {str(h): c.alpha.get(h) for h in HORIZONS},
-                "has_data": c.has_data,
-            }
-            for c in calls
-        ],
+        "calls": [_serialize_call(c) for c in calls],
+    }
+
+
+async def build_scorecard_page(
+    store: PriceStore,
+    raw_calls: list[dict],
+    total: int,
+    page: int,
+    page_size: int,
+    benchmark: str = SCORECARD_BENCHMARK,
+) -> dict:
+    """Score ONLY this page's calls (no cross-page aggregates).
+
+    Prices just this page's tickers + benchmark, so each request stays bounded
+    no matter how many calls the channel has. `raw_calls` is the current page,
+    newest first.
+    """
+    tickers = {c["ticker"] for c in raw_calls}
+    series_map = await fetch_price_series(store, tickers | {benchmark})
+    calls = _score_calls(raw_calls, series_map, series_map.get(benchmark))
+    return {
+        "horizons": list(HORIZONS),
+        "benchmark": benchmark,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "calls": [_serialize_call(c) for c in calls],
     }

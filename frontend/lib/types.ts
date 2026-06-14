@@ -273,11 +273,6 @@ export interface ScorecardHorizonStats {
   win_rate: number | null;
 }
 
-export interface ScorecardStanceAggregate {
-  total: number;
-  horizons: Record<string, ScorecardHorizonStats>;
-}
-
 export interface ScorecardCall {
   video_id: string;
   video_title: string;
@@ -296,8 +291,10 @@ export interface ScorecardCall {
 export interface Scorecard {
   horizons: number[];
   benchmark: string;
-  aggregates: { buy: ScorecardStanceAggregate; sell: ScorecardStanceAggregate };
   calls: ScorecardCall[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface LeaderboardItem {

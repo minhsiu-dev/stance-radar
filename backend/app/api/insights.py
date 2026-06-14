@@ -1,13 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_price_store, get_session
 from app.envelope import fail, ok
 from app.insights.flips import StancePoint, detect_flips
-from app.insights.scorecard import build_scorecard
+from app.insights.scorecard import build_scorecard, build_scorecard_page
 from app.market.store import PriceStore
 from app.models import Channel, Stance, Video, VideoStance
 
@@ -110,17 +110,53 @@ async def _channel_calls(session: AsyncSession, channel_id: str) -> list[dict]:
     ]
 
 
+async def _channel_calls_page(
+    session: AsyncSession, channel_id: str, page: int, page_size: int
+) -> tuple[list[dict], int]:
+    total = (await session.execute(
+        select(func.count())
+        .select_from(VideoStance)
+        .join(Video, VideoStance.video_id == Video.id)
+        .where(Video.channel_id == channel_id)
+        .where(VideoStance.stance != Stance.neutral)
+    )).scalar_one()
+    rows = (await session.execute(
+        select(VideoStance, Video)
+        .join(Video, VideoStance.video_id == Video.id)
+        .where(Video.channel_id == channel_id)
+        .where(VideoStance.stance != Stance.neutral)
+        .order_by(Video.published_at.desc(), Video.id.desc(), VideoStance.ticker.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )).all()
+    calls = [
+        {
+            "video_id": video.id,
+            "video_title": video.title,
+            "ticker": stance.ticker,
+            "stance": stance.stance.value,
+            "confidence": stance.confidence,
+            "summary": stance.summary,
+            "published_at": video.published_at,
+        }
+        for stance, video in rows
+    ]
+    return calls, total
+
+
 @router.get("/channels/{channel_id}/scorecard")
 async def channel_scorecard(
     channel_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
     store: PriceStore = Depends(get_price_store),
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
         return fail(f"頻道 {channel_id} 不存在", status_code=404)
-    calls = await _channel_calls(session, channel_id)
-    scorecard = await build_scorecard(store, calls)
+    calls, total = await _channel_calls_page(session, channel_id, page, page_size)
+    scorecard = await build_scorecard_page(store, calls, total, page, page_size)
     return ok(scorecard)
 
 
