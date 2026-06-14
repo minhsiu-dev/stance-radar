@@ -187,7 +187,6 @@
       "empty": "沒有影片。",
       "actionFailed": "操作失敗:{message}",
       "queued": "已排入分析佇列",
-      "loadMore": "載入更多",
       "loaded": "已載入 {loaded} / {total}",
       "loadOlder": "載入更早的影片",
       "loadingOlder": "載入中…",

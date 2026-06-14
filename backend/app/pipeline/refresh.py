@@ -167,7 +167,7 @@ class RefreshRunner:
             return len(new_videos)
 
     async def _run_load_older(self, job_id: int, *, channel_id: str) -> None:
-        """為單一頻道載入更早的影片(walk past 已知區塊),一律進 discovered。"""
+        """為單一頻道載入更早的影片(walk past 已知區塊),一律進 skipped。"""
         deps = self._deps
         async with deps.sessionmaker() as session:
             channel = await session.get(Channel, channel_id)
@@ -184,10 +184,11 @@ class RefreshRunner:
         })
 
     async def _ingest_older_channel_videos(self, channel: Channel) -> int:
-        """載入該頻道較舊的未知影片,一律 status=discovered,回傳新增數。
+        """載入該頻道較舊的未知影片,一律 status=skipped,回傳新增數。
 
-        老影片是使用者手動 backfill 的範圍,不走 auto_analyze,
-        永遠進 discovered 讓使用者挑選。
+        老影片是使用者手動往回挖的範圍:預設不需要再 review,直接進 skipped
+        (不進 discovered 待挑選、也不走 auto_analyze)。使用者若想分析某部,
+        仍可在頻道頁對個別 skipped 影片按「分析」。
         """
         deps = self._deps
         async with deps.sessionmaker() as session:
@@ -208,7 +209,7 @@ class RefreshRunner:
                     id=info.id, channel_id=channel.id, title=info.title,
                     published_at=info.published_at, thumbnail_url=info.thumbnail_url,
                     duration_seconds=durations.get(info.id),
-                    status=VideoStatus.discovered,
+                    status=VideoStatus.skipped,
                 ))
             row = await session.get(Channel, channel.id)
             row.last_refreshed_at = utcnow()

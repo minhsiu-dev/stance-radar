@@ -17,7 +17,7 @@ async def _seed_alpha_trimmed(api) -> None:
         await s.commit()
 
 
-async def test_load_older_pulls_older_videos_as_discovered(api):
+async def test_load_older_pulls_older_videos_as_skipped(api):
     app, client = api
     await _seed_alpha_trimmed(api)
 
@@ -43,9 +43,9 @@ async def test_load_older_pulls_older_videos_as_discovered(api):
     by_id = {vid: status for vid, status in rows}
     # 兩部較舊的回來了
     assert set(by_id) == {"alpha_vid_1", "alpha_vid_2", "alpha_vid_3"}
-    # 新加入的兩部一律是 discovered(使用者待挑選)
-    assert by_id["alpha_vid_1"] == VideoStatus.discovered
-    assert by_id["alpha_vid_2"] == VideoStatus.discovered
+    # 往回挖的較舊影片一律進 skipped(預設不需 review)
+    assert by_id["alpha_vid_1"] == VideoStatus.skipped
+    assert by_id["alpha_vid_2"] == VideoStatus.skipped
 
 
 async def test_load_older_missing_channel_404(api):

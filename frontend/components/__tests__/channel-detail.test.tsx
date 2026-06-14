@@ -1,8 +1,39 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { ChannelDetail } from "@/components/channel-detail";
+
+// 可控的 IntersectionObserver:記住每個 observe 的 (callback, element),
+// 讓測試針對「捲動 sentinel」手動觸發載入(頁面上可能有多個 observer)。
+let observed: { cb: IntersectionObserverCallback; el: Element }[] = [];
+class MockIntersectionObserver {
+  cb: IntersectionObserverCallback;
+  constructor(cb: IntersectionObserverCallback) {
+    this.cb = cb;
+  }
+  observe(el: Element) {
+    observed.push({ cb: this.cb, el });
+  }
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+}
+
+function scrollToSentinel() {
+  const hits = observed.filter(
+    (o) => o.el?.getAttribute?.("data-testid") === "load-more-sentinel",
+  );
+  const hit = hits[hits.length - 1];
+  act(() => {
+    hit?.cb(
+      [{ isIntersecting: true, target: hit.el } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+  });
+}
 
 vi.mock("@/i18n/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -200,6 +231,11 @@ function pagedVideos(total: number) {
 }
 
 describe("ChannelDetail", () => {
+  // afterEach 的 unstubAllGlobals 會還原 IntersectionObserver,故每個 test 前重裝
+  beforeEach(() => {
+    observed = [];
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -234,22 +270,27 @@ describe("ChannelDetail", () => {
     ).toBeInTheDocument();
   });
 
-  it("loads videos in pages of 50 with a load-more button", async () => {
+  it("loads videos in pages of 50 via infinite scroll", async () => {
     const fetcher = renderDetail(pagedVideos(120));
     // switch to videos tab first (scorecard is now the default)
     fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
-    // 第一頁:50 部影片 + 計數器 + 載入更多按鈕
+    // 第一頁:50 部影片 + 計數器 + 捲動 sentinel(沒有「載入更多」按鈕)
     expect(await screen.findByText("Video 1")).toBeInTheDocument();
     expect(screen.getByText("Video 50")).toBeInTheDocument();
     expect(screen.queryByText("Video 51")).not.toBeInTheDocument();
     expect(screen.getByText("50 of 120 loaded")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Load more" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("load-more-sentinel")).toBeInTheDocument();
 
     // 跨頁批次選取:第一頁勾的影片,載入第二頁後要保持勾選
     const firstCheckbox = screen.getByRole("checkbox", { name: "Video 1" });
     fireEvent.click(firstCheckbox);
     expect(screen.getByText("1 selected")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    // 捲到 sentinel → 自動載入下一頁
+    scrollToSentinel();
     expect(await screen.findByText("Video 51")).toBeInTheDocument();
     expect(screen.getByText("Video 100")).toBeInTheDocument();
     expect(screen.getByText("100 of 120 loaded")).toBeInTheDocument();
@@ -265,10 +306,11 @@ describe("ChannelDetail", () => {
           key.includes("page=2"),
       ),
     ).toBe(true);
-    // 還有第三頁 → 按鈕仍在
+    // 還有第三頁(100<120)→ sentinel 仍在、還不會出現「載入更舊」
+    expect(screen.getByTestId("load-more-sentinel")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Load more" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Load older videos" }),
+    ).not.toBeInTheDocument();
   });
 
   it("select-all toggles every actionable loaded video at once", async () => {
@@ -291,15 +333,17 @@ describe("ChannelDetail", () => {
     expect(screen.getByRole("checkbox", { name: "Video 1" })).not.toBeChecked();
   });
 
-  it("hides load-more when every video is loaded", async () => {
+  it("shows load-older (no sentinel) when every video is loaded", async () => {
     renderDetail(); // 預設 fixture:total 2、items 2
     // switch to videos tab first (scorecard is now the default)
     fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
     expect(await screen.findByText("Analyzed video")).toBeInTheDocument();
     expect(screen.getByText("2 of 2 loaded")).toBeInTheDocument();
+    // 全部載完 → 不再有捲動 sentinel,改成「載入更舊」按鈕
+    expect(screen.queryByTestId("load-more-sentinel")).toBeNull();
     expect(
-      screen.queryByRole("button", { name: "Load more" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Load older videos" }),
+    ).toBeInTheDocument();
   });
 
   it("revalidates the video list after a skip action", async () => {

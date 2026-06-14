@@ -187,7 +187,6 @@
       "empty": "No videos.",
       "actionFailed": "Action failed: {message}",
       "queued": "Queued for analysis",
-      "loadMore": "Load more",
       "loaded": "{loaded} of {total} loaded",
       "loadOlder": "Load older videos",
       "loadingOlder": "Loading…",

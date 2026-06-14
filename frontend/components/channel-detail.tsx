@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
@@ -102,7 +102,6 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
   const {
     data: videoPages,
     error: videosError,
-    size,
     setSize,
     isValidating,
     mutate: mutateVideos,
@@ -111,6 +110,28 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
   const videosTotal = videoPages?.[0]?.total ?? 0;
   const videosLoaded = videoPages !== undefined;
   const hasMore = videoItems.length < videosTotal;
+  // 捲到底自動載入下一頁(已在 DB 的影片),取代「載入更多」按鈕。
+  // 用 callback ref 而非 useEffect:sentinel 在 TabsContent 內,mount 時機與本
+  // component 的 render 不同步;callback ref 會在節點實際掛載時才接上 observer。
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      if (!node) return;
+      const obs = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && !isValidating && hasMore) {
+            setSize((s) => s + 1);
+          }
+        },
+        { rootMargin: "200px" },
+      );
+      obs.observe(node);
+      observerRef.current = obs;
+    },
+    [setSize, isValidating, hasMore],
+  );
 
   // 全選只作用在「已載入且可操作」的影片(尊重目前的狀態篩選)
   const actionableIds = useMemo(
@@ -436,35 +457,40 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
                   busy={busy}
                 />
               ))}
-              {videosLoaded && (
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                  {videoItems.length > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      {t("videos.loaded", {
-                        loaded: videoItems.length,
-                        total: videosTotal,
-                      })}
-                    </span>
-                  )}
-                  {hasMore && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={isValidating}
-                      onClick={() => setSize(size + 1)}
+              {videosLoaded && videoItems.length > 0 && (
+                <div className="space-y-3 pt-2">
+                  <p className="text-center text-xs text-muted-foreground">
+                    {t("videos.loaded", {
+                      loaded: videoItems.length,
+                      total: videosTotal,
+                    })}
+                  </p>
+                  {hasMore ? (
+                    // 捲到底自動載入下一頁;sentinel 進入視窗即觸發 setSize
+                    <div
+                      ref={sentinelRef}
+                      data-testid="load-more-sentinel"
+                      className="py-2"
                     >
-                      {t("videos.loadMore")}
-                    </Button>
+                      {isValidating && (
+                        <Skeleton className="mx-auto h-8 w-full" />
+                      )}
+                    </div>
+                  ) : (
+                    // DB 內影片都載完了 → 往回挖更舊的影片(進 skipped,免 review)
+                    <div className="flex justify-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={loadOlder}
+                      >
+                        {busy
+                          ? t("videos.loadingOlder")
+                          : t("videos.loadOlder")}
+                      </Button>
+                    </div>
                   )}
-                  {/* 較舊的影片可能不在目前 DB 分頁內,故按鈕永遠顯示 */}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={loadOlder}
-                  >
-                    {busy ? t("videos.loadingOlder") : t("videos.loadOlder")}
-                  </Button>
                 </div>
               )}
             </CardContent>
