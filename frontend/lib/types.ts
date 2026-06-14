@@ -185,6 +185,7 @@ export interface StanceSummary {
   neutral: number;
   sell: number;
   window_days: number;
+  channels: { id: string; title: string; thumbnail_url: string | null }[];
 }
 
 export type FinancialsPeriod = "quarterly" | "annual";

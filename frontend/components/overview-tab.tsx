@@ -12,7 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
-import { formatMarketCap } from "@/lib/format";
 import type {
   AnalystData,
   FinancialReport,
@@ -20,17 +19,14 @@ import type {
   StockSummary,
 } from "@/lib/types";
 import { AnalystCard } from "@/components/analyst-card";
+import { ChannelAvatar } from "@/components/channel-avatar";
 import { FinancialsChart } from "@/components/financials-chart";
-import { GrowthMargins } from "@/components/growth-margins";
+import { GrowthTable, MarginsChart } from "@/components/growth-margins";
 import { cn } from "@/lib/utils";
 
 const WINDOW_OPTIONS = [30, 90, 180, 365] as const;
 const ALL_WINDOW = 3650;
-
-function yoy(latest: number | null, prior: number | null): number | null {
-  if (latest == null || prior == null || prior === 0) return null;
-  return (latest - prior) / prior;
-}
+const MAX_AVATARS = 10;
 
 export function OverviewTab({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.overview");
@@ -67,17 +63,18 @@ export function OverviewTab({ ticker }: { ticker: string }) {
   if (!financials || !summary || !stock)
     return <Skeleton className="h-48 w-full" />;
 
-  const latest = financials.at(-1);
-  const prior = financials.length >= 5 ? financials.at(-5) : undefined;
   const maxStance = Math.max(summary.buy, summary.neutral, summary.sell, 1);
+  const channels = summary.channels ?? [];
+  const shownAvatars = channels.slice(0, MAX_AVATARS);
+  const extraAvatars = channels.length - shownAvatars.length;
 
   const stanceTitleKey = windowDays === ALL_WINDOW ? "ytStanceAll" : "ytStance";
   const stanceTitleArgs = windowDays === ALL_WINDOW ? undefined : { days: windowDays };
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+      <div className="grid gap-4 md:grid-cols-2 md:items-stretch">
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-y-1 space-y-0">
             <CardTitle>
               {stanceTitleArgs ? t(stanceTitleKey, stanceTitleArgs) : t(stanceTitleKey)}
@@ -93,22 +90,32 @@ export function OverviewTab({ ticker }: { ticker: string }) {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <Bar label={tStance("buy")} count={summary.buy} max={maxStance} color="bg-sky-500" />
-            <Bar label={tStance("neutral")} count={summary.neutral} max={maxStance} color="bg-zinc-400" />
-            <Bar label={tStance("sell")} count={summary.sell} max={maxStance} color="bg-orange-500" />
+          <CardContent className="flex flex-1 flex-col gap-4">
+            <div className="space-y-2">
+              <Bar label={tStance("buy")} count={summary.buy} max={maxStance} color="bg-sky-500" />
+              <Bar label={tStance("neutral")} count={summary.neutral} max={maxStance} color="bg-zinc-400" />
+              <Bar label={tStance("sell")} count={summary.sell} max={maxStance} color="bg-orange-500" />
+            </div>
+            {shownAvatars.length > 0 && (
+              <div className="mt-auto flex items-center gap-2 border-t pt-3">
+                <span className="text-xs text-muted-foreground">
+                  {t("channelsLabel", { count: channels.length })}
+                </span>
+                <div className="flex -space-x-1.5">
+                  {shownAvatars.map((c) => (
+                    <span key={c.id} className="rounded-full ring-2 ring-background">
+                      <ChannelAvatar title={c.title} thumbnail={c.thumbnail_url ?? ""} />
+                    </span>
+                  ))}
+                </div>
+                {extraAvatars > 0 && (
+                  <span className="text-xs text-muted-foreground">+{extraAvatars}</span>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("latestQuarter")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Row label={t("revenue")} latest={latest?.total_revenue ?? null} prior={prior?.total_revenue ?? null} format={formatMarketCap} />
-            <Row label={t("netIncome")} latest={latest?.net_income ?? null} prior={prior?.net_income ?? null} format={formatMarketCap} />
-            <Row label={t("eps")} latest={stock.eps} prior={null} format={(v) => (v == null ? "—" : v.toFixed(2))} />
-          </CardContent>
-        </Card>
+        <GrowthTable reports={financials} />
       </div>
       <Card>
         <CardHeader>
@@ -119,45 +126,8 @@ export function OverviewTab({ ticker }: { ticker: string }) {
         </CardContent>
       </Card>
       <div className="grid gap-4 md:grid-cols-2">
-        <GrowthMargins reports={financials} />
+        <MarginsChart reports={financials} />
         {analyst && <AnalystCard data={analyst} price={stock.price} />}
-      </div>
-    </div>
-  );
-}
-
-function Row({
-  label,
-  latest,
-  prior,
-  format,
-}: {
-  label: string;
-  latest: number | null;
-  prior: number | null;
-  format: (v: number | null) => string;
-}) {
-  const change = yoy(latest, prior);
-  return (
-    <div className="flex items-baseline justify-between">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <div className="flex items-baseline gap-2">
-        <span className="font-medium">{format(latest)}</span>
-        {change != null && (
-          <span
-            className={cn(
-              "text-xs",
-              change >= 0
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-rose-600 dark:text-rose-400",
-            )}
-          >
-            {change >= 0 ? "▲" : "▼"} {(change * 100).toFixed(1)}%
-          </span>
-        )}
-        {change == null && (
-          <span className="text-xs text-muted-foreground">—</span>
-        )}
       </div>
     </div>
   );

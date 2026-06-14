@@ -240,7 +240,21 @@ async def stance_summary(
     counts = {"buy": 0, "neutral": 0, "sell": 0}
     for stance, c in rows:
         counts[stance.value] = c
-    return ok({**counts, "window_days": days})
+
+    # 該窗內對這檔有立場的頻道(去重),給前端顯示頭像
+    chan_rows = (await session.execute(
+        select(Channel.id, Channel.title, Channel.thumbnail_url)
+        .join(Video, Video.channel_id == Channel.id)
+        .join(VideoStance, VideoStance.video_id == Video.id)
+        .where(VideoStance.ticker == ticker.upper())
+        .where(Video.published_at >= cutoff)
+        .distinct()
+    )).all()
+    channels = [
+        {"id": cid, "title": title, "thumbnail_url": thumb}
+        for cid, title, thumb in chan_rows
+    ]
+    return ok({**counts, "window_days": days, "channels": channels})
 
 
 @router.get("/{ticker}/stances")

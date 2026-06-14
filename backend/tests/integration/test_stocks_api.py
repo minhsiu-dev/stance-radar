@@ -178,11 +178,12 @@ async def test_stance_summary_shape(api):
     res = await client.get("/api/stocks/AAPL/stance-summary")
     assert res.status_code == 200
     body = res.json()["data"]
-    assert set(body.keys()) == {"buy", "neutral", "sell", "window_days"}
+    assert set(body.keys()) == {"buy", "neutral", "sell", "window_days", "channels"}
     assert body["window_days"] == 90
     assert isinstance(body["buy"], int)
     assert isinstance(body["neutral"], int)
     assert isinstance(body["sell"], int)
+    assert isinstance(body["channels"], list)
 
 
 @pytest.mark.asyncio
@@ -191,7 +192,9 @@ async def test_stance_summary_unknown_ticker_returns_zero_counts(api):
     res = await client.get("/api/stocks/ZZZZ/stance-summary")
     assert res.status_code == 200
     body = res.json()["data"]
-    assert body == {"buy": 0, "neutral": 0, "sell": 0, "window_days": 90}
+    assert body == {
+        "buy": 0, "neutral": 0, "sell": 0, "window_days": 90, "channels": [],
+    }
 
 
 @pytest.mark.asyncio
@@ -377,6 +380,8 @@ async def test_stance_summary_counts_distinct_channels(api, sessionmaker):
     assert body["buy"] == 2     # channel A (once, despite 2 videos) + channel B
     assert body["sell"] == 1    # channel B
     assert body["neutral"] == 0
+    # channels:窗內對 TSLA 有立場的頻道去重(A、B 各一次)
+    assert {c["id"] for c in body["channels"]} == {"cA", "cB"}
 
 
 @pytest.mark.asyncio
