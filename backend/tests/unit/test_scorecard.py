@@ -133,3 +133,32 @@ def test_aggregate_sell_win_means_price_dropped():
     assert sell7["avg_return"] == 1.0
     assert sell7["win_rate"] == 50.0
     assert sell7["avg_alpha"] == -4.0  # 只平均有 alpha 的樣本
+
+
+async def test_build_scorecard_page_no_aggregates_voo_benchmark():
+    from app.insights.scorecard import build_scorecard_page
+
+    store = StubStore({
+        "AAPL": _linear_candles("AAPL"),
+        "VOO": _linear_candles("SPY"),  # flat → alpha == raw return
+    })
+    published = datetime(2026, 1, 10, 12, 0, tzinfo=timezone.utc)
+    raw = [{
+        "video_id": "v1", "video_title": "t1", "ticker": "AAPL",
+        "stance": "buy", "confidence": "high", "summary": "s",
+        "published_at": published,
+    }]
+    result = await build_scorecard_page(
+        store, raw, total=5, page=2, page_size=1,
+    )
+    assert result["benchmark"] == "VOO"
+    assert result["total"] == 5
+    assert result["page"] == 2
+    assert result["page_size"] == 1
+    assert result["horizons"] == [7, 30, 90]
+    assert "aggregates" not in result
+    assert len(result["calls"]) == 1
+    call = result["calls"][0]
+    assert call["ticker"] == "AAPL"
+    assert call["returns"]["7"] == pytest.approx(6.42, abs=0.01)
+    assert call["alpha"]["7"] == call["returns"]["7"]  # flat VOO
