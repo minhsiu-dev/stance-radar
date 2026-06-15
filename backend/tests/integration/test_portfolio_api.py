@@ -158,3 +158,30 @@ async def test_put_negative_cash_rejected(api):
     _, client = api
     resp = await client.put("/api/portfolio/cash", json={"amount": -1})
     assert resp.status_code == 400
+
+
+async def test_holdings_includes_cash_in_totals_and_weights(api):
+    _, client = api
+    await client.post("/api/portfolio/transactions", json={
+        "ticker": "AAPL", "side": "buy", "shares": 10, "price": 100,
+        "executed_on": "2026-01-02",
+    })
+    await client.put("/api/portfolio/cash", json={"amount": 1000})
+    data = (await client.get("/api/portfolio/holdings")).json()["data"]
+    totals = data["totals"]
+    assert totals["cash"] == 1000
+    assert totals["total_value"] == round(totals["market_value"] + 1000, 2)
+    hold_w = sum(h["weight"] for h in data["holdings"] if h["weight"] is not None)
+    assert totals["cash_weight"] is not None
+    assert abs(hold_w + totals["cash_weight"] - 100) < 0.2
+
+
+async def test_holdings_zero_cash_unchanged(api):
+    _, client = api
+    await client.post("/api/portfolio/transactions", json={
+        "ticker": "AAPL", "side": "buy", "shares": 10, "price": 100,
+        "executed_on": "2026-01-02",
+    })
+    totals = (await client.get("/api/portfolio/holdings")).json()["data"]["totals"]
+    assert totals["cash"] == 0
+    assert totals["total_value"] == totals["market_value"]

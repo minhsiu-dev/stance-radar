@@ -182,12 +182,12 @@ async def holdings(
         total_cost += cost
         if value is not None:
             total_value += value
+    cash = float(await get_cash(session))
+    denom = total_value + cash
     for row in rows:
-        if row["market_value"] is not None and total_value:
-            row["weight"] = round(row["market_value"] / total_value * 100, 2)
+        if row["market_value"] is not None and denom:
+            row["weight"] = round(row["market_value"] / denom * 100, 2)
     rows.sort(key=lambda r: -(r["market_value"] or 0))
-    # All quotes failed -> total market value/PL returns None (shows "—"), to avoid misleading $0;
-    # partial failure keeps the best-effort sum (rows missing a price already show null price themselves)
     all_quotes_missing = bool(rows) and all(
         r["market_value"] is None for r in rows
     )
@@ -202,6 +202,12 @@ async def holdings(
             "unrealized_pl_percent": (
                 round((total_value - total_cost) / total_cost * 100, 2)
                 if total_cost and not all_quotes_missing else None
+            ),
+            "cash": round(cash, 2),
+            "total_value": None if all_quotes_missing else round(total_value + cash, 2),
+            "cash_weight": (
+                round(cash / denom * 100, 2)
+                if denom and not all_quotes_missing else None
             ),
         },
     })
