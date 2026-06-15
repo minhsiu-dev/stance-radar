@@ -82,7 +82,7 @@ export function VideoMentions({
                   {t("mentionCount", { count: g.mentions.length })}
                 </span>
                 {g.summary && (
-                  <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                  <span className="min-w-0 flex-1 break-words text-sm text-muted-foreground">
                     {g.summary}
                   </span>
                 )}
