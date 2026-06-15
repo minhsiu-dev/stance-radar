@@ -1,8 +1,19 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { PortfolioChart } from "@/components/portfolio-chart";
 import { PortfolioHoldingsTable } from "@/components/portfolio-holdings-table";
 import { PortfolioSummary } from "@/components/portfolio-summary";
 import { PortfolioTransactions } from "@/components/portfolio-transactions";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "Nav" });
+  return { title: t("portfolio") };
+}
 
 export default async function PortfolioPage() {
   const t = await getTranslations("Portfolio");
