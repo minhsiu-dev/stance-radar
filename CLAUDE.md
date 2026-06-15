@@ -1,23 +1,26 @@
 # CLAUDE.md
 
-給在這個 repo 工作的 agent 的指引。功能面看 `README.md`,這裡只記開發 / 測試
-要注意的地方。
+Guidance for agents working in this repo. For the feature-level picture see
+`README.md`; this file only records things to watch out for during development /
+testing.
 
-## 架構
+## Architecture
 
-三容器:Next.js(:3000)→ FastAPI(:8000)→ Postgres(:5432),定義在
-`docker-compose.yml`。
+Three containers: Next.js (:3000) → FastAPI (:8000) → Postgres (:5432), defined in
+`docker-compose.yml`.
 
-外部服務(YouTube Data API / youtube-transcript-api / Claude Code CLI / yfinance)
-都走 adapter 介面,注入點在 `backend/app/main.py` 的 `build_adapters()`:
-`USE_FAKE_ADAPTERS=true` 時換成確定性假資料(`FakeYouTubeClient` /
-`FakeTranscriptClient` / `FakeLLMClient` / `FakeMarketClient`),否則用真實 client。
-測試與假資料試玩都靠這個開關。
+External services (YouTube Data API / youtube-transcript-api / Claude Code CLI /
+yfinance) all go through an adapter interface, wired up in `build_adapters()` in
+`backend/app/main.py`: when `USE_FAKE_ADAPTERS=true` they are swapped for
+deterministic fake data (`FakeYouTubeClient` / `FakeTranscriptClient` /
+`FakeLLMClient` / `FakeMarketClient`), otherwise the real clients are used. Both
+the tests and playing around with fake data rely on this switch.
 
-## 後端測試流程
+## Backend test flow
 
-後端程式碼是在 build 時 `COPY` 進 image 的(見 `backend/Dockerfile`,**沒有**
-source bind-mount),所以改完 code 一定要**先 rebuild** 再跑測試:
+The backend code is `COPY`-ed into the image at build time (see
+`backend/Dockerfile`, there is **no** source bind-mount), so after changing code
+you must **rebuild first** before running the tests:
 
 ```bash
 cd /workspace
@@ -27,30 +30,36 @@ docker exec -w /srv \
   workspace-api-1 sh -c 'unset BACKFILL_LIMIT && python -m pytest tests/ -q --no-cov'
 ```
 
-可把 `tests/` 換成單一檔案或路徑只跑那部分。
+You can replace `tests/` with a single file or path to run only that part.
 
-注意事項:
+Things to note:
 
-- **`BACKFILL_LIMIT` 不要留在 `.env`**:`.env` 會被 compose 帶進容器環境,而
-  `tests/unit/test_config.py::test_defaults` 斷言預設值 `backfill_limit == 30`,
-  環境裡有這個變數就會讓該測試失敗。上面指令的 `unset BACKFILL_LIMIT` 就是為此。
-- **已知 flake**:`tests/integration/test_refresh_api.py::test_trigger_refresh_and_poll_until_done`
-  在跑全套時偶爾受排序影響而失敗,單獨跑會過(pre-existing,非新 bug)。
+- **Do not leave `BACKFILL_LIMIT` in `.env`**: `.env` is pulled into the container
+  environment by compose, and `tests/unit/test_config.py::test_defaults` asserts
+  the default value `backfill_limit == 30`, so having this variable in the
+  environment makes that test fail. The `unset BACKFILL_LIMIT` in the command
+  above is exactly for this reason.
+- **Known flake**: `tests/integration/test_refresh_api.py::test_trigger_refresh_and_poll_until_done`
+  occasionally fails when running the whole suite due to ordering effects, but
+  passes when run on its own (pre-existing, not a new bug).
 
-conftest(`backend/tests/conftest.py`)會自動建 `stance_radar_test` 資料庫,
-`api` fixture 用假 adapter + test db 起完整 ASGI app。
+conftest (`backend/tests/conftest.py`) automatically creates the
+`stance_radar_test` database, and the `api` fixture brings up the full ASGI app
+with fake adapters + the test db.
 
-## 前端測試
+## Frontend test flow
 
-在 host 跑(不進容器):
+Run on the host (not inside the container):
 
 ```bash
 cd /workspace/frontend && npx vitest run && npm run build
 ```
 
-注意:host 上的 `npm run build` 只是**驗證能不能編譯**,不會更新跑在 :3000 的容器。
-frontend 跟 backend 一樣是 `build:` 進 image、**沒有** source bind-mount(見
-`docker-compose.yml`),所以改完前端要 reflect 到 :3000 一定要 rebuild image 再重啟:
+Note: `npm run build` on the host only **verifies that it compiles**, it does not
+update the container running on :3000. Like the backend, the frontend is built
+via `build:` into the image with **no** source bind-mount (see
+`docker-compose.yml`), so to reflect frontend changes on :3000 you must rebuild
+the image and restart:
 
 ```bash
 docker compose build frontend && docker compose up -d frontend
@@ -58,16 +67,18 @@ docker compose build frontend && docker compose up -d frontend
 
 ## E2E
 
-預設流程(host 跑 Playwright):
+Default flow (run Playwright on the host):
 
 ```bash
 docker compose -p stance-e2e -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
 cd e2e && npm test
 ```
 
-磁碟受限環境(如 CI 沙箱)用 opt-in 的 `docker-compose.e2e.lowdisk.yml`:它把
-frontend 改用 `frontend/Dockerfile.e2e`(打包 host 已 build 好的 `.next/standalone`,
-跳過容器內 ~1GB npm ci),搭配 `e2e/Dockerfile.testrunner`(容器內跑 Playwright)。
+For disk-constrained environments (e.g. a CI sandbox), use the opt-in
+`docker-compose.e2e.lowdisk.yml`: it switches the frontend to
+`frontend/Dockerfile.e2e` (which packages the `.next/standalone` already built on
+the host, skipping the ~1GB `npm ci` inside the container), paired with
+`e2e/Dockerfile.testrunner` (running Playwright inside a container).
 
 ```bash
 cd frontend && API_URL=http://api:8000 npm run build && cd ..
@@ -76,60 +87,73 @@ docker compose -p stance-e2e \
   up -d --build
 ```
 
-一般情況不需要——細節見 `docker-compose.e2e.lowdisk.yml` 頂端註解。
+You normally do not need this — see the comment at the top of
+`docker-compose.e2e.lowdisk.yml` for details.
 
-## Migration 規則
+## Migration rules
 
-啟動時 `Base.metadata.create_all` 只**建缺少的 table**,不會改既有 type / column。
-要改既有 table(加 enum 值、加欄位)寫在 `backend/app/db_migrations.py` 的
-`_STATEMENTS`,每條必須冪等(`IF NOT EXISTS`),在 `create_all` 之後執行:全新 DB
-這裡全是 no-op,舊 DB 才靠這裡補上。
+At startup `Base.metadata.create_all` only **creates missing tables**; it does not
+change existing types / columns. To change an existing table (add an enum value,
+add a column) write it in `_STATEMENTS` in `backend/app/db_migrations.py`; each
+statement must be idempotent (`IF NOT EXISTS`) and runs after `create_all`: on a
+brand-new DB these are all no-ops, and only an older DB relies on them to be
+backfilled.
 
-## i18n 規則
+## i18n rules
 
-每個 UI 字串都要**同時**進 `frontend/messages/zh-TW.json` 與
-`frontend/messages/en.json`。少了任一邊就算沒寫完。
+Every UI string must go into **both** `frontend/messages/zh-TW.json` **and**
+`frontend/messages/en.json`. Missing either side counts as unfinished.
 
-## 市場資料層
+## Market data layer
 
-- **日 K 線**:`backend/app/market/store.py` 的 `PriceStore` 把日 K 增量落地到
-  Postgres(`price_bars` / `price_coverage`),DB 為準、只對缺口批次打 yfinance,
-  並會偵測分割 / 除權息造成的序列重新調整而整檔重抓。記分板、圖表的歷史價走這裡。
-- **其餘**:即時報價、盤中、搜尋、財報、分析師資料只用記憶體 TTL 快取
-  (`backend/app/market/client.py` 的 `YFinanceMarketClient`,各自不同 TTL),
-  不落地 DB。
+- **Daily K-line (candles)**: `PriceStore` in `backend/app/market/store.py`
+  incrementally persists daily candles to Postgres (`price_bars` /
+  `price_coverage`), with the DB as the source of truth, only batching calls to
+  yfinance for gaps, and detecting series re-adjustments caused by splits /
+  dividends and re-fetching the whole symbol. The scoreboard and chart historical
+  prices go through this.
+- **Everything else**: real-time quotes, intraday, search, financials, and analyst
+  data use only an in-memory TTL cache (`YFinanceMarketClient` in
+  `backend/app/market/client.py`, each with its own TTL); they are not persisted
+  to the DB.
 
-## spec / plan 位置
+## Spec / plan location
 
-- 設計 spec:`docs/superpowers/specs/`
-- 實作計畫:`docs/superpowers/plans/`
+Design specs and implementation plans live under `docs/superpowers/` (`specs/` and
+`plans/`). This directory is git-ignored and kept local-only — it is not published.
 
-## 磁碟 / Docker 空間
+## Disk / Docker space
 
-開發是 Docker-in-Docker:image layers、container overlay、build cache 全部存在
-daemon 容器的 `/var/lib/docker`,跟 repo 共用同一顆 backing disk(`df /` 看到的
-~79G overlay)。從 workspace 容器內 `du` 只看得到自己約 2G,docker 那塊要用
-`docker` CLI 看(`docker system df`),不是 `du`。
+Development runs Docker-in-Docker: image layers, container overlay, and build cache
+all live in `/var/lib/docker` of the daemon container, sharing the same backing
+disk as the repo (the ~79G overlay you see with `df /`). From inside the workspace
+container `du` only sees its own ~2G; the docker portion has to be inspected with
+the `docker` CLI (`docker system df`), not `du`.
 
-吃空間的兩個來源:每次 `docker compose build` 累積的 image layer / build cache,
-以及 **E2E 會另外 build 一整套 `stance-e2e-*` image(~2–3G)**。跑完 E2E 或空間
-吃緊時一鍵清:
+There are two things that eat space: the image layers / build cache accumulated by
+each `docker compose build`, and the fact that **E2E builds a whole separate set
+of `stance-e2e-*` images (~2–3G)**. After running E2E or when space is tight,
+clean up in one shot:
 
 ```bash
-make clean-docker      # 拆 E2E stack(含其拋棄式 pgdata)+ prune image/cache;不碰主 DB
+make clean-docker      # tear down the E2E stack (incl. its throwaway pgdata) + prune images/cache; leaves the main DB alone
 ```
 
-`make clean-docker` 不會動 `workspace_pgdata`(你的持股/分析資料)。要連 volume 全清
-(會刪掉主 DB)才用 `make clean-docker-all`,它會先要你打 `yes` 確認。
-（沒裝 make 時等價於 `docker compose -p stance-e2e down -v --remove-orphans &&
-docker image prune -af && docker builder prune -af`。)
+`make clean-docker` does not touch `workspace_pgdata` (your holdings / analysis
+data). To wipe everything including volumes (which deletes the main DB) use
+`make clean-docker-all`, which first asks you to type `yes` to confirm.
+(Without make installed this is equivalent to `docker compose -p stance-e2e down
+-v --remove-orphans && docker image prune -af && docker builder prune -af`.)
 
-**磁碟滿(100%)會害死 Postgres**:它 WAL redo 完、寫 end-of-recovery checkpoint
-時 `No space left on device` → PANIC → 重啟 → 無限迴圈,`db` 變 unhealthy、所有
-`/api/portfolio/*` 回 500(`CannotConnectNowError: ... in recovery mode`)。
-資料沒壞(redo 已完成),只是寫不進去。處理:先清出空間(上面的 prune),再
-`docker compose restart db`,幾秒就會 healthy。
+**A full (100%) disk will kill Postgres**: when it finishes WAL redo and writes the
+end-of-recovery checkpoint it hits `No space left on device` → PANIC → restart →
+infinite loop, `db` goes unhealthy, and all `/api/portfolio/*` return 500
+(`CannotConnectNowError: ... in recovery mode`). The data is not corrupted (redo
+already completed), it just can't write. To fix: free up space first (the prune
+above), then `docker compose restart db`, and it will be healthy within seconds.
 
-79G 大半是 host 共用、非我們可控;真正能回收的只有上面那些 docker artifact。要更大
-空間得在開這個 sandbox 的那層(雲端 workspace 磁碟設定 / VM volume / Docker Desktop
-的 virtual disk limit)調,容器內無法改。
+Most of the 79G is shared by the host and outside our control; the only thing
+actually reclaimable is the docker artifacts above. For more space you have to
+adjust it at the layer that opens this sandbox (cloud workspace disk settings / VM
+volume / Docker Desktop's virtual disk limit); it cannot be changed from inside
+the container.
