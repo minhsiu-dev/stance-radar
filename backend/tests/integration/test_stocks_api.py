@@ -22,7 +22,7 @@ async def test_list_mentioned_stocks_with_counts(api):
     app, client = await seed(api)
     resp = await client.get("/api/stocks")
     data = resp.json()["data"]
-    # AAPL 2 筆 mention、NVDA 2 筆、TSLA 1 筆;依次數降冪
+    # AAPL has 2 mentions, NVDA 2, TSLA 1; ordered by count descending
     assert data[0]["ticker"] in {"AAPL", "NVDA"}
     assert {row["ticker"]: row["mention_count"] for row in data} == {
         "AAPL": 2, "NVDA": 2, "TSLA": 1,
@@ -48,7 +48,7 @@ async def test_candles_default_range_and_invalid_range(api):
     resp = await client.get("/api/stocks/AAPL/candles")
     body = resp.json()
     data = body["data"]
-    # 預設 1y → 現在走 PriceStore,日數由日曆天數決定(250–270 個交易日)
+    # default 1y -> now goes through PriceStore; day count derived from calendar days (250-270 trading days)
     assert len(data) > 200
     assert "time" in body["data"][0]
     assert "date" not in body["data"][0]
@@ -62,7 +62,7 @@ async def test_stock_stances_ascending_for_chart(api):
     app, client = await seed(api)
     resp = await client.get("/api/stocks/AAPL/stances")
     data = resp.json()["data"]
-    assert [row["video_id"] for row in data] == ["beta_vid_2", "alpha_vid_3"]  # 舊→新
+    assert [row["video_id"] for row in data] == ["beta_vid_2", "alpha_vid_3"]  # old -> new
     assert data[1] == {
         "video_id": "alpha_vid_3",
         "video_title": "AAPL 財報解讀",
@@ -79,14 +79,14 @@ async def test_stock_mentions_grouped_per_video_with_deep_links(api):
     app, client = await seed(api)
     resp = await client.get("/api/stocks/AAPL/mentions")
     data = resp.json()["data"]
-    assert [row["video_id"] for row in data] == ["alpha_vid_3", "beta_vid_2"]  # 新→舊
+    assert [row["video_id"] for row in data] == ["alpha_vid_3", "beta_vid_2"]  # new -> old
     first = data[0]
-    # 影片層級欄位
-    assert first["stance"] == "buy"  # 來自 VideoStance(整部影片總體立場)
+    # video-level fields
+    assert first["stance"] == "buy"  # from VideoStance (the video's overall stance)
     assert first["summary"] == "財報強勁,整體看多 AAPL"
     assert first["channel_thumbnail"] is not None
     assert first["youtube_url"] == "https://www.youtube.com/watch?v=alpha_vid_3"
-    # 巢狀 mentions:每次提及一筆,含 deep link
+    # nested mentions: one row per mention, with a deep link
     m = first["mentions"][0]
     assert m["start_seconds"] == 12.5
     assert m["youtube_url"] == "https://www.youtube.com/watch?v=alpha_vid_3&t=12s"
@@ -106,7 +106,7 @@ async def test_stock_mentions_one_row_per_video_with_multiple_timestamps(api, se
             published_at=datetime.now(timezone.utc) - timedelta(hours=1),
             thumbnail_url="", duration_seconds=60, status=VideoStatus.analyzed,
         ))
-        # 同一部影片三次提及,逐筆 stance 不一致,且沒有 VideoStance 列
+        # same video mentioned three times, with inconsistent per-mention stance and no VideoStance row
         for sec, stance in ((10.0, Stance.buy), (20.0, Stance.buy), (30.0, Stance.sell)):
             s.add(Mention(video_id="v_multi", ticker="AMD", start_seconds=sec,
                           quote=f"q{sec}", stance=stance, reasoning="r"))
@@ -114,10 +114,10 @@ async def test_stock_mentions_one_row_per_video_with_multiple_timestamps(api, se
 
     resp = await client.get("/api/stocks/AMD/mentions")
     data = resp.json()["data"]
-    assert len(data) == 1  # 一部影片只有一列
+    assert len(data) == 1  # one video yields a single row
     row = data[0]
     assert [m["start_seconds"] for m in row["mentions"]] == [10.0, 20.0, 30.0]
-    assert row["stance"] == "buy"  # 無 VideoStance 時取逐筆多數決
+    assert row["stance"] == "buy"  # with no VideoStance, take the per-mention majority vote
     assert row["channel_thumbnail"] == "http://x/a.jpg"
 
 
@@ -313,9 +313,9 @@ async def test_daily_candles_served_from_price_store(api):
     body = resp.json()
     assert resp.status_code == 200 and body["success"]
     assert len(body["data"]) > 30
-    # 日 K time 是 YYYY-MM-DD 字串
+    # daily-bar time is a YYYY-MM-DD string
     assert all(isinstance(c["time"], str) for c in body["data"])
-    # 第二次呼叫直接走 DB(不會壞)
+    # the second call goes straight to the DB (does not break)
     resp2 = await client.get("/api/stocks/AAPL/candles?range=3m")
     assert resp2.json()["data"] == body["data"]
 
@@ -380,7 +380,7 @@ async def test_stance_summary_counts_distinct_channels(api, sessionmaker):
     assert body["buy"] == 2     # channel A (once, despite 2 videos) + channel B
     assert body["sell"] == 1    # channel B
     assert body["neutral"] == 0
-    # channels:窗內對 TSLA 有立場的頻道去重(A、B 各一次)
+    # channels: distinct channels that had a stance on TSLA within the window (A and B, once each)
     assert {c["id"] for c in body["channels"]} == {"cA", "cB"}
 
 

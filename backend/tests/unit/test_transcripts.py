@@ -13,7 +13,7 @@ from app.transcripts.client import (
 
 
 @dataclass(frozen=True)
-class Candidate:  # 模擬 youtube-transcript-api 的 Transcript 物件介面
+class Candidate:  # mimics the Transcript object interface of youtube-transcript-api
     language_code: str
     is_generated: bool
 
@@ -28,7 +28,7 @@ def test_select_prefers_manual_zh_tw_first():
 
 
 def test_select_falls_through_priority_then_generated():
-    # 沒有 zh-TW/zh/en 手動字幕 → 取 priority 內的自動字幕
+    # no manual zh-TW/zh/en subtitles -> take auto-generated within priority
     candidates = [Candidate("ja", False), Candidate("en", True)]
     assert select_best(candidates) == Candidate("en", True)
 

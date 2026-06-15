@@ -31,7 +31,7 @@ async def _ensure_test_database() -> None:
 async def engine():
     await _ensure_test_database()
     from app.db import Base
-    from app import models  # noqa: F401  # 註冊 models
+    from app import models  # noqa: F401  # register models
 
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.begin() as conn:
@@ -55,7 +55,7 @@ async def sessionmaker(engine):
 
 @pytest.fixture
 async def api(engine, monkeypatch):
-    """(app, client) — fake adapters + test db 的完整 ASGI app。"""
+    """(app, client) — full ASGI app with fake adapters + test db."""
     monkeypatch.setenv("USE_FAKE_ADAPTERS", "true")
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
     from app.config import get_settings
@@ -75,7 +75,7 @@ async def api(engine, monkeypatch):
 
 
 async def wait_refresh(app) -> None:
-    """等待背景 refresh job 完成(測試輔助)。"""
+    """Wait for the background refresh job to finish (test helper)."""
     runner = app.state.runner
     if runner.current_task is not None:
         await runner.current_task

@@ -258,7 +258,7 @@ async def test_fake_daily_history_is_deterministic_and_weekdays_only():
     assert set(out) == {"AAPL", "VOO"}
     aapl = out["AAPL"]
     assert all(date.fromisoformat(c.time).weekday() < 5 for c in aapl)
-    # 同一天的收盤價跨呼叫一致(store 的 overlap 比對依賴這點)
+    # the same day's close is consistent across calls (the store's overlap comparison relies on this)
     again = await fake.get_daily_history(["AAPL"], date(2026, 5, 15), date(2026, 5, 31))
     by_date = {c.time: c.close for c in again["AAPL"]}
     for c in aapl:

@@ -30,10 +30,10 @@ def test_portfolio_values_starts_at_latest_first_bar_and_forward_fills():
     values = portfolio_values(
         {"A": Decimal("1"), "B": Decimal("1")},
         {
-            # B 比 A 晚上市 → 序列從 B 的第一天開始
+            # B listed later than A -> series starts at B's first day
             "A": [bar("2026-06-01", 10.0), bar("2026-06-02", 11.0),
                   bar("2026-06-03", 12.0)],
-            "B": [bar("2026-06-02", 100.0)],  # 6/3 缺 → 沿用 100
+            "B": [bar("2026-06-02", 100.0)],  # 6/3 missing -> carry forward 100
         },
     )
     assert values == [
@@ -49,7 +49,7 @@ def test_portfolio_values_empty_when_no_bars():
 def test_slice_for_range_date_based():
     values = [(date(2026, m, 1), float(m)) for m in range(1, 7)]
     out = slice_for_range(values, "3m", today=date(2026, 6, 12))
-    # 起點 = 今天 - 93 天 = 2026-03-11 → 第一根 ≥ 該日為 4/1
+    # start = today - 93 days = 2026-03-11 -> first bar >= that date is 4/1
     assert out[0] == (date(2026, 4, 1), 4.0)
     assert out[-1] == (date(2026, 6, 1), 6.0)
 

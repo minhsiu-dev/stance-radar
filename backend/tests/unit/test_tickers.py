@@ -22,6 +22,6 @@ async def test_caches_results_per_ticker():
     market = CountingMarket({"AAPL"})
     validator = TickerValidator(market)
     await validator.is_valid("AAPL")
-    await validator.is_valid("aapl")   # 正規化後同一檔
+    await validator.is_valid("aapl")   # same ticker after normalization
     await validator.is_valid(" AAPL ")
     assert market.calls == 1

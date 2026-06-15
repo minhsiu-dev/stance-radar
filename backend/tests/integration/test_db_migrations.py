@@ -4,7 +4,7 @@ from app.db_migrations import run_startup_migrations
 
 
 async def test_startup_migrations_idempotent(engine):
-    # 跑兩次都不能丟錯(全部語句必須冪等)
+    # Running twice must not raise (all statements must be idempotent)
     await run_startup_migrations(engine)
     await run_startup_migrations(engine)
 

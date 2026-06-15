@@ -16,8 +16,8 @@ async def test_add_channels_resolves_and_triggers_refresh(api, session):
 
     await wait_refresh(app)
     statuses = (await session.execute(select(Video.status))).scalars().all()
-    assert len(statuses) == 6  # 自動觸發 discover 撈進影片
-    assert set(statuses) == {VideoStatus.discovered}  # 但不自動分析
+    assert len(statuses) == 6  # auto-triggered discover pulls in videos
+    assert set(statuses) == {VideoStatus.discovered}  # but does not auto-analyze
 
     listed = await client.get("/api/channels")
     assert [c["id"] for c in listed.json()["data"]] == ["UC_fake_alpha", "UC_fake_beta"]
@@ -65,7 +65,7 @@ async def test_handle_and_id_for_same_channel_dedupes(api):
     assert resp.status_code == 200, resp.text
     data = resp.json()["data"]
     assert [c["id"] for c in data["added"]] == ["UC_fake_alpha"]
-    # 第二個(同一頻道)被視為重複略過,回報原始 token
+    # The second (same channel) is treated as a duplicate and skipped, reporting the original token
     assert data["skipped"] == ["UC_fake_alpha"]
     await wait_refresh(app)
 

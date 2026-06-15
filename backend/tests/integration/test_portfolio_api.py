@@ -58,7 +58,7 @@ async def test_performance_summary_and_range(api):
     app, client = api
     resp = await client.get("/api/portfolio/performance/summary")
     data = resp.json()["data"]
-    assert data["portfolio"] is None  # 空持股
+    assert data["portfolio"] is None  # empty holdings
     assert "1y" in data["voo"]["changes"]
 
     await add_tx(client)
@@ -71,7 +71,7 @@ async def test_performance_summary_and_range(api):
     data = resp.json()["data"]
     assert data["portfolio"]["series"][0]["value"] == 100.0
     assert data["voo"]["series"][0]["value"] == 100.0
-    # 三條序列起點對齊
+    # the three series share the same start point
     assert data["voo"]["series"][0]["date"] == data["portfolio"]["series"][0]["date"]
 
     resp = await client.get("/api/portfolio/performance?range=1d")
@@ -119,18 +119,19 @@ async def test_one_day_change_treats_missing_change_as_flat(api):
     app.state.market = FlatMarket()
     resp = await client.get("/api/portfolio/performance?range=1d")
     data = resp.json()["data"]
-    # change=None 視為 0 → 組合 1d 變化 0%
+    # change=None treated as 0 -> portfolio 1d change is 0%
     assert data["portfolio"]["change_percent"] == 0.0
 
 
 async def test_same_day_transactions_do_not_crash_validation(api):
-    """回歸:候選交易的 created_at 在驗證時還是 None(column default 要到
-    INSERT 才生效),與既有同日交易排序比較會 TypeError → 500。"""
+    """Regression: a candidate transaction's created_at is still None at validation
+    time (the column default only takes effect on INSERT), so sorting it against an
+    existing same-day transaction raised TypeError -> 500."""
     app, client = api
     assert (await add_tx(client, ticker="QQQ", executed_on="2026-01-01")).status_code == 200
     resp = await add_tx(client, ticker="VOO", executed_on="2026-01-01")
     assert resp.status_code == 200 and resp.json()["success"]
-    # 同日買後賣(依 created_at 排序在後)也要能過驗證
+    # a same-day sell after the buy (sorted later by created_at) must also pass validation
     resp = await add_tx(
         client, ticker="VOO", side="sell", shares=5, executed_on="2026-01-01"
     )

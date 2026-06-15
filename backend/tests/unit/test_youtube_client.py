@@ -165,17 +165,17 @@ async def test_fake_client_has_seeded_channels():
 
 async def test_fake_list_older_skips_known_and_collects_older():
     yt = FakeYouTubeClient()
-    # 已知最新一部 → 應拿到剩下兩部較舊的(略過已知,不在第一個已知就停)
+    # latest one known -> should get the remaining two older ones (skip known, don't stop at first known)
     older = await yt.list_older_uploads(
         "UU_fake_alpha", known_video_ids={"alpha_vid_3"}, limit=10
     )
     assert [v.id for v in older] == ["alpha_vid_2", "alpha_vid_1"]
-    # limit 生效
+    # limit takes effect
     one = await yt.list_older_uploads(
         "UU_fake_alpha", known_video_ids={"alpha_vid_3"}, limit=1
     )
     assert [v.id for v in one] == ["alpha_vid_2"]
-    # 全部已知 → 空
+    # all known -> empty
     assert await yt.list_older_uploads(
         "UU_fake_alpha",
         known_video_ids={"alpha_vid_1", "alpha_vid_2", "alpha_vid_3"},
@@ -184,7 +184,7 @@ async def test_fake_list_older_skips_known_and_collects_older():
 
 
 async def test_data_api_list_older_walks_past_known_block():
-    # 真實 client:略過 known(continue),走到較舊的影片,而非在第一個 known 就停
+    # real client: skip known (continue), walk to older videos rather than stopping at first known
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,

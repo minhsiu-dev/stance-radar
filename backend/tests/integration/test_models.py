@@ -41,7 +41,7 @@ async def test_roundtrip_all_tables(session):
     await session.commit()
 
     loaded = (await session.execute(select(Video))).scalar_one()
-    assert loaded.status == VideoStatus.pending  # 預設值
+    assert loaded.status == VideoStatus.pending  # default value
     assert loaded.duration_seconds is None
     mention = (await session.execute(select(Mention))).scalar_one()
     assert mention.stance == Stance.buy
@@ -68,7 +68,7 @@ async def test_delete_channel_cascades(session):
 
     for model in (Video, Mention, VideoStance):
         count = (await session.execute(select(func.count()).select_from(model))).scalar_one()
-        assert count == 0, f"{model.__name__} 應被 DB-level cascade 刪除"
+        assert count == 0, f"{model.__name__} should be removed by DB-level cascade"
 
 
 async def test_mention_persists_context_columns(sessionmaker):

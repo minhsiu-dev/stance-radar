@@ -31,7 +31,7 @@ async def test_discovered_videos_grouped_by_channel(api):
     assert alpha["channel"]["title"] == "頻道 Alpha"
     assert [v["id"] for v in alpha["videos"]] == [
         "alpha_vid_3", "alpha_vid_2", "alpha_vid_1",
-    ]  # 新→舊
+    ]  # new -> old
     first = alpha["videos"][0]
     assert first["status"] == "discovered"
     assert first["duration_seconds"] == 600
@@ -48,7 +48,7 @@ async def test_feed_hides_discovered_and_skipped(api):
     app, client = api
     await add_channels_and_discover(app, client)
     feed = (await client.get("/api/feed")).json()["data"]
-    assert feed["total"] == 0  # 未挑選不進 feed
+    assert feed["total"] == 0  # unselected videos do not enter the feed
 
     resp = await client.post(
         "/api/videos/skip", json={"video_ids": ["alpha_vid_1"]}
@@ -76,7 +76,7 @@ async def test_analyze_selected_videos_only(api):
 async def test_skip_then_rediscover_does_not_resurrect(api):
     app, client = api
     await add_channels_and_discover(app, client)
-    # alpha_vid_3 是最新影片(分頁停止點),略過它最容易觸發復活 bug
+    # alpha_vid_3 is the newest video (pagination stop point); skipping it most easily triggers the resurrection bug
     resp = await client.post(
         "/api/videos/skip", json={"video_ids": ["alpha_vid_3"]}
     )
@@ -85,7 +85,7 @@ async def test_skip_then_rediscover_does_not_resurrect(api):
     await client.post("/api/refresh")
     await wait_refresh(app)
     resp = await client.get("/api/videos", params={"status": "discovered"})
-    assert resp.json()["data"]["total"] == 5  # 不會多出重複的 alpha_vid_3
+    assert resp.json()["data"]["total"] == 5  # no duplicate alpha_vid_3 appears
 
 
 async def test_skipped_video_recoverable_via_analyze(api):
@@ -119,7 +119,7 @@ async def test_analyze_unknown_video_404(api):
     )
     assert resp.status_code == 404
     assert "nope" in resp.json()["error"]
-    # 整批拒絕:有效影片不可被改動
+    # reject the whole batch: valid videos must not be modified
     app_session = app.state.sessionmaker
     async with app_session() as s:
         video = await s.get(Video, "alpha_vid_3")
@@ -135,7 +135,7 @@ async def test_analyze_empty_list_400(api):
 async def test_video_detail_groups_mentions_by_ticker(api):
     app, client = api
     await add_channels_and_discover(app, client)
-    # 拿一部會被分析成 analyzed 的影片
+    # pick a video that will be analyzed to the analyzed status
     await analyze(client, app, ["alpha_vid_3"])
     feed = (await client.get("/api/feed")).json()["data"]
     vid = feed["items"][0]["video_id"]
@@ -145,7 +145,7 @@ async def test_video_detail_groups_mentions_by_ticker(api):
     data = resp.json()["data"]
 
     assert data["video"]["id"] == vid
-    assert data["video"]["channel"]["id"]  # 有帶頻道
+    assert data["video"]["channel"]["id"]  # channel is included
     assert data["video"]["status"] == "analyzed"
 
     groups = data["groups"]
@@ -158,7 +158,7 @@ async def test_video_detail_groups_mentions_by_ticker(api):
         "start_seconds", "quote", "stance", "confidence",
         "time_horizon", "is_conditional", "condition",
     }
-    # 組內依秒數遞增
+    # within a group, ordered by ascending seconds
     secs = [x["start_seconds"] for x in g["mentions"]]
     assert secs == sorted(secs)
 

@@ -49,7 +49,7 @@ async def run_job(runner: RefreshRunner, kind: JobKind) -> int:
 
 
 async def select_all_for_analysis(sessionmaker) -> None:
-    """模擬使用者在挑選頁全選:discovered → pending。"""
+    """Simulate the user selecting all on the picker page: discovered -> pending."""
     async with sessionmaker() as s:
         await s.execute(
             update(Video)
@@ -129,7 +129,7 @@ async def test_skipped_videos_do_not_resurrect_on_rediscover(session, sessionmak
     runner = make_runner(sessionmaker)
     await run_job(runner, JobKind.discover)
     async with sessionmaker() as s:
-        # 略過最新的影片(分頁停止點),重跑 discover 不可復活或重複匯入
+        # skip the newest video (pagination stop point); rerunning discover must not resurrect or re-import it
         video = await s.get(Video, "alpha_vid_3")
         video.status = VideoStatus.skipped
         await s.commit()
@@ -154,7 +154,7 @@ async def test_backfill_limit_applies_to_new_channels(session, sessionmaker):
     await seed_channels(session)
     runner = make_runner(sessionmaker, settings=make_settings(backfill_limit=2))
     await run_job(runner, JobKind.discover)
-    assert await count(session, Video) == 4  # 每頻道只取最新 2 部
+    assert await count(session, Video) == 4  # only the newest 2 per channel
 
 
 async def test_failed_video_retried_after_reselect_without_duplicates(
@@ -178,7 +178,7 @@ async def test_failed_video_retried_after_reselect_without_duplicates(
     assert video.status == VideoStatus.failed
     assert "temporary failure" in video.error_message
 
-    # 重試 = 使用者把 failed 影片重新設回 pending(analyze endpoint 的行為)
+    # retry = the user sets the failed video back to pending (the analyze endpoint's behavior)
     async with sessionmaker() as s:
         retry = await s.get(Video, "alpha_vid_3")
         retry.status = VideoStatus.pending
@@ -191,11 +191,11 @@ async def test_failed_video_retried_after_reselect_without_duplicates(
         select(func.count()).select_from(Mention)
         .where(Mention.video_id == "alpha_vid_3")
     )).scalar_one()
-    assert mention_count == 1  # 重跑不重複
+    assert mention_count == 1  # rerun does not duplicate
 
 
 async def test_leftover_pending_swept_by_next_analyze(session, sessionmaker):
-    """上次中斷殘留的 pending,下一個 analyze job 要撿走(resume 語意)。"""
+    """A pending video left over from a previous interruption must be picked up by the next analyze job (resume semantics)."""
     await seed_channels(session)
     runner = make_runner(sessionmaker)
     await run_job(runner, JobKind.discover)
@@ -236,7 +236,7 @@ async def test_concurrent_start_returns_same_job(session, sessionmaker):
     job_id, created = await runner.start(JobKind.discover)
     job_id2, created2 = await runner.start(JobKind.analyze)
     assert created is True and created2 is False
-    assert job_id == job_id2  # discover 與 analyze 共用單一 job 鎖
+    assert job_id == job_id2  # discover and analyze share a single job lock
     await runner.current_task
 
 
@@ -268,7 +268,7 @@ async def test_refresh_pipeline_populates_mention_context(session, sessionmaker)
         )).scalars().all()
     assert mentions, "expected at least one mention for alpha_vid_3"
     aapl = next(m for m in mentions if m.ticker == "AAPL")
-    # 新格式:excerpt 是錨點(12.5s)前後合成的單段原文,含錨點本身與前後鄰句
+    # new format: excerpt is a single composed passage around the anchor (12.5s), including the anchor itself and its neighboring sentences
     assert aapl.excerpt == "今天來看蘋果的財報 蘋果這季財報很強,我會買 以上是今天的內容"
     assert aapl.context_before is None
     assert aapl.context_after is None

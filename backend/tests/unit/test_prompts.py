@@ -4,7 +4,7 @@ from app.transcripts.client import TranscriptSegment
 
 def test_system_prompt_contains_core_rules():
     assert "US-listed stock" in SYSTEM_PROMPT
-    assert "AAPL" in SYSTEM_PROMPT  # 正規化範例
+    assert "AAPL" in SYSTEM_PROMPT  # normalization example
     assert "record_analysis" in SYSTEM_PROMPT
 
 

@@ -17,7 +17,7 @@ def test_includes_anchor_and_immediate_neighbours_merged():
         _seg(10.0, "Follow-up sentence"),
     )
     out = excerpt_around(segs, start_seconds=5.0)
-    # 一整段連續文字:含錨點本身與前後鄰句
+    # one continuous block of text: includes the anchor itself plus its neighbours
     assert out == "Intro talk Anchor sentence here Follow-up sentence"
 
 
@@ -40,7 +40,7 @@ def test_accumulates_short_segments_up_to_limit_each_side():
 def test_caps_each_side_by_char_budget():
     segs = tuple(_seg(float(i), f"seg{i:02d}") for i in range(40))
     out = excerpt_around(segs, start_seconds=20.0, max_chars_each_side=10)
-    # 不會無限制累積整份逐字稿
+    # does not accumulate the entire transcript without limit
     assert "seg20" in out
     assert "seg00" not in out
     assert "seg39" not in out
@@ -65,5 +65,5 @@ def test_anchor_between_segments_uses_nearest_preceding():
         _seg(20.0, "Third"),
     )
     out = excerpt_around(segs, start_seconds=14.5, max_chars_each_side=5)
-    # 錨點落在 Second:含前一句 First 與後一句 Third
+    # anchor lands on Second: includes the preceding First and following Third
     assert out == "First Second Third"
