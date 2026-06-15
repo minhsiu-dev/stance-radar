@@ -132,8 +132,10 @@ the `docker` CLI (`docker system df`), not `du`.
 
 There are two things that eat space: the image layers / build cache accumulated by
 each `docker compose build`, and the fact that **E2E builds a whole separate set
-of `stance-e2e-*` images (~2–3G)**. After running E2E or when space is tight,
-clean up in one shot:
+of `stance-e2e-*` images (~2–3G)**. Frequently rebuilding the api / frontend
+images during development (e.g. the rebuild-before-pytest loop) also accumulates
+layers and can fill the disk on its own, so run `make clean-docker` periodically
+even without E2E. After running E2E or when space is tight, clean up in one shot:
 
 ```bash
 make clean-docker      # tear down the E2E stack (incl. its throwaway pgdata) + prune images/cache; leaves the main DB alone
