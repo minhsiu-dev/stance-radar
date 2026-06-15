@@ -1,0 +1,2 @@
+# keep this folder present for the frontend Dockerfile (COPY public ./public)
+# drop static assets (screenshots, og images) here
