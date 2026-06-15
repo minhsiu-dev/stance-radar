@@ -1,0 +1,28 @@
+# Opt-in override: route the api's scraping (transcripts + yfinance) through a
+# rotating NordVPN exit via gluetun. Bring up with:
+#   docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
+# Requires OPENVPN_USER / OPENVPN_PASSWORD / SERVER_COUNTRIES in .env (see .env.example).
+services:
+  gluetun:
+    image: qdm12/gluetun:v3.40.0
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      VPN_SERVICE_PROVIDER: nordvpn
+      VPN_TYPE: openvpn
+      OPENVPN_USER: ${OPENVPN_USER}
+      OPENVPN_PASSWORD: ${OPENVPN_PASSWORD}
+      SERVER_COUNTRIES: ${SERVER_COUNTRIES:-United States}
+      HTTPPROXY: "on"
+      HTTPPROXY_LISTENING_ADDRESS: ":8888"
+      # control server defaults to :8000 (unauthenticated) — used by ProxyRotator
+
+  api:
+    environment:
+      FETCH_PROXY_URL: http://gluetun:8888
+      GLUETUN_CONTROL_URL: http://gluetun:8000
+    depends_on:
+      gluetun:
+        condition: service_healthy
