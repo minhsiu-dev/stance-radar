@@ -22,9 +22,12 @@ const messages = {
     watchOnYoutube: "Open on YouTube",
     mentionsHeading: "Mentions & stances",
     mentionCount: "{count} mentions",
-    jumpHint: "jump",
+    stockCount: "{count} stocks",
     noMentions: "No mentions",
     viewStock: "Stock page",
+  },
+  Stock: {
+    stance: { buy: "Buy", neutral: "Neutral", sell: "Sell" },
   },
 };
 

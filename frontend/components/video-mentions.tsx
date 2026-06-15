@@ -14,6 +14,12 @@ import { formatSeconds } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { VideoDetailGroup } from "@/lib/types";
 
+const STANCE_ACCENT: Record<string, string> = {
+  buy: "border-l-sky-500",
+  neutral: "border-l-zinc-400",
+  sell: "border-l-orange-500",
+};
+
 export function VideoMentions({
   groups,
   onSeek,
@@ -60,18 +66,20 @@ export function VideoMentions({
                 ref={isHighlight ? highlightRef : undefined}
                 className={cn("rounded-lg", isHighlight && "ring-2 ring-primary")}
               >
-                <Card className="flex flex-wrap items-center gap-2 p-3">
-                  <Link
-                    href={`/stocks/${g.ticker}`}
-                    className="font-mono font-semibold hover:underline"
-                  >
-                    {g.ticker}
-                  </Link>
-                  <StanceBadge stance={g.stance} confidence={g.confidence} />
+                <Card className={cn("border-l-4 p-3", STANCE_ACCENT[g.stance])}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/stocks/${g.ticker}`}
+                      className="font-mono font-semibold hover:underline"
+                    >
+                      {g.ticker}
+                    </Link>
+                    <StanceBadge stance={g.stance} confidence={g.confidence} />
+                  </div>
                   {g.summary && (
-                    <span className="min-w-0 flex-1 break-words text-sm text-muted-foreground">
+                    <p className="mt-1.5 break-words text-sm text-muted-foreground">
                       {g.summary}
-                    </span>
+                    </p>
                   )}
                 </Card>
               </div>
@@ -95,7 +103,7 @@ export function VideoMentions({
                 <button
                   type="button"
                   onClick={() => onSeek(m.start_seconds)}
-                  className="shrink-0 font-mono text-sky-600 hover:underline dark:text-sky-400"
+                  className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-sky-600 hover:bg-muted/70 dark:text-sky-400"
                 >
                   {formatSeconds(m.start_seconds)}
                 </button>
@@ -111,7 +119,7 @@ export function VideoMentions({
                     <HoverCardTrigger
                       delay={150}
                       render={
-                        <span className="min-w-0 flex-1 cursor-help break-words">
+                        <span className="min-w-0 flex-1 cursor-help break-words leading-relaxed">
                           {m.quote}
                         </span>
                       }
@@ -121,7 +129,7 @@ export function VideoMentions({
                     </HoverCardContent>
                   </HoverCard>
                 ) : (
-                  <span className="min-w-0 flex-1 break-words">{m.quote}</span>
+                  <span className="min-w-0 flex-1 break-words leading-relaxed">{m.quote}</span>
                 )}
               </li>
             ))}
