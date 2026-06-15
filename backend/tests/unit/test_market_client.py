@@ -309,3 +309,63 @@ async def test_yfinance_analyst_parses_info_and_recommendations(monkeypatch):
     assert a.recommendations == {
         "strongBuy": 10, "buy": 12, "hold": 6, "sell": 1, "strongSell": 1,
     }
+
+
+import pytest
+from app.market.client import YFinanceMarketClient, StockSummary
+from app.net.proxy import ProxyRotator
+
+
+class _CountingRotator(ProxyRotator):
+    def __init__(self):
+        super().__init__("")
+        self.rotations = 0
+
+    async def rotate(self):
+        self.rotations += 1
+
+
+def _summary(t):
+    return StockSummary(
+        ticker=t, name=t, price=1.0, change=0.0, change_percent=0.0,
+        market_cap=0.0, pe_ratio=None, forward_pe=None, eps=None,
+        week52_high=None, week52_low=None, volume=None, dividend_yield=None,
+    )
+
+
+async def test_market_rotates_on_rate_limit_then_succeeds(monkeypatch):
+    monkeypatch.setattr("yfinance.set_config", lambda **kw: None)
+    rot = _CountingRotator()
+    client = YFinanceMarketClient(proxy_url="http://proxy:8888", rotator=rot)
+    calls = {"n": 0}
+
+    def fake_fetch(ticker):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("429 Too Many Requests")
+        return _summary(ticker)
+
+    monkeypatch.setattr(client, "_fetch_summary", fake_fetch)
+    out = await client.get_summary("AAPL")
+    assert out.ticker == "AAPL"
+    assert rot.rotations == 1 and calls["n"] == 2
+
+
+async def test_market_no_proxy_does_not_rotate(monkeypatch):
+    rot = _CountingRotator()
+    client = YFinanceMarketClient(proxy_url="", rotator=rot)
+
+    def fake_fetch(ticker):
+        raise RuntimeError("429 Too Many Requests")
+
+    monkeypatch.setattr(client, "_fetch_summary", fake_fetch)
+    with pytest.raises(RuntimeError):
+        await client.get_summary("AAPL")
+    assert rot.rotations == 0
+
+
+async def test_market_sets_yfinance_proxy(monkeypatch):
+    captured = {}
+    monkeypatch.setattr("yfinance.set_config", lambda **kw: captured.update(kw))
+    YFinanceMarketClient(proxy_url="http://proxy:8888")
+    assert captured.get("proxy") == "http://proxy:8888"

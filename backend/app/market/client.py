@@ -6,8 +6,15 @@ from datetime import date, timedelta
 from typing import Literal, Protocol
 
 from app.market.cache import TTLCache
+from app.net.proxy import ProxyRotator, with_rotation
 
 logger = logging.getLogger(__name__)
+
+
+def _is_yf_blocked(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "429" in msg or "too many requests" in msg
+
 
 RANGE_TO_FETCH: dict[str, tuple[str, str]] = {
     "1d":  ("1d",  "5m"),
@@ -100,7 +107,12 @@ class MarketClient(Protocol):
 
 
 class YFinanceMarketClient:
-    def __init__(self) -> None:
+    def __init__(self, proxy_url: str = "", rotator: ProxyRotator | None = None) -> None:
+        self._proxy_url = proxy_url
+        self._rotator = rotator or ProxyRotator("")
+        if proxy_url:
+            import yfinance as yf
+            yf.set_config(proxy=proxy_url)
         self._summary_cache = TTLCache(ttl_seconds=900)     # 15 minutes
         self._candles_cache = TTLCache(ttl_seconds=3600)    # 1 hour
         self._exists_cache = TTLCache(ttl_seconds=86400)    # 1 day
@@ -108,11 +120,18 @@ class YFinanceMarketClient:
         self._financials_cache = TTLCache(ttl_seconds=86400) # 24 hours; financials change only once a quarter
         self._analyst_cache = TTLCache(ttl_seconds=86400)  # 24 hours
 
+    async def _call(self, fn, *args):
+        if not self._proxy_url:
+            return await asyncio.to_thread(fn, *args)
+        return await with_rotation(
+            lambda: asyncio.to_thread(fn, *args), _is_yf_blocked, self._rotator
+        )
+
     async def get_summary(self, ticker: str) -> StockSummary:
         cached = self._summary_cache.get(ticker)
         if cached is not None:
             return cached
-        summary = await asyncio.to_thread(self._fetch_summary, ticker)
+        summary = await self._call(self._fetch_summary, ticker)
         self._summary_cache.set(ticker, summary)
         return summary
 
@@ -123,7 +142,7 @@ class YFinanceMarketClient:
         cached = self._candles_cache.get(key)
         if cached is not None:
             return cached
-        candles = await asyncio.to_thread(self._fetch_candles, ticker, range_key)
+        candles = await self._call(self._fetch_candles, ticker, range_key)
         self._candles_cache.set(key, candles)
         return candles
 
@@ -131,7 +150,7 @@ class YFinanceMarketClient:
         cached = self._exists_cache.get(ticker)
         if cached is not None:
             return cached
-        exists = await asyncio.to_thread(self._check_exists, ticker)
+        exists = await self._call(self._check_exists, ticker)
         self._exists_cache.set(ticker, exists)
         return exists
 
@@ -198,7 +217,7 @@ class YFinanceMarketClient:
         cached = self._search_cache.get(q)
         if cached is not None:
             return cached
-        hits = await asyncio.to_thread(self._fetch_search, q)
+        hits = await self._call(self._fetch_search, q)
         self._search_cache.set(q, hits)
         return hits
 
@@ -238,7 +257,7 @@ class YFinanceMarketClient:
         cached = self._financials_cache.get(key)
         if cached is not None:
             return cached
-        reports = await asyncio.to_thread(self._fetch_financials, ticker, period)
+        reports = await self._call(self._fetch_financials, ticker, period)
         self._financials_cache.set(key, reports)
         return reports
 
@@ -281,7 +300,7 @@ class YFinanceMarketClient:
     ) -> dict[str, list[Candle]]:
         """Fetch daily candles for multiple tickers in one HTTP call (used by PriceStore for incremental
         backfill); does not use the cache -- the caller (PriceStore) treats the DB as the source of truth."""
-        return await asyncio.to_thread(self._fetch_daily_history, tickers, start, end)
+        return await self._call(self._fetch_daily_history, tickers, start, end)
 
     def _fetch_daily_history(
         self, tickers: list[str], start: date, end: date
@@ -324,7 +343,7 @@ class YFinanceMarketClient:
         cached = self._analyst_cache.get(ticker)
         if cached is not None:
             return cached
-        data = await asyncio.to_thread(self._fetch_analyst, ticker)
+        data = await self._call(self._fetch_analyst, ticker)
         self._analyst_cache.set(ticker, data)
         return data
 
