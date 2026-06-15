@@ -21,7 +21,7 @@ services:
       # ⚠️ host-local only — DO NOT expose these to the public internet (open HTTP
       # proxy + a control server that can stop/rotate your VPN).
       - "8888:8888"   # HTTP proxy (scrapers fetch through this)
-      - "8000:8000"   # control server (used by the app to rotate the exit IP)
+      - "8001:8000"   # control server (rotation). Host 8001 because the api already uses 8000.
     environment:
       VPN_SERVICE_PROVIDER: nordvpn
       VPN_TYPE: openvpn

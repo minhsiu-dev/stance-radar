@@ -6,11 +6,12 @@
 #   # 2) in the DinD sandbox: docker compose -f docker-compose.yml -f docker-compose.vpn-remote.yml up -d
 #
 # Quick reachability check from the sandbox once the host gluetun is up:
-#   docker exec <project>-api-1 python -c "import httpx; print(httpx.get('http://host.docker.internal:8000/v1/publicip/ip', timeout=5).json())"
+#   docker exec <project>-api-1 python -c "import httpx; print(httpx.get('http://host.docker.internal:8001/v1/publicip/ip', timeout=5).json())"
 services:
   api:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
       FETCH_PROXY_URL: http://host.docker.internal:8888
-      GLUETUN_CONTROL_URL: http://host.docker.internal:8000
+      # control server is published on host 8001 by docker-compose.gluetun.yml (8000 = api)
+      GLUETUN_CONTROL_URL: http://host.docker.internal:8001
