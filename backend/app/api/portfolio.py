@@ -15,6 +15,7 @@ from app.envelope import fail, ok
 from app.market.client import MarketClient
 from app.market.store import PriceStore
 from app.models import PortfolioTransaction, TransactionSide, utcnow
+from app.portfolio.cash import get_cash, set_cash
 from app.portfolio.holdings import Holding, InvalidTransaction, replay
 from app.portfolio.performance import (
     PERFORMANCE_RANGES, change_percent, normalize, portfolio_values,
@@ -36,6 +37,10 @@ class TransactionIn(BaseModel):
     price: Decimal = Field(gt=0)
     executed_on: date
     note: str | None = None
+
+
+class CashBody(BaseModel):
+    amount: float
 
 
 def _tx_dict(t: PortfolioTransaction) -> dict:
@@ -115,6 +120,21 @@ async def delete_transaction(
     return ok({"deleted": True})
 
 
+@router.get("/cash")
+async def get_cash_balance(session: AsyncSession = Depends(get_session)):
+    return ok({"amount": float(await get_cash(session))})
+
+
+@router.put("/cash")
+async def put_cash_balance(
+    body: CashBody, session: AsyncSession = Depends(get_session)
+):
+    if body.amount < 0:
+        return fail("cash must be >= 0", status_code=400)
+    await set_cash(session, Decimal(str(body.amount)))
+    return ok({"amount": body.amount})
+
+
 async def _held(session: AsyncSession) -> dict[str, Holding]:
     return replay(await _all_transactions(session))
 
@@ -162,12 +182,12 @@ async def holdings(
         total_cost += cost
         if value is not None:
             total_value += value
+    cash = float(await get_cash(session))
+    denom = total_value + cash
     for row in rows:
-        if row["market_value"] is not None and total_value:
-            row["weight"] = round(row["market_value"] / total_value * 100, 2)
+        if row["market_value"] is not None and denom:
+            row["weight"] = round(row["market_value"] / denom * 100, 2)
     rows.sort(key=lambda r: -(r["market_value"] or 0))
-    # All quotes failed -> total market value/PL returns None (shows "—"), to avoid misleading $0;
-    # partial failure keeps the best-effort sum (rows missing a price already show null price themselves)
     all_quotes_missing = bool(rows) and all(
         r["market_value"] is None for r in rows
     )
@@ -183,12 +203,18 @@ async def holdings(
                 round((total_value - total_cost) / total_cost * 100, 2)
                 if total_cost and not all_quotes_missing else None
             ),
+            "cash": round(cash, 2),
+            "total_value": None if all_quotes_missing else round(total_value + cash, 2),
+            "cash_weight": (
+                round(cash / denom * 100, 2)
+                if denom and not all_quotes_missing else None
+            ),
         },
     })
 
 
 async def _one_day_changes(
-    market: MarketClient, held: dict[str, Holding]
+    market: MarketClient, held: dict[str, Holding], cash: float = 0.0
 ) -> tuple[float | None, dict[str, float | None], float | None]:
     """Return (portfolio 1d %, {benchmark: 1d %}, portfolio current value)."""
     # Holdings missing a quote are simply skipped -> the numbers are best-effort over the "quoted portion";
@@ -212,6 +238,8 @@ async def _one_day_changes(
             continue
         total_now += float(h.shares) * s.price
         total_prev += float(h.shares) * (s.price - (s.change or 0.0))
+    total_now += cash
+    total_prev += cash
     portfolio_1d = (
         round((total_now / total_prev - 1) * 100, 2) if total_prev else None
     )
@@ -229,13 +257,14 @@ async def performance_summary(
     store: PriceStore = Depends(get_price_store),
 ):
     held = await _held(session)
+    cash = float(await get_cash(session))
     today = datetime.now(timezone.utc).date()
     start = min(
         today - timedelta(days=_MAX_HISTORY_DAYS), date(today.year, 1, 1)
     )
     bars = await store.get_daily([*held, *BENCHMARKS], start)
 
-    portfolio_1d, bench_1d, total_value = await _one_day_changes(market, held)
+    portfolio_1d, bench_1d, total_value = await _one_day_changes(market, held, cash)
 
     def changes_for(values) -> dict:
         return {
@@ -255,7 +284,7 @@ async def performance_summary(
     portfolio_payload = None
     if held:
         values = portfolio_values(
-            {t: h.shares for t, h in held.items()}, bars
+            {t: h.shares for t, h in held.items()}, bars, cash=cash
         )
         portfolio_payload = {
             "total_value": total_value,
@@ -280,10 +309,11 @@ async def performance(
             f"range must be one of {', '.join(PERFORMANCE_RANGES)}", status_code=422
         )
     held = await _held(session)
+    cash = float(await get_cash(session))
     today = datetime.now(timezone.utc).date()
 
     if range_key == "1d":
-        portfolio_1d, bench_1d, _ = await _one_day_changes(market, held)
+        portfolio_1d, bench_1d, _ = await _one_day_changes(market, held, cash)
         return ok({
             "range": "1d",
             "effective_start": None,
@@ -302,7 +332,7 @@ async def performance(
     portfolio_sliced = None
     effective_start: date | None = None
     if held:
-        values = portfolio_values({t: h.shares for t, h in held.items()}, bars)
+        values = portfolio_values({t: h.shares for t, h in held.items()}, bars, cash=cash)
         portfolio_sliced = slice_for_range(values, range_key, today)
         if portfolio_sliced:
             effective_start = portfolio_sliced[0][0]

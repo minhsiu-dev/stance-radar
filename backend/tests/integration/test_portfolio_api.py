@@ -136,3 +136,65 @@ async def test_same_day_transactions_do_not_crash_validation(api):
         client, ticker="VOO", side="sell", shares=5, executed_on="2026-01-01"
     )
     assert resp.status_code == 200 and resp.json()["success"]
+
+
+async def test_cash_defaults_to_zero(api):
+    _, client = api
+    resp = await client.get("/api/portfolio/cash")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["amount"] == 0
+
+
+async def test_put_then_get_cash(api):
+    _, client = api
+    put = await client.put("/api/portfolio/cash", json={"amount": 5000})
+    assert put.status_code == 200
+    assert put.json()["data"]["amount"] == 5000
+    got = await client.get("/api/portfolio/cash")
+    assert got.json()["data"]["amount"] == 5000
+
+
+async def test_put_negative_cash_rejected(api):
+    _, client = api
+    resp = await client.put("/api/portfolio/cash", json={"amount": -1})
+    assert resp.status_code == 400
+
+
+async def test_holdings_includes_cash_in_totals_and_weights(api):
+    _, client = api
+    await client.post("/api/portfolio/transactions", json={
+        "ticker": "AAPL", "side": "buy", "shares": 10, "price": 100,
+        "executed_on": "2026-01-02",
+    })
+    await client.put("/api/portfolio/cash", json={"amount": 1000})
+    data = (await client.get("/api/portfolio/holdings")).json()["data"]
+    totals = data["totals"]
+    assert totals["cash"] == 1000
+    assert totals["total_value"] == round(totals["market_value"] + 1000, 2)
+    hold_w = sum(h["weight"] for h in data["holdings"] if h["weight"] is not None)
+    assert totals["cash_weight"] is not None
+    assert abs(hold_w + totals["cash_weight"] - 100) < 0.2
+
+
+async def test_holdings_zero_cash_unchanged(api):
+    _, client = api
+    await client.post("/api/portfolio/transactions", json={
+        "ticker": "AAPL", "side": "buy", "shares": 10, "price": 100,
+        "executed_on": "2026-01-02",
+    })
+    totals = (await client.get("/api/portfolio/holdings")).json()["data"]["totals"]
+    assert totals["cash"] == 0
+    assert totals["total_value"] == totals["market_value"]
+
+
+async def test_performance_summary_total_value_includes_cash(api):
+    _, client = api
+    await client.post("/api/portfolio/transactions", json={
+        "ticker": "AAPL", "side": "buy", "shares": 10, "price": 100,
+        "executed_on": "2026-01-02",
+    })
+    base = (await client.get("/api/portfolio/performance/summary")).json()["data"]
+    base_tv = base["portfolio"]["total_value"]
+    await client.put("/api/portfolio/cash", json={"amount": 2000})
+    after = (await client.get("/api/portfolio/performance/summary")).json()["data"]
+    assert after["portfolio"]["total_value"] == round(base_tv + 2000, 2)

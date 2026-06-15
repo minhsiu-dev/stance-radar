@@ -78,3 +78,17 @@ def test_change_percent_and_normalize():
 def test_change_percent_insufficient_data():
     assert change_percent([]) is None
     assert change_percent([(date(2026, 6, 1), 100.0)]) is None
+
+
+def test_portfolio_values_adds_constant_cash():
+    from app.portfolio.performance import portfolio_values
+    from app.market.client import Candle
+
+    def c(day, close):
+        return Candle(time=day, open=close, high=close, low=close, close=close, volume=1)
+
+    bars = {"A": [c("2026-01-02", 100.0), c("2026-01-05", 110.0)]}
+    no_cash = portfolio_values({"A": Decimal("1")}, bars)
+    with_cash = portfolio_values({"A": Decimal("1")}, bars, cash=50.0)
+    assert [v for _, v in no_cash] == [100.0, 110.0]
+    assert [v for _, v in with_cash] == [150.0, 160.0]

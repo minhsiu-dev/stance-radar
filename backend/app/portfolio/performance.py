@@ -29,7 +29,9 @@ def _daily(bars: list[Candle]) -> list[tuple[date, float]]:
 
 
 def portfolio_values(
-    holdings: dict[str, Decimal], bars_by_ticker: dict[str, list[Candle]]
+    holdings: dict[str, Decimal],
+    bars_by_ticker: dict[str, list[Candle]],
+    cash: float = 0.0,
 ) -> list[tuple[date, float]]:
     series = {t: _daily(bars_by_ticker.get(t, [])) for t in holdings}
     # Holdings with no price data at all (delisted/not found) are excluded from the backtest, so the whole series can still be computed
@@ -48,7 +50,7 @@ def portfolio_values(
                 last_close[t] = s[i][1]
                 i += 1
             iters[t] = i
-        total = sum(
+        total = cash + sum(
             float(holdings[t]) * last_close[t]
             for t in series
             if t in last_close

@@ -104,6 +104,31 @@ export function PortfolioHoldingsTable() {
                     </td>
                   </tr>
                 ))}
+                {data.totals.cash != 0 && (
+                  <tr className="border-b last:border-0">
+                    <td className="py-2 pr-3 font-medium">{t("cash")}</td>
+                    <td className="py-2 pr-3 text-right font-mono tabular-nums">
+                      —
+                    </td>
+                    <td className="py-2 pr-3 text-right font-mono tabular-nums">
+                      —
+                    </td>
+                    <td className="py-2 pr-3 text-right font-mono tabular-nums">
+                      —
+                    </td>
+                    <td className="py-2 pr-3 text-right font-mono tabular-nums">
+                      {masked(hideAmounts, num(data.totals.cash))}
+                    </td>
+                    <td className="py-2 pr-3 text-right font-mono tabular-nums">
+                      —
+                    </td>
+                    <td className="py-2 text-right font-mono tabular-nums">
+                      {data.totals.cash_weight == null
+                        ? "—"
+                        : `${data.totals.cash_weight.toFixed(1)}%`}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -321,7 +321,15 @@
     "totals": {
       "marketValue": "Market value",
       "costBasis": "Cost basis",
-      "unrealizedPl": "Unrealized P/L"
+      "unrealizedPl": "Unrealized P/L",
+      "totalValue": "Total value",
+      "cash": "Cash"
+    },
+    "cashDialog": {
+      "title": "Set cash (USD)",
+      "placeholder": "0.00",
+      "save": "Save",
+      "edit": "Edit"
     },
     "chart": {
       "title": "Portfolio vs VOO / QQQ (start = 100)",
@@ -337,6 +345,7 @@
       "marketValue": "Value",
       "pl": "P/L",
       "weight": "Weight",
+      "cash": "Cash (USD)",
       "empty": "No holdings yet — add a transaction below"
     },
     "transactions": {
