@@ -26,6 +26,23 @@ export interface ChannelItem {
   video_counts?: Partial<Record<VideoStatus, number>>;
 }
 
+export interface WeeklyActivity {
+  week_start: string;
+  total: number;
+  analyzed: number;
+}
+
+export interface ChannelOverviewItem extends ChannelItem {
+  weekly_activity: WeeklyActivity[];
+}
+
+export interface ChannelOverviewResponse {
+  items: ChannelOverviewItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface AddChannelsResult {
   added: ChannelItem[];
   skipped: string[];
