@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeAll } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
@@ -13,30 +13,22 @@ vi.mock("@/i18n/navigation", () => ({
 
 const messages = {
   VideoDetail: {
-    mentionsHeading: "Mentions & stances",
-    mentionCount: "{count} mentions",
-    jumpHint: "Click a timestamp to jump there",
     noMentions: "No mentions",
-    viewStock: "Stock page",
+    byStock: "By stock",
+    quotesByTime: "Quotes (in order)",
   },
 };
 
 const GROUPS: VideoDetailGroup[] = [
   {
-    ticker: "AAPL",
-    stance: "buy",
-    summary: "Bullish on AAPL",
-    confidence: "high",
+    ticker: "AAPL", stance: "buy", summary: "Bullish on AAPL", confidence: "high",
     mentions: [
       { start_seconds: 134, quote: "still going up", excerpt: "raw words around 134", stance: "buy", confidence: "high", time_horizon: null, is_conditional: null, condition: null },
       { start_seconds: 662, quote: "watch earnings", excerpt: null, stance: "neutral", confidence: null, time_horizon: null, is_conditional: null, condition: null },
     ],
   },
   {
-    ticker: "TSLA",
-    stance: "sell",
-    summary: "Too expensive",
-    confidence: "medium",
+    ticker: "TSLA", stance: "sell", summary: "Too expensive", confidence: "medium",
     mentions: [
       { start_seconds: 330, quote: "valuation too high", excerpt: null, stance: "sell", confidence: "medium", time_horizon: null, is_conditional: null, condition: null },
     ],
@@ -55,51 +47,52 @@ beforeAll(() => {
 });
 
 describe("VideoMentions", () => {
-  it("renders one group per ticker with formatted timestamps and quotes", () => {
+  it("Section A shows each ticker's stance + summary, with no quotes", () => {
     wrap(<VideoMentions groups={GROUPS} onSeek={() => {}} initialTicker={null} />);
+    expect(screen.getByText("By stock")).toBeInTheDocument();
     expect(screen.getByText("Bullish on AAPL")).toBeInTheDocument();
     expect(screen.getByText("Too expensive")).toBeInTheDocument();
-    expect(screen.getByText("still going up")).toBeInTheDocument();
-    // 134s → "2:14", 662s → "11:02", 330s → "5:30"
-    expect(screen.getByRole("button", { name: "2:14" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "11:02" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "5:30" })).toBeInTheDocument();
+    const aaplRow = screen.getByTestId("mention-group-AAPL");
+    expect(within(aaplRow).queryByText("still going up")).toBeNull();
+    expect(within(aaplRow).queryByText("watch earnings")).toBeNull();
   });
 
-  it("calls onSeek with the mention's start_seconds when a timestamp is clicked", async () => {
+  it("Section B lists every quote ordered by ascending timestamp across tickers", () => {
+    wrap(<VideoMentions groups={GROUPS} onSeek={() => {}} initialTicker={null} />);
+    expect(screen.getByText("Quotes (in order)")).toBeInTheDocument();
+    const order = screen
+      .getAllByText(/still going up|valuation too high|watch earnings/)
+      .map((e) => e.textContent);
+    // 134 (AAPL) -> 330 (TSLA) -> 662 (AAPL)
+    expect(order).toEqual(["still going up", "valuation too high", "watch earnings"]);
+    expect(screen.getByRole("button", { name: "2:14" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "5:30" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "11:02" })).toBeInTheDocument();
+  });
+
+  it("calls onSeek with the mention start_seconds on timestamp click", async () => {
     const onSeek = vi.fn();
     wrap(<VideoMentions groups={GROUPS} onSeek={onSeek} initialTicker={null} />);
     await userEvent.click(screen.getByRole("button", { name: "5:30" }));
     expect(onSeek).toHaveBeenCalledWith(330);
   });
 
-  it("highlights and scrolls to the initialTicker group", () => {
+  it("highlights + scrolls to the initialTicker row in Section A", () => {
     wrap(<VideoMentions groups={GROUPS} onSeek={() => {}} initialTicker="TSLA" />);
-    const group = screen.getByTestId("mention-group-TSLA");
-    expect(group.className).toContain("ring-2");
+    const row = screen.getByTestId("mention-group-TSLA");
+    expect(row.className).toContain("ring-2");
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 
-  it("shows empty state when there are no groups", () => {
+  it("links tickers to their stock pages", () => {
+    wrap(<VideoMentions groups={GROUPS} onSeek={() => {}} initialTicker={null} />);
+    const links = screen.getAllByRole("link", { name: "AAPL" });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0].getAttribute("href")).toContain("/stocks/AAPL");
+  });
+
+  it("shows the empty state when there are no groups", () => {
     wrap(<VideoMentions groups={[]} onSeek={() => {}} initialTicker={null} />);
     expect(screen.getByText("No mentions")).toBeInTheDocument();
-  });
-
-  it("links the ticker (left) to its stock page", async () => {
-    wrap(<VideoMentions groups={GROUPS} onSeek={() => {}} initialTicker={null} />);
-    const link = screen.getByRole("link", { name: "AAPL" });
-    expect(link.getAttribute("href")).toContain("/stocks/AAPL");
-  });
-
-  it("has no separate right-side stock-page link and no header stance bubble", async () => {
-    wrap(<VideoMentions groups={GROUPS} onSeek={() => {}} initialTicker={null} />);
-    expect(screen.queryByText("Stock page")).toBeNull(); // viewStock link gone
-    // header no longer renders "AAPL · Buy" badge; ticker link is plain "AAPL"
-    expect(screen.queryByText("AAPL · Buy")).toBeNull();
-  });
-
-  it("is expanded by default (mention quotes visible without clicking)", async () => {
-    wrap(<VideoMentions groups={GROUPS} onSeek={() => {}} initialTicker={null} />);
-    expect(screen.getByText("still going up")).toBeInTheDocument();
   });
 });

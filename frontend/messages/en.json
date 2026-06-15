@@ -275,6 +275,8 @@
     "watchOnYoutube": "Open on YouTube",
     "mentionsHeading": "Mentions & stances",
     "mentionCount": "{count} mentions",
+    "byStock": "By stock",
+    "quotesByTime": "Quotes (in order)",
     "jumpHint": "Click a timestamp to jump there",
     "noMentions": "No U.S. stock mentions detected in this video",
     "reanalyze": "Re-analyze",
