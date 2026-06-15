@@ -2,6 +2,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import Iterable, Protocol, Sequence
 
+from app.net.proxy import ProxyRotator, with_rotation
+
 LANGUAGE_PRIORITY = ("zh-TW", "zh", "en")
 
 
@@ -53,16 +55,40 @@ def normalize_segments(raw: Iterable[dict]) -> tuple[TranscriptSegment, ...]:
     return tuple(segments)
 
 
+def _is_transcript_blocked(exc: BaseException) -> bool:
+    from youtube_transcript_api import IpBlocked, RequestBlocked
+    return isinstance(exc, (IpBlocked, RequestBlocked))
+
+
 class YouTubeTranscriptApiClient:
+    def __init__(self, proxy_url: str = "", rotator: ProxyRotator | None = None) -> None:
+        self._proxy_url = proxy_url
+        self._rotator = rotator or ProxyRotator("")
+
     async def fetch(self, video_id: str) -> Transcript:
-        return await asyncio.to_thread(self._fetch_sync, video_id)
+        async def attempt() -> Transcript:
+            return await asyncio.to_thread(self._fetch_sync, video_id)
+
+        if not self._proxy_url:
+            return await attempt()
+        return await with_rotation(attempt, _is_transcript_blocked, self._rotator)
+
+    def _build_api(self):
+        from youtube_transcript_api import YouTubeTranscriptApi
+        if self._proxy_url:
+            from youtube_transcript_api.proxies import GenericProxyConfig
+            return YouTubeTranscriptApi(
+                proxy_config=GenericProxyConfig(
+                    http_url=self._proxy_url, https_url=self._proxy_url
+                )
+            )
+        return YouTubeTranscriptApi()
 
     def _fetch_sync(self, video_id: str) -> Transcript:
-        from youtube_transcript_api import YouTubeTranscriptApi
         from youtube_transcript_api import CouldNotRetrieveTranscript
 
         try:
-            transcript_list = YouTubeTranscriptApi().list(video_id)
+            transcript_list = self._build_api().list(video_id)
             best = select_best(list(transcript_list))
             if best is None:
                 raise TranscriptNotAvailable(video_id)
