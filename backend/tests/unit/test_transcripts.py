@@ -67,3 +67,52 @@ async def test_fake_client_raises_for_no_transcript_video():
     fake = FakeTranscriptClient()
     with pytest.raises(TranscriptNotAvailable):
         await fake.fetch("beta_vid_1")
+
+
+import pytest
+from app.transcripts.client import YouTubeTranscriptApiClient
+from app.net.proxy import ProxyRotator
+
+
+class _CountingRotator(ProxyRotator):
+    def __init__(self):
+        super().__init__("")
+        self.rotations = 0
+
+    async def rotate(self):
+        self.rotations += 1
+
+
+async def test_transcript_rotates_on_ipblocked_then_succeeds(monkeypatch):
+    from app.transcripts.client import Transcript
+    from youtube_transcript_api import IpBlocked
+
+    rot = _CountingRotator()
+    client = YouTubeTranscriptApiClient(proxy_url="http://proxy:8888", rotator=rot)
+    calls = {"n": 0}
+
+    def fake_sync(video_id):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise IpBlocked("blocked")
+        return Transcript("en", ())
+
+    monkeypatch.setattr(client, "_fetch_sync", fake_sync)
+    result = await client.fetch("vid")
+    assert result.language == "en"
+    assert rot.rotations == 1 and calls["n"] == 2
+
+
+async def test_transcript_no_proxy_does_not_rotate(monkeypatch):
+    from youtube_transcript_api import IpBlocked
+
+    rot = _CountingRotator()
+    client = YouTubeTranscriptApiClient(proxy_url="", rotator=rot)
+
+    def fake_sync(video_id):
+        raise IpBlocked("blocked")
+
+    monkeypatch.setattr(client, "_fetch_sync", fake_sync)
+    with pytest.raises(IpBlocked):
+        await client.fetch("vid")
+    assert rot.rotations == 0

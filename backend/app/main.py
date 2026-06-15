@@ -10,6 +10,7 @@ from app.db import Base, create_engine_and_sessionmaker
 from app.db_migrations import run_startup_migrations
 from app.market.client import FakeMarketClient, YFinanceMarketClient
 from app.market.store import PriceStore
+from app.net.proxy import ProxyRotator
 from app.pipeline.jobs import fail_orphan_jobs
 from app.pipeline.refresh import RefreshDeps, RefreshRunner
 from app.pipeline.scheduler import AutoRefreshScheduler
@@ -25,11 +26,16 @@ def build_adapters(settings: Settings) -> dict:
             "llm": FakeLLMClient(),
             "market": FakeMarketClient(),
         }
+    rotator = ProxyRotator(settings.gluetun_control_url)
     return {
         "youtube": DataAPIYouTubeClient(api_key=settings.youtube_api_key),
-        "transcripts": YouTubeTranscriptApiClient(),
+        "transcripts": YouTubeTranscriptApiClient(
+            proxy_url=settings.fetch_proxy_url, rotator=rotator
+        ),
         "llm": ClaudeCLIClient(binary=settings.claude_bin, model=settings.claude_model),
-        "market": YFinanceMarketClient(),
+        "market": YFinanceMarketClient(
+            proxy_url=settings.fetch_proxy_url, rotator=rotator
+        ),
     }
 
 
