@@ -6,8 +6,9 @@ const launchOptions = executablePath ? { executablePath } : {};
 export default defineConfig({
   testDir: "./tests",
   timeout: 60_000,
-  // 所有 spec 共用同一個後端 DB,平行 worker 會互相污染狀態(例如某 spec 新增頻道
-  // 後,golden-path 的「全新加入」分支就不會觸發)。固定單 worker 串行執行。
+  // All specs share one backend DB; parallel workers would pollute each other's
+  // state (e.g. after one spec adds a channel, golden-path's "brand-new add"
+  // branch wouldn't fire). Pin to a single worker and run serially.
   workers: 1,
   use: {
     // Default to localhost for the host-run flow; the containerized test-runner

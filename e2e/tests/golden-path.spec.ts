@@ -10,9 +10,10 @@ test("golden path: add channel → review → analyze → dashboard → stock �
   await expect(page.getByText(/added|already exists/i)).toBeVisible();
 
   // 2. Review page: confirm the default all-checked selection.
-  // discover 是 add 之後的背景工作,挑選頁可能還沒灌入影片;不要依賴「Added vs
-  // Already exists」這條會閃現/被重繪覆蓋的訊息判斷狀態(會 race),改成直接輪詢
-  // 挑選頁:出現 confirm 按鈕就按、若是空的(代表早已分析過)就跳過。
+  // discover runs as a background job after add, so the selection page may not
+  // have videos loaded yet; don't rely on the flickering / re-rendered "Added vs
+  // Already exists" message to decide state (it races). Instead poll the selection
+  // page: click confirm when it appears, or skip if empty (already analyzed).
   await page.goto("/en/review");
   const confirmButton = page.getByRole("button", { name: /analyze selected/i });
   const emptyState = page.getByText(/no videos awaiting review/i);
