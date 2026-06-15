@@ -137,12 +137,8 @@
     },
     "activity": {
       "legend": "發佈 / 已分析",
-      "tooltip": "發佈 {total} 部 · 已分析 {analyzed} 部"
-    },
-    "pager": {
-      "prev": "上一頁",
-      "next": "下一頁",
-      "page": "第 {page} / {pages} 頁"
+      "tooltip": "發佈 {total} 部 · 已分析 {analyzed} 部",
+      "weekOf": "{date} 那週"
     }
   },
   "Review": {

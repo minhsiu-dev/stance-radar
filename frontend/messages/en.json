@@ -137,12 +137,8 @@
     },
     "activity": {
       "legend": "published / analyzed",
-      "tooltip": "{total} published · {analyzed} analyzed"
-    },
-    "pager": {
-      "prev": "Previous",
-      "next": "Next",
-      "page": "Page {page} / {pages}"
+      "tooltip": "{total} published · {analyzed} analyzed",
+      "weekOf": "Week of {date}"
     }
   },
   "Review": {

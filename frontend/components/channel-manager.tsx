@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import useSWR from "swr";
+import { useCallback, useEffect, useRef, useState } from "react";
+import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -17,22 +17,57 @@ const PAGE_SIZE = 10;
 export function ChannelManager() {
   const t = useTranslations("Channels");
   const [message, setMessage] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const { data, mutate } = useSWR<ChannelOverviewResponse>(
-    `/api/channels/overview?page=${page}&page_size=${PAGE_SIZE}`,
-  );
 
-  const items = data?.items ?? [];
-  const total = data?.total ?? 0;
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const getKey = useCallback(
+    (pageIndex: number, previous: ChannelOverviewResponse | null) => {
+      if (previous && previous.items.length < PAGE_SIZE) return null;
+      return `/api/channels/overview?page=${pageIndex + 1}&page_size=${PAGE_SIZE}`;
+    },
+    [],
+  );
+  const { data, mutate, setSize, isValidating } =
+    useSWRInfinite<ChannelOverviewResponse>(getKey);
+
+  const items = (data ?? []).flatMap((p) => p.items);
+  const total = data?.[0]?.total ?? 0;
+  const loaded = data !== undefined;
+  const hasMore = items.length < total;
+
+  // The add dialog can't target this infinite hook's $inf$ key via the global mutate
+  // predicate, so it fires a window event we listen for to revalidate after a channel is added.
+  useEffect(() => {
+    const handler = () => mutate();
+    window.addEventListener("channels:changed", handler);
+    return () => window.removeEventListener("channels:changed", handler);
+  }, [mutate]);
+
+  // Auto-load the next page when the sentinel scrolls into view.
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      if (!node) return;
+      const obs = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && !isValidating && hasMore) {
+            setSize((s) => s + 1);
+          }
+        },
+        { rootMargin: "200px" },
+      );
+      obs.observe(node);
+      observerRef.current = obs;
+    },
+    [setSize, isValidating, hasMore],
+  );
 
   async function remove(channel: ChannelOverviewItem) {
     setMessage(null);
     if (!window.confirm(t("list.removePrompt", { name: channel.title }))) return;
     try {
       await apiFetch(`/api/channels/${channel.id}`, { method: "DELETE" });
-      if (items.length === 1 && page > 1) setPage((p) => p - 1);
-      else await mutate();
+      await mutate();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("list.removeFailed"));
     }
@@ -96,32 +131,12 @@ export function ChannelManager() {
         );
       })}
 
-      {data && total === 0 && (
+      {loaded && total === 0 && (
         <p className="text-sm text-muted-foreground">{t("list.empty")}</p>
       )}
 
-      {total > PAGE_SIZE && (
-        <div className="flex items-center justify-center gap-4 pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            {t("pager.prev")}
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            {t("pager.page", { page, pages })}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= pages}
-            onClick={() => setPage((p) => Math.min(pages, p + 1))}
-          >
-            {t("pager.next")}
-          </Button>
-        </div>
+      {hasMore && (
+        <div ref={sentinelRef} data-testid="load-more-sentinel" className="h-1" />
       )}
     </div>
   );

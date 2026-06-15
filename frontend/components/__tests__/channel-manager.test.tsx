@@ -1,9 +1,54 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { ChannelManager } from "@/components/channel-manager";
 import type { ChannelOverviewItem, ChannelOverviewResponse } from "@/lib/types";
+
+// Controllable IntersectionObserver: remember each observe's (callback, element) so the test
+// can manually fire the scroll sentinel (mirrors the channel-detail infinite-scroll test).
+let observed: { cb: IntersectionObserverCallback; el: Element }[] = [];
+class MockIntersectionObserver {
+  cb: IntersectionObserverCallback;
+  constructor(cb: IntersectionObserverCallback) {
+    this.cb = cb;
+  }
+  observe(el: Element) {
+    observed.push({ cb: this.cb, el });
+  }
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+}
+
+function scrollToSentinel() {
+  const hits = observed.filter(
+    (o) => o.el?.getAttribute?.("data-testid") === "load-more-sentinel",
+  );
+  const hit = hits[hits.length - 1];
+  act(() => {
+    hit?.cb(
+      [{ isIntersecting: true, target: hit.el } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+  });
+}
+
+beforeEach(() => {
+  observed = [];
+  vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+vi.mock("@/i18n/navigation", () => ({
+  Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
 
 const messages = {
   Channels: {
@@ -18,8 +63,7 @@ const messages = {
       autoBadge: "Auto",
       analyzedCount: "{count} analyzed",
     },
-    activity: { legend: "published / analyzed", tooltip: "{total} pub · {analyzed} an" },
-    pager: { prev: "Previous", next: "Next", page: "Page {page} / {pages}" },
+    activity: { legend: "published / analyzed", tooltip: "{total} pub · {analyzed} an", weekOf: "Week of {date}" },
   },
 };
 
@@ -42,8 +86,13 @@ function item(id: string): ChannelOverviewItem {
   };
 }
 
+// total 15: page 1 returns 10 items, page 2 returns 5.
 function page(n: number): ChannelOverviewResponse {
-  return { items: [item(`c${n}`)], total: 15, page: n, page_size: 10 };
+  const ids =
+    n === 1
+      ? Array.from({ length: 10 }, (_, i) => `a${i + 1}`)
+      : Array.from({ length: 5 }, (_, i) => `b${i + 1}`);
+  return { items: ids.map(item), total: 15, page: n, page_size: 10 };
 }
 
 function wrap() {
@@ -62,19 +111,23 @@ function wrap() {
 }
 
 describe("ChannelManager", () => {
-  it("renders rows with activity bars and a working pager", async () => {
+  it("renders the first page with activity bars and loads more on scroll", async () => {
     wrap();
-    expect(await screen.findByText("Channel c1")).toBeInTheDocument();
-    expect(screen.getAllByTestId("bar-total").length).toBe(5);
-    expect(screen.getByText("Page 1 / 2")).toBeInTheDocument();
-    const prev = screen.getByRole("button", { name: "Previous" });
-    const next = screen.getByRole("button", { name: "Next" });
-    expect(prev).toBeDisabled();
-    expect(next).not.toBeDisabled();
+    // First page rows + bars (10 rows × 5 bars).
+    expect(await screen.findByText("Channel a1")).toBeInTheDocument();
+    expect(screen.getByText("Channel a10")).toBeInTheDocument();
+    expect(screen.getAllByTestId("bar-total").length).toBe(50);
+    // Page 2 not loaded yet.
+    expect(screen.queryByText("Channel b1")).not.toBeInTheDocument();
 
-    fireEvent.click(next);
-    expect(await screen.findByText("Channel c2")).toBeInTheDocument();
-    expect(screen.getByText("Page 2 / 2")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    // Scroll the sentinel into view → next page appends.
+    scrollToSentinel();
+    expect(await screen.findByText("Channel b1")).toBeInTheDocument();
+    expect(screen.getByText("Channel b5")).toBeInTheDocument();
+
+    // All 15 loaded → sentinel gone (no further pages).
+    await waitFor(() =>
+      expect(screen.queryByTestId("load-more-sentinel")).not.toBeInTheDocument(),
+    );
   });
 });

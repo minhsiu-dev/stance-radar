@@ -48,6 +48,9 @@ export function AddChannelDialog() {
       if (data.added.length) {
         setInput("");
         await mutate((key) => typeof key === "string" && key.startsWith("/api/channels"));
+        // The channel manager uses useSWRInfinite, whose $inf$ key the predicate above can't
+        // target; signal it explicitly so the list refreshes with the newly added channel.
+        window.dispatchEvent(new Event("channels:changed"));
         setOpen(false);
       }
     } catch (error) {
