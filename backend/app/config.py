@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     claude_model: str = "claude-haiku-4-5"
     backfill_limit: int = 30
     analysis_concurrency: int = 4
+    # Skip imported videos this many seconds or shorter (YouTube Shorts / too-short
+    # clips have no analyzable content); 0 disables the filter
+    shorts_max_seconds: int = 240
     # Auto discover + analyze every N minutes (0 = disabled, stays fully manual)
     auto_refresh_minutes: int = 0
     database_url: str = "postgresql+asyncpg://stance:stance@localhost:5432/stance_radar"

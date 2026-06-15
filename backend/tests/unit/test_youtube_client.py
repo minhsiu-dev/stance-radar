@@ -156,7 +156,7 @@ async def test_fake_client_has_seeded_channels():
     info = await fake.resolve_channel("UC_fake_alpha")
     assert info.uploads_playlist_id == "UU_fake_alpha"
     videos = await fake.list_new_uploads("UU_fake_alpha", known_video_ids=set(), limit=30)
-    assert len(videos) == 3
+    assert len(videos) == 4  # 3 normal videos + 1 short (filtering happens in the pipeline, not the client)
     with pytest.raises(ChannelNotFound):
         await fake.resolve_channel("UC_unknown")
 
@@ -165,20 +165,22 @@ async def test_fake_client_has_seeded_channels():
 
 async def test_fake_list_older_skips_known_and_collects_older():
     yt = FakeYouTubeClient()
-    # latest one known -> should get the remaining two older ones (skip known, don't stop at first known)
+    # one known -> should get the remaining unknown ones (skip known, don't stop at first known).
+    # The client does not filter shorts; alpha_short is the newest entry and is returned here
+    # (the SHORTS_MAX_SECONDS filter is applied in the pipeline, not the client).
     older = await yt.list_older_uploads(
         "UU_fake_alpha", known_video_ids={"alpha_vid_3"}, limit=10
     )
-    assert [v.id for v in older] == ["alpha_vid_2", "alpha_vid_1"]
+    assert [v.id for v in older] == ["alpha_short", "alpha_vid_2", "alpha_vid_1"]
     # limit takes effect
     one = await yt.list_older_uploads(
         "UU_fake_alpha", known_video_ids={"alpha_vid_3"}, limit=1
     )
-    assert [v.id for v in one] == ["alpha_vid_2"]
+    assert [v.id for v in one] == ["alpha_short"]
     # all known -> empty
     assert await yt.list_older_uploads(
         "UU_fake_alpha",
-        known_video_ids={"alpha_vid_1", "alpha_vid_2", "alpha_vid_3"},
+        known_video_ids={"alpha_short", "alpha_vid_1", "alpha_vid_2", "alpha_vid_3"},
         limit=10,
     ) == []
 

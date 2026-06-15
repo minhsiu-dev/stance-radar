@@ -243,6 +243,7 @@ class FakeYouTubeClient:
     }
     UPLOADS = {
         "UU_fake_alpha": [  # newest-to-oldest order, matching the real API
+            _fake_video("alpha_short", "盤中快訊 #shorts", "2026-06-09T12:00:00"),
             _fake_video("alpha_vid_3", "AAPL 財報解讀", "2026-06-08T12:00:00"),
             _fake_video("alpha_vid_2", "NVDA 還能追嗎", "2026-05-25T12:00:00"),
             _fake_video("alpha_vid_1", "大盤閒聊", "2026-05-10T12:00:00"),
@@ -295,5 +296,7 @@ class FakeYouTubeClient:
                 break
         return collected
 
+    FAKE_DURATIONS = {"alpha_short": 45}
+
     async def get_durations(self, video_ids: list[str]) -> dict[str, int]:
-        return {vid: 600 for vid in video_ids}
+        return {vid: self.FAKE_DURATIONS.get(vid, 600) for vid in video_ids}
