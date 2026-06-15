@@ -4,7 +4,7 @@
 # Requires OPENVPN_USER / OPENVPN_PASSWORD / SERVER_COUNTRIES in .env (see .env.example).
 services:
   gluetun:
-    image: qdm12/gluetun:v3.40.0
+    image: qmcgaw/gluetun:v3.40.0
     cap_add:
       - NET_ADMIN
     devices:
