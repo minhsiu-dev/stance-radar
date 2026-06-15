@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     auto_refresh_minutes: int = 0
     database_url: str = "postgresql+asyncpg://stance:stance@localhost:5432/stance_radar"
     use_fake_adapters: bool = False
+    # Opt-in VPN proxy (set by docker-compose.vpn.yml); empty = fetch directly
+    fetch_proxy_url: str = ""
+    gluetun_control_url: str = ""
 
     def validate_required_keys(self) -> None:
         if self.use_fake_adapters:

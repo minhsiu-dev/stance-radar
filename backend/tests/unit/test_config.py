@@ -39,3 +39,5 @@ def test_defaults():
     assert settings.analysis_concurrency == 4
     assert settings.shorts_max_seconds == 240
     assert settings.use_fake_adapters is False
+    assert settings.fetch_proxy_url == ""
+    assert settings.gluetun_control_url == ""
