@@ -26,3 +26,6 @@ audit-*.png
 fix-*.png
 .claude/
 .superpowers/
+
+# Local-only design specs/plans (not published)
+docs/superpowers/
