@@ -21,6 +21,14 @@ from app.youtube.client import QuotaExceededError, YouTubeClient
 logger = logging.getLogger(__name__)
 
 
+def _is_short(duration_seconds: int | None, max_seconds: int) -> bool:
+    """A video at or under max_seconds (a Short / too-short clip) — skip on import.
+
+    Unknown duration (None, e.g. live/premiere) is never treated as a short.
+    """
+    return duration_seconds is not None and duration_seconds <= max_seconds
+
+
 @dataclass
 class RefreshDeps:
     sessionmaker: async_sessionmaker[AsyncSession]
@@ -154,17 +162,22 @@ class RefreshRunner:
                 if channel.auto_analyze and not is_backfill
                 else VideoStatus.discovered
             )
+            max_seconds = deps.settings.shorts_max_seconds
+            added = 0
             for info in new_videos:
+                if _is_short(durations.get(info.id), max_seconds):
+                    continue
                 session.add(Video(
                     id=info.id, channel_id=channel.id, title=info.title,
                     published_at=info.published_at, thumbnail_url=info.thumbnail_url,
                     duration_seconds=durations.get(info.id),
                     status=ingest_status,
                 ))
+                added += 1
             row = await session.get(Channel, channel.id)
             row.last_refreshed_at = utcnow()
             await session.commit()
-            return len(new_videos)
+            return added
 
     async def _run_load_older(self, job_id: int, *, channel_id: str) -> None:
         """Load older videos for a single channel (walking past the known block); all go to skipped."""
@@ -204,17 +217,22 @@ class RefreshRunner:
                 await deps.youtube.get_durations([v.id for v in older_videos])
                 if older_videos else {}
             )
+            max_seconds = deps.settings.shorts_max_seconds
+            added = 0
             for info in older_videos:
+                if _is_short(durations.get(info.id), max_seconds):
+                    continue
                 session.add(Video(
                     id=info.id, channel_id=channel.id, title=info.title,
                     published_at=info.published_at, thumbnail_url=info.thumbnail_url,
                     duration_seconds=durations.get(info.id),
                     status=VideoStatus.skipped,
                 ))
+                added += 1
             row = await session.get(Channel, channel.id)
             row.last_refreshed_at = utcnow()
             await session.commit()
-            return len(older_videos)
+            return added
 
     async def _process_video(self, video_id: str) -> None:
         deps = self._deps

@@ -37,4 +37,5 @@ def test_defaults():
     assert settings.claude_model == "claude-haiku-4-5"
     assert settings.backfill_limit == 30
     assert settings.analysis_concurrency == 4
+    assert settings.shorts_max_seconds == 240
     assert settings.use_fake_adapters is False

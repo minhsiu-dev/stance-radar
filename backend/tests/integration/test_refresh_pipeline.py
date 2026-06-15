@@ -82,6 +82,16 @@ async def test_discover_creates_discovered_videos_without_analyzing(
     assert channel.last_refreshed_at is not None
 
 
+async def test_discover_skips_shorts(session, sessionmaker):
+    await seed_channels(session)
+    await run_job(make_runner(sessionmaker), JobKind.discover)
+    ids = set((await session.execute(select(Video.id))).scalars().all())
+    # alpha_short (45s <= 240) is skipped; the normal videos are ingested
+    assert "alpha_short" not in ids
+    assert "alpha_vid_3" in ids
+    assert "alpha_vid_2" in ids
+
+
 async def test_happy_path_two_phase(session, sessionmaker):
     await seed_channels(session)
     runner = make_runner(sessionmaker)
@@ -154,7 +164,9 @@ async def test_backfill_limit_applies_to_new_channels(session, sessionmaker):
     await seed_channels(session)
     runner = make_runner(sessionmaker, settings=make_settings(backfill_limit=2))
     await run_job(runner, JobKind.discover)
-    assert await count(session, Video) == 4  # only the newest 2 per channel
+    # newest 2 per channel are fetched; alpha's newest 2 are alpha_short (filtered) + alpha_vid_3,
+    # so alpha ingests 1 and beta ingests 2 -> 3 total
+    assert await count(session, Video) == 3
 
 
 async def test_failed_video_retried_after_reselect_without_duplicates(
