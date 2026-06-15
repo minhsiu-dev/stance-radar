@@ -17,7 +17,7 @@ const RANGE_LABEL: Record<(typeof CHIP_RANGES)[number], string> = {
 
 function pctText(v: number | null | undefined): string {
   if (v == null) return "—";
-  const rounded = Math.round(v * 10) / 10 + 0; // 避免 -0.04 顯示成 "-0.0%"
+  const rounded = Math.round(v * 10) / 10 + 0; // avoid -0.04 rendering as "-0.0%"
   return `${rounded >= 0 ? "+" : ""}${rounded.toFixed(1)}%`;
 }
 

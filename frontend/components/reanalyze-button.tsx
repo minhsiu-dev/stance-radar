@@ -10,10 +10,10 @@ import { cn } from "@/lib/utils";
 import type { JobInfo } from "@/lib/types";
 
 /**
- * 重新分析這一部影片:把它設回 pending 並觸發 analyze job,然後輪詢
- * /api/jobs/current,直到「我們這支 job」結束,再呼叫 onDone 重抓影片詳情。
- * 比對 job id(而非單純 running→done 轉換)才能涵蓋假 adapter 下 job 秒殺、
- * 第一次輪詢就已 done 的情況。
+ * Re-analyze this video: set it back to pending and trigger an analyze job, then poll
+ * /api/jobs/current until "our job" finishes, then call onDone to re-fetch the video detail.
+ * Comparing the job id (rather than just a running→done transition) is needed to cover the case
+ * where, under the fake adapter, the job finishes instantly and is already done on the first poll.
  */
 export function ReanalyzeButton({
   videoId,

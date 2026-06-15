@@ -4,8 +4,8 @@ import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { ChannelDetail } from "@/components/channel-detail";
 
-// 可控的 IntersectionObserver:記住每個 observe 的 (callback, element),
-// 讓測試針對「捲動 sentinel」手動觸發載入(頁面上可能有多個 observer)。
+// Controllable IntersectionObserver: remember each observe's (callback, element),
+// so tests can manually trigger loads against the "scroll sentinel" (the page may have multiple observers).
 let observed: { cb: IntersectionObserverCallback; el: Element }[] = [];
 class MockIntersectionObserver {
   cb: IntersectionObserverCallback;
@@ -204,7 +204,7 @@ function makeVideo(n: number, status = "discovered") {
   };
 }
 
-/** 模擬後端分頁:total 部影片,每頁 page_size 部。 */
+/** Simulate backend pagination: total videos, page_size per page. */
 function pagedVideos(total: number) {
   return (key: string) => {
     const params = new URLSearchParams(key.split("?")[1]);
@@ -224,7 +224,7 @@ function pagedVideos(total: number) {
 }
 
 describe("ChannelDetail", () => {
-  // afterEach 的 unstubAllGlobals 會還原 IntersectionObserver,故每個 test 前重裝
+  // afterEach's unstubAllGlobals restores IntersectionObserver, so reinstall before each test
   beforeEach(() => {
     observed = [];
     vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
@@ -237,13 +237,13 @@ describe("ChannelDetail", () => {
     renderDetail();
     expect(await screen.findByText("Alpha")).toBeInTheDocument();
     expect(screen.getByText("Most mentioned")).toBeInTheDocument();
-    // top-tickers 表格的 ticker 連到個股頁
+    // The ticker in the top-tickers table links to the stock page
     const link = screen.getByRole("link", { name: "AAPL" });
     expect(link.getAttribute("href")).toContain("/stocks/AAPL");
     expect(screen.getByTestId("stance-bar-AAPL")).toBeInTheDocument();
   });
 
-  it("defaults to the scorecard (最新提及) tab", async () => {
+  it("defaults to the scorecard (Latest mentions) tab", async () => {
     renderDetail();
     // scorecard panel should be visible without clicking a tab:
     expect(await screen.findByTestId("channel-scorecard")).toBeInTheDocument();
@@ -255,9 +255,9 @@ describe("ChannelDetail", () => {
     fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
     expect(await screen.findByText("Analyzed video")).toBeInTheDocument();
     expect(screen.getByText("Skipped video")).toBeInTheDocument();
-    // "Skipped" 同時出現在統計卡與 badge → 用 getAllByText
+    // "Skipped" appears in both the stat card and the badge → use getAllByText
     expect(screen.getAllByText("Skipped").length).toBeGreaterThan(0);
-    // skipped 影片有「反悔」按鈕
+    // Skipped videos have an "undo" button
     expect(
       screen.getByRole("button", { name: "Analyze" }),
     ).toBeInTheDocument();
@@ -267,7 +267,7 @@ describe("ChannelDetail", () => {
     const fetcher = renderDetail(pagedVideos(120));
     // switch to videos tab first (scorecard is now the default)
     fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
-    // 第一頁:50 部影片 + 計數器 + 捲動 sentinel(沒有「載入更多」按鈕)
+    // First page: 50 videos + counter + scroll sentinel (no "load more" button)
     expect(await screen.findByText("Video 1")).toBeInTheDocument();
     expect(screen.getByText("Video 50")).toBeInTheDocument();
     expect(screen.queryByText("Video 51")).not.toBeInTheDocument();
@@ -277,20 +277,20 @@ describe("ChannelDetail", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByTestId("load-more-sentinel")).toBeInTheDocument();
 
-    // 跨頁批次選取:第一頁勾的影片,載入第二頁後要保持勾選
+    // Cross-page batch selection: videos checked on the first page must stay checked after loading the second page
     const firstCheckbox = screen.getByRole("checkbox", { name: "Video 1" });
     fireEvent.click(firstCheckbox);
     expect(screen.getByText("1 selected")).toBeInTheDocument();
 
-    // 捲到 sentinel → 自動載入下一頁
+    // Scroll to the sentinel → auto-load the next page
     scrollToSentinel();
     expect(await screen.findByText("Video 51")).toBeInTheDocument();
     expect(screen.getByText("Video 100")).toBeInTheDocument();
     expect(screen.getByText("100 of 120 loaded")).toBeInTheDocument();
-    // 第一頁勾選跨頁仍保留
+    // First-page selections persist across pages
     expect(screen.getByRole("checkbox", { name: "Video 1" })).toBeChecked();
     expect(screen.getByText("1 selected")).toBeInTheDocument();
-    // 確認第二頁是用 page=2 取的
+    // Confirm the second page was fetched with page=2
     expect(
       fetcher.mock.calls.some(
         ([key]) =>
@@ -299,7 +299,7 @@ describe("ChannelDetail", () => {
           key.includes("page=2"),
       ),
     ).toBe(true);
-    // 還有第三頁(100<120)→ sentinel 仍在、還不會出現「載入更舊」
+    // There's still a third page (100<120) → the sentinel remains and "load older" doesn't appear yet
     expect(screen.getByTestId("load-more-sentinel")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Load older videos" }),
@@ -320,19 +320,19 @@ describe("ChannelDetail", () => {
     expect(screen.getByRole("checkbox", { name: "Video 3" })).toBeChecked();
     expect(screen.getByRole("button", { name: "Analyze selected" })).toBeInTheDocument();
 
-    // 再點一次全部取消
+    // Click again to deselect all
     fireEvent.click(selectAll);
     expect(screen.queryByText("3 selected")).toBeNull();
     expect(screen.getByRole("checkbox", { name: "Video 1" })).not.toBeChecked();
   });
 
   it("shows load-older (no sentinel) when every video is loaded", async () => {
-    renderDetail(); // 預設 fixture:total 2、items 2
+    renderDetail(); // default fixture: total 2, items 2
     // switch to videos tab first (scorecard is now the default)
     fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
     expect(await screen.findByText("Analyzed video")).toBeInTheDocument();
     expect(screen.getByText("2 of 2 loaded")).toBeInTheDocument();
-    // 全部載完 → 不再有捲動 sentinel,改成「載入更舊」按鈕
+    // Everything loaded → no more scroll sentinel, replaced by the "load older" button
     expect(screen.queryByTestId("load-more-sentinel")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Load older videos" }),
@@ -340,7 +340,7 @@ describe("ChannelDetail", () => {
   });
 
   it("revalidates the video list after a skip action", async () => {
-    // act() 走 apiFetch → global fetch;回傳成功 envelope
+    // act() goes through apiFetch → global fetch; returns a success envelope
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -362,17 +362,17 @@ describe("ChannelDetail", () => {
       ).length;
     const before = videoCalls();
 
-    // discovered 影片有 Skip 按鈕
+    // Discovered videos have a Skip button
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
-    // skip 成功後必須重新抓影片清單(useSWRInfinite 的 $inf$ key 也要被 mutate 命中)
+    // After a successful skip, the video list must be re-fetched (the useSWRInfinite $inf$ key must also be hit by mutate)
     await waitFor(() => {
       expect(videoCalls()).toBeGreaterThan(before);
     });
   });
 
   it("POSTs to load-older and re-enables when the job finishes", async () => {
-    // POST /load-older → {job_id, created:true};/api/jobs/current → 非 running
-    // 讓 poll 立即結束。loadOlder 全程走 apiFetch → global fetch。
+    // POST /load-older → {job_id, created:true}; /api/jobs/current → non-running
+    // so the poll ends immediately. loadOlder goes entirely through apiFetch → global fetch.
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (typeof url === "string" && url.includes("/load-older")) {
         return Promise.resolve({
@@ -401,7 +401,7 @@ describe("ChannelDetail", () => {
     const btn = await screen.findByRole("button", { name: "Load older videos" });
     fireEvent.click(btn);
 
-    // POST 應以正確 URL + method 打出
+    // The POST should be made with the correct URL + method
     await waitFor(() => {
       expect(
         fetchMock.mock.calls.some(
@@ -413,7 +413,7 @@ describe("ChannelDetail", () => {
       ).toBe(true);
     });
 
-    // 工作完成後按鈕重新可用
+    // The button becomes usable again after the job finishes
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: "Load older videos" }),

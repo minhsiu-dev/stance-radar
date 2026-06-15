@@ -114,7 +114,7 @@ function FeedFilterBar({
       </Select>
       <DropdownMenu>
         <DropdownMenuTrigger
-          // base-ui 用 render 取代 Radix 的 asChild
+          // base-ui uses render instead of Radix's asChild
           render={
             <Button
               variant="outline"
@@ -191,7 +191,7 @@ export function FeedList({
     () => new Set((holdings?.holdings ?? []).map((h) => h.ticker)),
     [holdings],
   );
-  // 高亮集合:選了 ticker → 只亮該 ticker;只開 holdingsOnly → 亮持股;否則不變暗
+  // Highlight set: a selected ticker → highlight only that ticker; holdingsOnly only → highlight holdings; otherwise nothing is dimmed
   const highlightSet: Set<string> | null =
     filters.tickers.length > 0
       ? new Set(filters.tickers)

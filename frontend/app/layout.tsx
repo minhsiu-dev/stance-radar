@@ -25,7 +25,8 @@ export const fontVariables = `${geistSans.variable} ${notoTC.variable}`;
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  // 字型 CSS 變數必須掛在 <html> 上,不能被外層 div 包住,否則 [locale]/layout.tsx
-  // 渲染的 <html> 拿不到變數 → fallback 到 Times。透過 fontVariables 由 locale layout 套用。
+  // The font CSS variables must be attached to <html> and not wrapped in an outer div,
+  // otherwise the <html> rendered by [locale]/layout.tsx can't read them and falls back to
+  // Times. They are applied by the locale layout via fontVariables.
   return <>{children}</>;
 }

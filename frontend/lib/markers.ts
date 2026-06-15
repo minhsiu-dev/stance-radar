@@ -17,7 +17,7 @@ const STANCE_MARKER: Record<
   neutral: { position: "aboveBar", color: "#a1a1aa", shape: "circle" },
 };
 
-/** 發布日貼齊「當天或下一個交易日」;早於圖表範圍回 null,晚於最後一根貼最後一根。 */
+/** Snap publish date to "the same day or the next trading day"; returns null if before the chart range, snaps to the last bar if after it. */
 export function snapToTradingDay(
   publishedAt: string,
   tradingDays: string[],

@@ -50,7 +50,7 @@ function wrap(ui: React.ReactNode) {
 }
 
 beforeAll(() => {
-  // jsdom 沒有實作 scrollIntoView
+  // jsdom doesn't implement scrollIntoView
   Element.prototype.scrollIntoView = vi.fn();
 });
 

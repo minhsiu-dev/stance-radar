@@ -61,7 +61,7 @@ describe("ChannelLeaderboard", () => {
 
   it("renders nothing when no channels have calls", async () => {
     renderBoard([]);
-    // loading skeleton 會先短暫顯示標題;等資料 resolve 後 section 整個不顯示
+    // The loading skeleton briefly shows the title first; after data resolves the whole section is hidden
     await waitFor(() =>
       expect(
         screen.queryByText("Channel accuracy leaderboard"),

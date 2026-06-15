@@ -25,7 +25,7 @@ export function VideoMentions({
   initialTicker: string | null;
 }) {
   const t = useTranslations("VideoDetail");
-  // 預設全部展開;點標頭可摺疊
+  // Expanded by default; click the header to collapse
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const highlightRef = useRef<HTMLDivElement>(null);
 

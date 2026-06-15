@@ -24,7 +24,7 @@ export function RecentStocks() {
     `/api/stocks/trending?limit=6&days=${days}`,
   );
 
-  // 最寬的視窗(3M)都沒有資料 → 視為尚無討論,整段不顯示
+  // No data even in the widest window (3M) → treat as no discussion yet and hide the whole section
   if (!isLoading && days === WIDEST_DAYS && (!data || data.length === 0)) {
     return null;
   }

@@ -36,7 +36,7 @@ it("computes QoQ and YoY for the latest quarter", () => {
     </NextIntlClientProvider>,
   );
   expect(screen.getByText("Growth (latest quarter)")).toBeInTheDocument();
-  // fixture 四個指標等比成長 → 四列同值,用 getAllByText
+  // The fixture's four metrics grow proportionally → four rows share the same value, use getAllByText
   expect(screen.getAllByText("+6.3%").length).toBe(4);   // 170/160 - 1
   expect(screen.getAllByText("+30.8%").length).toBe(4);  // 170/130 - 1
   expect(screen.getByText("Margin trends")).toBeInTheDocument();

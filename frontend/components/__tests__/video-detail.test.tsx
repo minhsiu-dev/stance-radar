@@ -8,7 +8,7 @@ vi.mock("@/components/youtube-player", () => ({
   YouTubePlayer: () => <div data-testid="yt-player-mock" />,
 }));
 
-// 預設無 ?ticker
+// No ?ticker by default
 vi.mock("next/navigation", async (orig) => ({
   ...(await orig<typeof import("next/navigation")>()),
   useSearchParams: () => new URLSearchParams(""),
