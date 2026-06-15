@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query
@@ -158,6 +159,74 @@ async def list_channels(session: AsyncSession = Depends(get_session)):
         {**channel_to_dict(c), "video_counts": counts.get(c.id, {})}
         for c in channels
     ])
+
+
+@router.get("/overview")
+async def channels_overview(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+):
+    total = (await session.execute(
+        select(func.count()).select_from(Channel)
+    )).scalar_one()
+
+    channels = (await session.execute(
+        select(Channel)
+        .order_by(Channel.added_at)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )).scalars().all()
+    page_ids = [c.id for c in channels]
+
+    counts: dict[str, dict[str, int]] = {}
+    if page_ids:
+        count_rows = (await session.execute(
+            select(Video.channel_id, Video.status, func.count())
+            .where(Video.channel_id.in_(page_ids))
+            .group_by(Video.channel_id, Video.status)
+        )).all()
+        for channel_id, status, n in count_rows:
+            counts.setdefault(channel_id, {})[status.value] = n
+
+    today = utcnow().date()
+    this_monday = today - timedelta(days=today.weekday())
+    weeks = [this_monday - timedelta(weeks=k) for k in range(4, -1, -1)]
+    since = datetime(weeks[0].year, weeks[0].month, weeks[0].day, tzinfo=timezone.utc)
+
+    activity: dict[tuple[str, object], tuple[int, int]] = {}
+    if page_ids:
+        wk = func.date_trunc("week", func.timezone("UTC", Video.published_at))
+        act_rows = (await session.execute(
+            select(
+                Video.channel_id,
+                wk.label("wk"),
+                func.count().label("total"),
+                func.count().filter(Video.status == VideoStatus.analyzed).label("analyzed"),
+            )
+            .where(Video.channel_id.in_(page_ids), Video.published_at >= since)
+            .group_by(Video.channel_id, wk)
+        )).all()
+        for channel_id, bucket, total_n, analyzed_n in act_rows:
+            activity[(channel_id, bucket.date())] = (total_n, analyzed_n)
+
+    items = []
+    for c in channels:
+        weekly = []
+        for w in weeks:
+            total_n, analyzed_n = activity.get((c.id, w), (0, 0))
+            weekly.append({
+                "week_start": w.isoformat(),
+                "total": total_n,
+                "analyzed": analyzed_n,
+            })
+        items.append({
+            **channel_to_dict(c),
+            "video_counts": counts.get(c.id, {}),
+            "weekly_activity": weekly,
+        })
+
+    return ok({"items": items, "total": total, "page": page, "page_size": page_size})
 
 
 @router.get("/{channel_id}")
