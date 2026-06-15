@@ -1,4 +1,8 @@
 {
+  "Meta": {
+    "video": "影片",
+    "channel": "頻道"
+  },
   "Nav": {
     "brand": "Stance Radar",
     "home": "首頁",

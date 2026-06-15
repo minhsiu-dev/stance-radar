@@ -1,4 +1,8 @@
 {
+  "Meta": {
+    "video": "Video",
+    "channel": "Channel"
+  },
   "Nav": {
     "brand": "Stance Radar",
     "home": "Home",
