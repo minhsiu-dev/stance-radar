@@ -26,7 +26,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # 唯讀掛入本機 Claude Code 認證,讓非假資料模式的 `claude -p` 分析可用
+      # Read-only mount of the host's Claude Code credentials so non-fake-data 'claude -p' analysis works
       - ${HOME}/.claude:/root/.claude:ro
     depends_on:
       db:

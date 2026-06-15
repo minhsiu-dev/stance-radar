@@ -1,5 +1,5 @@
-# 選用:無法在 host 跑 playwright 時(如 CI 沙箱)以容器跑 E2E。
-# 一般流程照 README:host 上 cd e2e && npm test。
+# Optional — run E2E inside a container when Playwright can't run on the host (e.g. CI sandbox).
+# The normal flow follows the README: cd e2e && npm test on the host.
 FROM node:22-alpine
 RUN apk add --no-cache \
     chromium \
