@@ -275,6 +275,8 @@
     "watchOnYoutube": "在 YouTube 開啟",
     "mentionsHeading": "提及與立場",
     "mentionCount": "{count} 次提及",
+    "byStock": "依股票",
+    "quotesByTime": "原句（依時間）",
     "jumpHint": "點時間碼可跳到影片該處",
     "noMentions": "這部影片沒有偵測到美股提及",
     "reanalyze": "重新分析",
