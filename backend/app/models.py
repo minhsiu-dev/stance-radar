@@ -206,3 +206,11 @@ class PortfolioTransaction(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )
+
+
+class PortfolioCash(Base):
+    """Singleton row (id=1) holding the manual USD cash balance."""
+    __tablename__ = "portfolio_cash"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)

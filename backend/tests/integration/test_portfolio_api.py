@@ -136,3 +136,25 @@ async def test_same_day_transactions_do_not_crash_validation(api):
         client, ticker="VOO", side="sell", shares=5, executed_on="2026-01-01"
     )
     assert resp.status_code == 200 and resp.json()["success"]
+
+
+async def test_cash_defaults_to_zero(api):
+    _, client = api
+    resp = await client.get("/api/portfolio/cash")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["amount"] == 0
+
+
+async def test_put_then_get_cash(api):
+    _, client = api
+    put = await client.put("/api/portfolio/cash", json={"amount": 5000})
+    assert put.status_code == 200
+    assert put.json()["data"]["amount"] == 5000
+    got = await client.get("/api/portfolio/cash")
+    assert got.json()["data"]["amount"] == 5000
+
+
+async def test_put_negative_cash_rejected(api):
+    _, client = api
+    resp = await client.put("/api/portfolio/cash", json={"amount": -1})
+    assert resp.status_code == 400

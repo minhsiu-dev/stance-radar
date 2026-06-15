@@ -15,6 +15,7 @@ from app.envelope import fail, ok
 from app.market.client import MarketClient
 from app.market.store import PriceStore
 from app.models import PortfolioTransaction, TransactionSide, utcnow
+from app.portfolio.cash import get_cash, set_cash
 from app.portfolio.holdings import Holding, InvalidTransaction, replay
 from app.portfolio.performance import (
     PERFORMANCE_RANGES, change_percent, normalize, portfolio_values,
@@ -36,6 +37,10 @@ class TransactionIn(BaseModel):
     price: Decimal = Field(gt=0)
     executed_on: date
     note: str | None = None
+
+
+class CashBody(BaseModel):
+    amount: float
 
 
 def _tx_dict(t: PortfolioTransaction) -> dict:
@@ -113,6 +118,21 @@ async def delete_transaction(
     await session.delete(tx)
     await session.commit()
     return ok({"deleted": True})
+
+
+@router.get("/cash")
+async def get_cash_balance(session: AsyncSession = Depends(get_session)):
+    return ok({"amount": float(await get_cash(session))})
+
+
+@router.put("/cash")
+async def put_cash_balance(
+    body: CashBody, session: AsyncSession = Depends(get_session)
+):
+    if body.amount < 0:
+        return fail("cash must be >= 0", status_code=400)
+    await set_cash(session, Decimal(str(body.amount)))
+    return ok({"amount": body.amount})
 
 
 async def _held(session: AsyncSession) -> dict[str, Holding]:
