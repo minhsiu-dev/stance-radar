@@ -6,7 +6,7 @@ from typing import Protocol
 import httpx
 
 BASE_URL = "https://www.googleapis.com/youtube/v3"
-_MAX_PAGES = 20  # 保險:避免 known ids 永遠對不上時無限翻頁
+_MAX_PAGES = 20  # safety: avoid paging forever if known ids never match
 
 
 class YouTubeError(Exception):
@@ -117,7 +117,7 @@ class DataAPIYouTubeClient:
         return self._channel_info(items[0])
 
     async def resolve_channel_by_handle(self, handle: str) -> ChannelInfo:
-        # YouTube Data API forHandle 接受帶不帶 @ 皆可,統一去掉前綴
+        # YouTube Data API forHandle accepts the handle with or without @; strip the prefix uniformly
         data = await self._get(
             "/channels",
             {"part": "snippet,contentDetails", "forHandle": handle.lstrip("@")},
@@ -164,10 +164,10 @@ class DataAPIYouTubeClient:
     async def list_older_uploads(
         self, playlist_id: str, *, known_video_ids: set[str], limit: int
     ) -> list[VideoInfo]:
-        """走過已知的影片區塊,收集較舊的未知影片(用於 load-older)。
+        """Walk past the known block of videos and collect older unknown ones (used by load-older).
 
-        與 list_new_uploads 相反:遇到 known id 不停止而是 continue,
-        一直收集到 limit 達成或 playlist/翻頁上限耗盡。
+        Opposite of list_new_uploads: on hitting a known id, continue instead of stopping,
+        collecting until limit is reached or the playlist/page cap is exhausted.
         """
         collected: list[VideoInfo] = []
         page_token: str | None = None
@@ -227,7 +227,7 @@ def _fake_video(video_id: str, title: str, published: str) -> VideoInfo:
 
 
 class FakeYouTubeClient:
-    """確定性假資料,整合測試與 USE_FAKE_ADAPTERS=true 模式使用。"""
+    """Deterministic fake data, used in integration tests and USE_FAKE_ADAPTERS=true mode."""
 
     CHANNELS = {
         "UC_fake_alpha": ChannelInfo(
@@ -242,7 +242,7 @@ class FakeYouTubeClient:
         ),
     }
     UPLOADS = {
-        "UU_fake_alpha": [  # 新→舊排序,與真實 API 一致
+        "UU_fake_alpha": [  # newest-to-oldest order, matching the real API
             _fake_video("alpha_vid_3", "AAPL 財報解讀", "2026-06-08T12:00:00"),
             _fake_video("alpha_vid_2", "NVDA 還能追嗎", "2026-05-25T12:00:00"),
             _fake_video("alpha_vid_1", "大盤閒聊", "2026-05-10T12:00:00"),
@@ -253,7 +253,7 @@ class FakeYouTubeClient:
             _fake_video("beta_vid_1", "投資心法", "2026-05-01T12:00:00"),
         ],
     }
-    # @handle → channel id,用於假資料的 handle 解析
+    # @handle -> channel id, used for handle resolution in the fake data
     HANDLES = {
         "@alpha": "UC_fake_alpha",
         "@beta": "UC_fake_beta",

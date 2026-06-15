@@ -40,7 +40,7 @@ async def app_settings():
 async def current_job(session: AsyncSession = Depends(get_session)):
     job = await get_running_job(session)
     if job is None:
-        # 沒有進行中的 job → 回最近一個(讓前端顯示完成/錯誤狀態);完全沒有 → 204
+        # No in-progress job -> return the most recent one (so the frontend can show done/error status); none at all -> 204
         job = (await session.execute(
             select(Job).order_by(Job.id.desc()).limit(1)
         )).scalars().first()

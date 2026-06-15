@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/channels")
 
 
 class AddChannelsRequest(BaseModel):
-    channel_ids: str  # 換行/逗號/空白分隔,一個或多個
+    channel_ids: str  # newline/comma/whitespace separated, one or more
 
 
 def parse_channel_ids(raw: str) -> list[str]:
@@ -34,16 +34,16 @@ def parse_channel_ids(raw: str) -> list[str]:
     return unique
 
 
-# 真實頻道 ID 是 UC + 22 字元;放寬成 UC 前綴即可,讓測試用的短 ID 也算 ID
+# Real channel IDs are UC + 22 chars; loosen to just the UC prefix so short test IDs also count as IDs
 _CHANNEL_ID_RE = re.compile(r"^UC[A-Za-z0-9_-]+$")
 
 
 def classify_channel_ref(token: str) -> tuple[str, str]:
-    """把使用者貼上的字串歸類成 ('id', channel_id) 或 ('handle', handle)。
+    """Classify a user-pasted string into ('id', channel_id) or ('handle', handle).
 
-    支援:純 UC... ID、@handle、以及 YouTube 連結
-    (/channel/UC...、/@handle、/c/Name、/user/Name、youtube.com/Name)。
-    無法判斷時一律當作 handle 交給 forHandle 解析。
+    Supports: bare UC... ID, @handle, and YouTube links
+    (/channel/UC..., /@handle, /c/Name, /user/Name, youtube.com/Name).
+    When it can't be determined, always treat it as a handle and let forHandle resolve it.
     """
     t = token.strip()
     if "youtube.com" in t or "youtu.be" in t:
@@ -89,11 +89,11 @@ async def add_channels(
     if not tokens:
         return fail("No parseable channel ID", status_code=400)
 
-    # 先把每個 token(ID / @handle / 連結)解析成 ChannelInfo
+    # First resolve each token (ID / @handle / link) into a ChannelInfo
     added: list[dict] = []
     skipped: list[str] = []
     failed: list[dict] = []
-    resolved: list[tuple[str, object]] = []  # (原始 token, ChannelInfo)
+    resolved: list[tuple[str, object]] = []  # (original token, ChannelInfo)
     for token in tokens:
         kind, value = classify_channel_ref(token)
         try:
@@ -109,7 +109,7 @@ async def add_channels(
             return fail(str(exc), status_code=503)
         resolved.append((token, info))
 
-    # 以解析後的 channel id 去重(避免同時貼 @handle 與其 UC ID 重複新增)
+    # Deduplicate by resolved channel id (avoid double-adding when both an @handle and its UC ID are pasted)
     existing = set((await session.execute(
         select(Channel.id).where(Channel.id.in_([info.id for _, info in resolved]))
     )).scalars().all())
@@ -134,7 +134,7 @@ async def add_channels(
 
     data = {"added": added, "skipped": skipped, "failed": failed, "job_id": job_id}
     if failed:
-        # 部分失敗:400,但有效的照常加入(data 內含結果)
+        # Partial failure: 400, but valid ones are still added (data carries the results)
         return JSONResponse(
             status_code=400,
             content={"success": False, "data": data, "error": "Some channel IDs are invalid"},

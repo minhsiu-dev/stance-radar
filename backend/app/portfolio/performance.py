@@ -1,7 +1,7 @@
-"""組合區間績效:「現在持股回推」— 目前股數 × 歷史收盤。
+"""Portfolio range performance: "current-holdings backtest" -- current share count x historical closes.
 
-期間內的加碼/賣出不影響曲線(spec 決議),好處是與 VOO/QQQ 直接可比。
-組合起點 = 各持股第一根日 K 的最大值(較晚上市者決定);缺日 forward-fill。
+Buys/sells within the period don't affect the curve (a spec decision); the upside is direct comparability with VOO/QQQ.
+The portfolio start = the max over each holding's first daily candle (decided by the latest-listed one); missing days are forward-filled.
 """
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from app.market.client import Candle
 
-# 與 app/api/stocks.py 的日 K 區間一致;5d 以「最後 6 根」處理
+# Matches the daily-candle ranges in app/api/stocks.py; 5d is handled as the "last 6 bars"
 RANGE_DAYS = {"1m": 31, "3m": 93, "6m": 186, "1y": 366}
 PERFORMANCE_RANGES = ("1d", "5d", "1m", "3m", "6m", "ytd", "1y")
 
@@ -32,7 +32,7 @@ def portfolio_values(
     holdings: dict[str, Decimal], bars_by_ticker: dict[str, list[Candle]]
 ) -> list[tuple[date, float]]:
     series = {t: _daily(bars_by_ticker.get(t, [])) for t in holdings}
-    # 完全無價格資料的持股(下市/查無)從回推中排除,避免整條序列算不出來
+    # Holdings with no price data at all (delisted/not found) are excluded from the backtest, so the whole series can still be computed
     series = {t: s for t, s in series.items() if s}
     if not series:
         return []

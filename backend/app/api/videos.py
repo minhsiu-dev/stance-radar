@@ -60,7 +60,7 @@ async def list_videos(
 async def _load_videos(
     session: AsyncSession, raw_ids: list[str]
 ) -> tuple[list[Video] | None, object | None]:
-    """整批驗證:任一 ID 無效就整批拒絕,不部分套用。"""
+    """Validate the whole batch: if any ID is invalid, reject the entire batch -- no partial application."""
     ids = list(dict.fromkeys(raw_ids))
     if not ids:
         return None, fail("video_ids must not be empty", status_code=400)
@@ -88,7 +88,7 @@ async def analyze_videos(
         video.status = VideoStatus.pending
         video.error_message = None
     await session.commit()
-    # created=False 表示已有 job 在跑;剛設成 pending 的影片會被下一個 analyze job 撿走
+    # created=False means a job is already running; videos just set to pending will be picked up by the next analyze job
     job_id, created = await runner.start(JobKind.analyze)
     return ok({"job_id": job_id, "created": created, "queued": len(videos)})
 
@@ -158,7 +158,7 @@ async def video_detail(
             "condition": m.condition,
         })
 
-    # 群組依「首次提及秒數」排序(mentions 已按秒數遞增)
+    # Sort groups by "first mention seconds" (mentions are already in ascending seconds)
     ordered = sorted(groups.values(), key=lambda g: g["mentions"][0]["start_seconds"])
     return ok({
         "video": {

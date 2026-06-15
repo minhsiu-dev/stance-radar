@@ -1,7 +1,7 @@
-"""背景自動更新:每隔 N 分鐘 discover 一次,有 pending 影片就接著 analyze。
+"""Background auto-refresh: discover every N minutes, then analyze if there are pending videos.
 
-AUTO_REFRESH_MINUTES=0(預設)時不啟動,行為與手動模式完全相同。
-與手動觸發共用 RefreshRunner 的單一 job 鎖:撞到進行中的 job 就略過本輪。
+When AUTO_REFRESH_MINUTES=0 (default) it doesn't start, behaving exactly like manual mode.
+Shares RefreshRunner's single job lock with manual triggers: if it hits an in-progress job, it skips this round.
 """
 import asyncio
 import logging
@@ -48,11 +48,11 @@ class AutoRefreshScheduler:
             await asyncio.sleep(self._interval_minutes * 60)
             try:
                 await self.run_once()
-            except Exception:  # 單輪失敗不終止排程
+            except Exception:  # a single failed round shouldn't stop the scheduler
                 logger.exception("auto refresh cycle failed")
 
     async def run_once(self) -> None:
-        """discover → (有 pending 時)analyze。回合間等 job 真正跑完。"""
+        """discover -> (if pending) analyze. Waits for each job to actually finish between steps."""
         _, created = await self._runner.start(JobKind.discover)
         if not created:
             logger.info("auto refresh skipped: another job is running")

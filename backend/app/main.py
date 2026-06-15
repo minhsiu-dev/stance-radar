@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app import models  # noqa: F401  # 註冊 models 供 create_all
+from app import models  # noqa: F401  # register models for create_all
 from app.analysis.llm import ClaudeCLIClient, FakeLLMClient
 from app.analysis.tickers import TickerValidator
 from app.config import Settings, get_settings

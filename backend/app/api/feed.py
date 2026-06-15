@@ -10,7 +10,7 @@ from app.portfolio.holdings import replay
 
 router = APIRouter(prefix="/api")
 
-# 未挑選(discovered)與已略過(skipped)不進 feed
+# Unselected (discovered) and skipped videos don't enter the feed
 HIDDEN_STATUSES = (VideoStatus.discovered, VideoStatus.skipped)
 
 

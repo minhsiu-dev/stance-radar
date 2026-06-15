@@ -33,7 +33,7 @@ class LLMClient(Protocol):
 
 
 def _parse_enum_field(item: dict, key: str, valid: frozenset[str]) -> str | None:
-    """新欄位採容錯解析:缺漏或值不合法 → None,不讓整部影片分析失敗。"""
+    """Lenient parsing for newer fields: missing or invalid value -> None, so the whole video analysis doesn't fail."""
     value = item.get(key)
     if isinstance(value, str) and value in valid:
         return value

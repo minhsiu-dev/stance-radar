@@ -1,8 +1,8 @@
-"""create_all 只建立缺少的 table,不會改既有 type/column;增量變更放這裡。
+"""create_all only creates missing tables; it won't alter existing types/columns. Incremental changes go here.
 
-每條語句必須冪等(IF NOT EXISTS)。在 create_all 之後執行:
-全新 DB 由 create_all 建出完整 schema,這裡全部是 no-op;
-舊 DB 則由這裡補上新 enum 值與欄位。
+Each statement must be idempotent (IF NOT EXISTS). Runs after create_all:
+on a brand-new DB, create_all builds the full schema and everything here is a no-op;
+on an old DB, this is what backfills new enum values and columns.
 """
 import logging
 
@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 logger = logging.getLogger(__name__)
 
 _STATEMENTS = (
-    # Postgres 不允許在交易內 ALTER TYPE ... ADD VALUE → 走 AUTOCOMMIT
+    # Postgres doesn't allow ALTER TYPE ... ADD VALUE inside a transaction -> use AUTOCOMMIT
     "ALTER TYPE video_status ADD VALUE IF NOT EXISTS 'discovered'",
     "ALTER TYPE video_status ADD VALUE IF NOT EXISTS 'skipped'",
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS kind"

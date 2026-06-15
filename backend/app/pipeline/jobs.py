@@ -10,7 +10,7 @@ async def get_running_job(session: AsyncSession) -> Job | None:
 
 
 async def start_job(session: AsyncSession, kind: str = "discover") -> tuple[Job, bool]:
-    """回傳 (job, created)。已有 running job 時回傳它,created=False。"""
+    """Return (job, created). If a running job already exists, return it with created=False."""
     existing = await get_running_job(session)
     if existing is not None:
         return existing, False
@@ -49,7 +49,7 @@ async def finish_job(
 
 
 async def fail_orphan_jobs(sessionmaker: async_sessionmaker[AsyncSession]) -> int:
-    """API 重啟時把中斷的 running job 標成 failed。回傳清理數。"""
+    """On API restart, mark interrupted running jobs as failed. Returns the number cleaned up."""
     async with sessionmaker() as session:
         result = await session.execute(
             update(Job)

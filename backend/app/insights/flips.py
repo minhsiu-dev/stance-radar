@@ -1,6 +1,6 @@
-"""立場轉變偵測:同一頻道對同一檔股票,前後兩部影片立場不同 → flip。
+"""Stance flip detection: for the same channel on the same stock, two consecutive videos with different stances -> a flip.
 
-reversal(buy↔sell)是最強訊號;進出 neutral 視為轉強/轉弱。
+A reversal (buy<->sell) is the strongest signal; moving in/out of neutral is treated as turning more bullish/bearish.
 """
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,11 +30,11 @@ class Flip:
     prev: StancePoint
     curr: StancePoint
     direction: str  # bullish | bearish
-    is_reversal: bool  # buy ↔ sell
+    is_reversal: bool  # buy <-> sell
 
 
 def detect_flips(points: list[StancePoint]) -> list[Flip]:
-    """points 需含全部歷史(偵測需要前一筆),回傳所有 flip,新的在前。"""
+    """points must contain the full history (detection needs the previous point); returns all flips, newest first."""
     ordered = sorted(
         points, key=lambda p: (p.channel_id, p.ticker, p.published_at, p.video_id)
     )
