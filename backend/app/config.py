@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     claude_model: str = "claude-haiku-4-5"
     backfill_limit: int = 30
     analysis_concurrency: int = 4
-    # 每 N 分鐘自動 discover + analyze(0 = 關閉,維持純手動)
+    # Auto discover + analyze every N minutes (0 = disabled, stays fully manual)
     auto_refresh_minutes: int = 0
     database_url: str = "postgresql+asyncpg://stance:stance@localhost:5432/stance_radar"
     use_fake_adapters: bool = False

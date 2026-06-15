@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/portfolio")
 
 BENCHMARKS = ("VOO", "QQQ")
-_MAX_HISTORY_DAYS = 366  # 績效最長區間 1y
+_MAX_HISTORY_DAYS = 366  # longest performance range is 1y
 
 
 class TransactionIn(BaseModel):
@@ -77,15 +77,15 @@ async def add_transaction(
     ticker = body.ticker.upper().strip()
     today = datetime.now(timezone.utc).date()
     if body.executed_on > today:
-        return fail("交易日期不可在未來", status_code=422)
+        return fail("Transaction date cannot be in the future", status_code=422)
     if not await market.ticker_exists(ticker):
-        return fail(f"查無股票 {ticker}", status_code=422)
+        return fail(f"No stock found: {ticker}", status_code=422)
     tx = PortfolioTransaction(
         ticker=ticker, side=TransactionSide(body.side),
         shares=body.shares, price=body.price,
         executed_on=body.executed_on, note=body.note,
-        # column default 要到 INSERT 才生效;驗證階段的 replay 排序需要實值,
-        # 否則與同日既有交易比較會 TypeError(None < datetime)
+        # The column default only takes effect at INSERT; the validation-stage replay sort needs a real value,
+        # otherwise comparing against an existing same-day transaction raises TypeError (None < datetime)
         created_at=utcnow(),
     )
     existing = await _all_transactions(session)
@@ -104,12 +104,12 @@ async def delete_transaction(
 ):
     tx = await session.get(PortfolioTransaction, tx_id)
     if tx is None:
-        return fail("查無此筆交易", status_code=404)
+        return fail("Transaction not found", status_code=404)
     remaining = [t for t in await _all_transactions(session) if t.id != tx_id]
     try:
         replay(remaining)
     except InvalidTransaction as exc:
-        return fail(f"刪除後交易紀錄不一致:{exc}", status_code=422)
+        return fail(f"Transaction records inconsistent after deletion: {exc}", status_code=422)
     await session.delete(tx)
     await session.commit()
     return ok({"deleted": True})
@@ -157,7 +157,7 @@ async def holdings(
                 round((value - cost) / cost * 100, 2)
                 if value is not None and cost else None
             ),
-            "weight": None,  # 填於下方(需總市值)
+            "weight": None,  # filled in below (needs total market value)
         })
         total_cost += cost
         if value is not None:
@@ -166,8 +166,8 @@ async def holdings(
         if row["market_value"] is not None and total_value:
             row["weight"] = round(row["market_value"] / total_value * 100, 2)
     rows.sort(key=lambda r: -(r["market_value"] or 0))
-    # 全部報價失敗 → 總市值/損益回 None(顯示「—」),避免誤導成 $0;
-    # 部分失敗則維持 best-effort 加總(缺價的列本身已顯示 null price)
+    # All quotes failed -> total market value/PL returns None (shows "—"), to avoid misleading $0;
+    # partial failure keeps the best-effort sum (rows missing a price already show null price themselves)
     all_quotes_missing = bool(rows) and all(
         r["market_value"] is None for r in rows
     )
@@ -190,9 +190,9 @@ async def holdings(
 async def _one_day_changes(
     market: MarketClient, held: dict[str, Holding]
 ) -> tuple[float | None, dict[str, float | None], float | None]:
-    """回傳 (組合 1d %, {benchmark: 1d %}, 組合現值)。"""
-    # 缺報價的持股直接略過 → 數字是「有報價部分」的 best-effort;
-    # 全部缺報價時 total_now=0 → 回 None
+    """Return (portfolio 1d %, {benchmark: 1d %}, portfolio current value)."""
+    # Holdings missing a quote are simply skipped -> the numbers are best-effort over the "quoted portion";
+    # when all quotes are missing, total_now=0 -> return None
 
     async def summary_or_none(ticker: str):
         try:
@@ -277,7 +277,7 @@ async def performance(
 ):
     if range_key not in PERFORMANCE_RANGES:
         return fail(
-            f"range 必須是 {', '.join(PERFORMANCE_RANGES)}", status_code=422
+            f"range must be one of {', '.join(PERFORMANCE_RANGES)}", status_code=422
         )
     held = await _held(session)
     today = datetime.now(timezone.utc).date()

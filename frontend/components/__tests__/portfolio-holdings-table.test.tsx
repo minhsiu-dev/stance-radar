@@ -67,7 +67,7 @@ describe("PortfolioHoldingsTable", () => {
     expect(screen.getByText("150.00")).toBeInTheDocument();   // price not masked
     expect(screen.getByText("100.0%")).toBeInTheDocument();   // weight not masked
     // Verify masked values are not present
-    expect(screen.queryByText("1,500.00")).toBeNull();  // market_value 不可洩漏
-    expect(screen.queryByText("100.00")).toBeNull();    // avg_cost 不可洩漏
+    expect(screen.queryByText("1,500.00")).toBeNull();  // market_value must not leak
+    expect(screen.queryByText("100.00")).toBeNull();    // avg_cost must not leak
   });
 });

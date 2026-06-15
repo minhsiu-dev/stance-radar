@@ -14,7 +14,7 @@ const STANCE_LABELS: Record<StanceValue, string> = {
   sell: "Sell",
 };
 
-// 信心強度以視覺重量呈現:high 加粗、low 虛線淡化;medium / 未知維持原樣
+// Confidence strength is shown via visual weight: high is bold, low is dashed and faded; medium / unknown stay as-is
 const CONFIDENCE_STYLES: Record<ConfidenceValue, string> = {
   high: "font-semibold",
   medium: "",

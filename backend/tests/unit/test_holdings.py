@@ -68,7 +68,7 @@ def test_oversell_raises_with_ticker_and_date():
 
 
 def test_replay_orders_by_date_then_created_at():
-    # 賣出在較早日期 → 即使 list 順序在後,重放時仍先驗到
+    # sell is on an earlier date → even though it is later in the list, replay validates it first
     with pytest.raises(InvalidTransaction):
         replay([
             tx("AAPL", "buy", "5", "100", date(2026, 3, 1)),

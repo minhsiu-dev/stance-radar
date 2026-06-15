@@ -47,7 +47,7 @@ function makeItem(i: number) {
   };
 }
 
-// FeedList 改為受控元件;測試用小型 stateful wrapper 提供 filters/onFiltersChange
+// FeedList is now a controlled component; tests use a small stateful wrapper to provide filters/onFiltersChange
 function ControlledFeedList({ initial = NO_FILTERS }: { initial?: FeedFilters }) {
   const [filters, setFilters] = useState<FeedFilters>(initial);
   return <FeedList filters={filters} onFiltersChange={setFilters} />;

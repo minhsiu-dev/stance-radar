@@ -40,15 +40,15 @@ const PAGE_SIZE = 50;
 const STAT_ORDER: VideoStatus[] = [
   "analyzed", "discovered", "pending", "failed", "no_transcript", "skipped",
 ];
-// 永遠顯示的核心三格;其餘只在 >0 時才顯示
+// The three core cells are always shown; the rest only appear when >0
 const ALWAYS_SHOW: ReadonlySet<VideoStatus> = new Set([
   "analyzed", "discovered", "skipped",
 ]);
-// 可勾選/可操作的狀態(analyzed、pending 不提供批次操作)
+// Selectable / actionable statuses (analyzed and pending don't support batch operations)
 const ACTIONABLE: ReadonlySet<VideoStatus> = new Set([
   "discovered", "failed", "no_transcript", "skipped",
 ]);
-// skipped 不能被略過(已 skipped 再 skip 無意義),analyzed 後端也會拒絕
+// skipped can't be skipped (skipping an already-skipped video is meaningless), and the backend also rejects analyzed
 const SKIPPABLE: ReadonlySet<VideoStatus> = new Set([
   "discovered", "failed", "no_transcript",
 ]);
@@ -69,7 +69,7 @@ function rowActionKey(
 ): "analyze" | "retry" | "reanalyze" | null {
   if (status === "discovered" || status === "skipped") return "analyze";
   if (status === "failed" || status === "no_transcript") return "retry";
-  // prompt 升級後可重跑舊影片(冪等:會先清掉舊的 mentions/stances)
+  // After a prompt upgrade, old videos can be re-run (idempotent: clears old mentions/stances first)
   if (status === "analyzed") return "reanalyze";
   return null;
 }
@@ -87,7 +87,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
   const { data: detail, error: detailError } =
     useSWR<ChannelDetailDto>(detailKey);
 
-  // 影片清單分頁載入:一次 50 部,按「載入更多」往後抓
+  // Video list is paginated: 50 at a time, fetching more with "load more"
   const getVideosKey = useMemo(
     () =>
       (pageIndex: number, previous: ChannelVideosResponse | null) => {
@@ -110,9 +110,9 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
   const videosTotal = videoPages?.[0]?.total ?? 0;
   const videosLoaded = videoPages !== undefined;
   const hasMore = videoItems.length < videosTotal;
-  // 捲到底自動載入下一頁(已在 DB 的影片),取代「載入更多」按鈕。
-  // 用 callback ref 而非 useEffect:sentinel 在 TabsContent 內,mount 時機與本
-  // component 的 render 不同步;callback ref 會在節點實際掛載時才接上 observer。
+  // Auto-load the next page on scroll-to-bottom (videos already in the DB), replacing the "load more" button.
+  // Use a callback ref instead of useEffect: the sentinel lives inside TabsContent, so its mount timing is
+  // out of sync with this component's render; a callback ref attaches the observer only when the node actually mounts.
   const observerRef = useRef<IntersectionObserver | null>(null);
   const sentinelRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -133,7 +133,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
     [setSize, isValidating, hasMore],
   );
 
-  // 全選只作用在「已載入且可操作」的影片(尊重目前的狀態篩選)
+  // Select-all only affects "already loaded and actionable" videos (respecting the current status filter)
   const actionableIds = useMemo(
     () => videoItems.filter((v) => ACTIONABLE.has(v.status)).map((v) => v.id),
     [videoItems],
@@ -176,8 +176,8 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         method: "PATCH",
         body: JSON.stringify({ auto_analyze: !detail.auto_analyze }),
       });
-      // 注意:filter 版 mutate 會「跳過」$inf$ 開頭的 useSWRInfinite key
-      // (SWR 2.x 內部行為),所以影片清單要用 hook 綁定的 mutate 另外刷新。
+      // Note: the filter form of mutate "skips" useSWRInfinite keys starting with $inf$
+      // (SWR 2.x internal behavior), so the video list must be refreshed separately via the hook-bound mutate.
       await Promise.all([
         mutate(
           (key) =>
@@ -207,9 +207,9 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
       });
       setSelected(new Set());
       if (path === "analyze") setMessage(t("videos.queued"));
-      // 注意:filter 版 mutate 會「跳過」$inf$ 開頭的 useSWRInfinite key
-      // (SWR 2.x 內部行為),predicate 永遠看不到影片清單的 infinite key,
-      // 所以必須用 hook 綁定的 mutateVideos() 另外刷新(會重抓已載入的各頁)。
+      // Note: the filter form of mutate "skips" useSWRInfinite keys starting with $inf$
+      // (SWR 2.x internal behavior), so the predicate never sees the video list's infinite key,
+      // which means we must refresh separately via the hook-bound mutateVideos() (re-fetches each loaded page).
       await Promise.all([
         mutate(
           (key) =>
@@ -239,21 +239,21 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         `/api/channels/${channelId}/load-older`,
         { method: "POST" },
       );
-      // 已有其他工作在跑(後端回 created:false)→ 提示稍後再試,不刷新
+      // Another job is already running (backend returns created:false) → prompt to try again later, no refresh
       if (res && res.created === false) {
         setMessage(t("videos.loadOlderBusy"));
         return;
       }
-      // 輪詢 /api/jobs/current 直到 load_older 工作不再 running(單工模型,
-      // 上面拿到 created:true 表示這個就是當前工作)。用 apiFetch 直接打,
-      // 測試可用 mocked fetch 驅動(回非 running 即立刻結束)。
+      // Poll /api/jobs/current until the load_older job is no longer running (single-job model;
+      // getting created:true above means this is the current job). Call apiFetch directly,
+      // which tests can drive with a mocked fetch (returning non-running ends it immediately).
       for (let i = 0; i < 150; i++) {
         const job = await apiFetch<JobInfo | null>("/api/jobs/current");
         if (!job || job.status !== "running") break;
         await new Promise((r) => setTimeout(r, 2000));
       }
-      // 注意:filter 版 mutate 會跳過 useSWRInfinite 的 $inf$ key,
-      // 影片清單要用 hook 綁定的 mutateVideos() 另外刷新。
+      // Note: the filter form of mutate skips useSWRInfinite's $inf$ keys,
+      // so the video list must be refreshed separately via the hook-bound mutateVideos().
       await Promise.all([
         mutate(
           (key) =>
@@ -466,7 +466,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
                     })}
                   </p>
                   {hasMore ? (
-                    // 捲到底自動載入下一頁;sentinel 進入視窗即觸發 setSize
+                    // Auto-load the next page on scroll-to-bottom; the sentinel triggers setSize as it enters the viewport
                     <div
                       ref={sentinelRef}
                       data-testid="load-more-sentinel"
@@ -477,7 +477,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
                       )}
                     </div>
                   ) : (
-                    // DB 內影片都載完了 → 往回挖更舊的影片(進 skipped,免 review)
+                    // All videos in the DB are loaded → dig back for older videos (go to skipped, no review needed)
                     <div className="flex justify-center">
                       <Button
                         size="sm"
@@ -561,7 +561,7 @@ function VideoRow({
       />
       <VideoRowThumb url={video.thumbnail_url} />
 
-      {/* 主資訊欄:標題 → 時間/狀態徽章 → stance chips */}
+      {/* Main info column: title → time/status badges → stance chips */}
       <div className="min-w-0 space-y-1.5">
         <Link
           href={`/videos/${video.id}`}
@@ -606,7 +606,7 @@ function VideoRow({
         )}
       </div>
 
-      {/* 操作欄:桌面 hover 才顯示;觸控裝置沒有 hover,直接常駐 */}
+      {/* Actions column: shown on hover on desktop; touch devices have no hover, so always visible */}
       <div className="flex shrink-0 items-center gap-0.5 transition-opacity focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
         {action && (
           <Button

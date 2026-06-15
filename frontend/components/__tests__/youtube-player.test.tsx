@@ -11,7 +11,7 @@ beforeEach(() => {
   seekTo.mockClear();
   playVideo.mockClear();
   playerCtor.mockClear();
-  // 預先放好 window.YT → 元件的 loadApi 立刻 resolve
+  // Pre-set window.YT → the component's loadApi resolves immediately
   (window as unknown as { YT: unknown }).YT = {
     Player: class {
       constructor(el: unknown, opts: unknown) {

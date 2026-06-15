@@ -23,7 +23,7 @@ async def test_trigger_refresh_and_poll_until_done(api):
     body = resp.json()["data"]
     assert body["status"] == "done"
     assert body["finished_at"] is not None
-    assert body["progress"]["discovered"] == 3  # 只探索,不分析
+    assert body["progress"]["discovered"] == 3  # discover only, no analysis
 
 
 async def test_double_trigger_returns_same_job(api):
@@ -31,9 +31,9 @@ async def test_double_trigger_returns_same_job(api):
 
     app, client = api
     await client.post("/api/channels", json={"channel_ids": "UC_fake_alpha"})
-    await wait_refresh(app)  # 先讓新增頻道觸發的 job 跑完
+    await wait_refresh(app)  # first let the job triggered by adding the channel finish
 
-    # 把 discover 卡在 list_new_uploads,確保第二次 POST 時 job 一定還在跑
+    # block discover at list_new_uploads so the job is definitely still running on the second POST
     youtube = app.state.runner._deps.youtube
     original = youtube.list_new_uploads
     gate = asyncio.Event()

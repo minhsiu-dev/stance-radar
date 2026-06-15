@@ -1,6 +1,6 @@
-"""持股推導:重放交易紀錄 → 每檔股數與加權平均成本。
+"""Holdings derivation: replay the transaction history -> per-ticker share count and weighted average cost.
 
-持股永不落表;賣出按當下平均成本減少 cost basis(平均成本不變)。
+Holdings are never persisted; a sell reduces the cost basis at the current average cost (the average cost stays unchanged).
 """
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -14,7 +14,7 @@ class InvalidTransaction(ValueError):
 
 class TransactionLike(Protocol):
     ticker: str
-    side: object  # TransactionSide 或 str
+    side: object  # TransactionSide or str
     shares: Decimal
     price: Decimal
     executed_on: date
@@ -34,7 +34,7 @@ def _side_value(side: object) -> str:
 
 
 def replay(transactions: Sequence[TransactionLike]) -> dict[str, Holding]:
-    state: dict[str, tuple[Decimal, Decimal]] = {}  # ticker → (shares, cost_basis)
+    state: dict[str, tuple[Decimal, Decimal]] = {}  # ticker -> (shares, cost_basis)
     ordered = sorted(transactions, key=lambda t: (t.executed_on, t.created_at))
     for t in ordered:
         shares, cost = state.get(t.ticker, (Decimal(0), Decimal(0)))
@@ -44,8 +44,8 @@ def replay(transactions: Sequence[TransactionLike]) -> dict[str, Holding]:
         else:
             if t.shares > shares:
                 raise InvalidTransaction(
-                    f"{t.executed_on.isoformat()} 賣出 {t.ticker} {t.shares} 股,"
-                    f"但當時僅持有 {shares} 股"
+                    f"{t.executed_on.isoformat()} sold {t.ticker} {t.shares} shares, "
+                    f"but only {shares} held at the time"
                 )
             avg = cost / shares
             shares -= t.shares

@@ -33,15 +33,15 @@ def test_softening_to_neutral_is_not_reversal():
     flips = detect_flips([point("sell", 1), point("neutral", 5)])
     assert len(flips) == 1
     assert flips[0].is_reversal is False
-    assert flips[0].direction == "bullish"  # sell → neutral 是轉強
+    assert flips[0].direction == "bullish"  # sell → neutral is a shift toward bullish
 
 
 def test_flips_only_within_same_channel_and_ticker():
     flips = detect_flips([
         point("buy", 1, channel="ch1"),
-        point("sell", 5, channel="ch2"),  # 不同頻道,不構成 flip
+        point("sell", 5, channel="ch2"),  # different channel, not a flip
         point("buy", 1, channel="ch3", ticker="NVDA"),
-        point("sell", 5, channel="ch3", ticker="TSLA"),  # 不同股票,不構成 flip
+        point("sell", 5, channel="ch3", ticker="TSLA"),  # different ticker, not a flip
     ])
     assert flips == []
 

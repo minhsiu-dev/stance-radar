@@ -1,9 +1,9 @@
-"""日 K 持久層:DB 為準,只對缺口打 yfinance(增量、批次)。
+"""Daily-candle persistence layer: DB is the source of truth; only gaps hit yfinance (incremental, batched).
 
-涵蓋規則(price_coverage 一檔一列,描述連續涵蓋區間):
-- 無紀錄或要求起點早於 start_date → 整段重抓(避免拼接邏輯)
-- end_date < today 且距上次同步 ≥1 小時 → 尾段補抓,往回多帶 7 天 overlap
-- overlap 內收盤價偏差 >0.5% → 序列被重新調整(分割/除權息)→ 整檔清掉重抓
+Coverage rules (price_coverage has one row per ticker, describing the contiguous covered range):
+- no record, or the requested start is earlier than start_date -> refetch the whole range (avoids splice logic)
+- end_date < today and >=1 hour since last sync -> trailing backfill, reaching back an extra 7 days of overlap
+- closing-price deviation >0.5% within the overlap -> series was readjusted (split/dividend) -> wipe and refetch the whole ticker
 """
 import asyncio
 import logging
@@ -61,7 +61,7 @@ class PriceStore:
     def __init__(self, sessionmaker, market: MarketClient) -> None:
         self._sessionmaker = sessionmaker
         self._market = market
-        self._lock = asyncio.Lock()  # 同步序列化,避免並發 upsert 撞 PK
+        self._lock = asyncio.Lock()  # serialize syncs to avoid concurrent upserts colliding on the PK
 
     async def get_daily(
         self, tickers: list[str], start: date
@@ -86,8 +86,8 @@ class PriceStore:
                     for t, fetch_start in plan.full.items():
                         candles = [c for c in data.get(t, []) if isinstance(c.time, str)]
                         await self._upsert(session, t, candles)
-                        # 空結果(無效代號或上游暫時失敗):end_date 設在起點前一天,
-                        # 之後的尾段同步(每小時最多一次)會從頭重試 → 暫時性失敗可自癒
+                        # Empty result (invalid ticker or transient upstream failure): set end_date to the day before the start,
+                        # so a later trailing sync (at most hourly) retries from scratch -> transient failures self-heal
                         end = today if candles else fetch_start - timedelta(days=1)
                         cov_start = fetch_start
                         if candles:

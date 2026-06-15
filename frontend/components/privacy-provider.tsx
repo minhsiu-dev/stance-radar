@@ -12,7 +12,7 @@ const PrivacyContext = createContext<{
 export function PrivacyProvider({ children }: { children: React.ReactNode }) {
   const [hideAmounts, setHideAmounts] = useState(false);
 
-  // SSR 沒有 localStorage → 掛載後才讀,初次 render 一律顯示
+  // SSR has no localStorage → read only after mount; always show on the first render
   useEffect(() => {
     setHideAmounts(localStorage.getItem(STORAGE_KEY) === "true");
   }, []);
@@ -35,7 +35,7 @@ export function usePrivacy() {
   return useContext(PrivacyContext);
 }
 
-/** 隱私模式下把金額/股數換成遮罩字串。 */
+/** In privacy mode, replaces amounts/share counts with a masked string. */
 export function masked(hide: boolean, text: string): string {
   return hide ? "••••" : text;
 }

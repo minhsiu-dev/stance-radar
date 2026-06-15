@@ -5,8 +5,8 @@ from tests.conftest import wait_refresh
 
 
 async def seed_stances(sessionmaker) -> None:
-    """ch1 對 AAPL:buy(40 天前)→ sell(2 天前)= 近期 reversal。
-    ch1 對 NVDA:一路 buy,無 flip。"""
+    """ch1 on AAPL: buy (40 days ago) → sell (2 days ago) = recent reversal.
+    ch1 on NVDA: buy throughout, no flip."""
     now = datetime.now(timezone.utc)
     async with sessionmaker() as s:
         s.add(Channel(
@@ -55,7 +55,7 @@ async def test_flips_window_excludes_old_flips(api, sessionmaker):
 
 
 async def _seed_reversal_and_neutral_flip(sessionmaker) -> None:
-    """ch1:AAPL buy→sell(reversal);TSLA buy→neutral(非反轉,但也是 flip)。"""
+    """ch1: AAPL buy→sell (reversal); TSLA buy→neutral (not a reversal, but still a flip)."""
     now = datetime.now(timezone.utc)
     async with sessionmaker() as s:
         s.add(Channel(
@@ -83,11 +83,11 @@ async def test_flips_reversals_only_excludes_neutral_flips(api, sessionmaker):
     _, client = api
     await _seed_reversal_and_neutral_flip(sessionmaker)
 
-    # 預設:兩個 flip 都回(AAPL 反轉 + TSLA 進 neutral)
+    # Default: both flips returned (AAPL reversal + TSLA going neutral)
     allf = (await client.get("/api/insights/flips?days=30")).json()["data"]["items"]
     assert {f["ticker"] for f in allf} == {"AAPL", "TSLA"}
 
-    # reversals_only:只留 buy↔sell 反轉
+    # reversals_only: keep only buy↔sell reversals
     rev = (await client.get(
         "/api/insights/flips?days=30&reversals_only=true"
     )).json()["data"]["items"]
@@ -163,7 +163,7 @@ async def test_leaderboard_ranks_channels(api, sessionmaker):
 
 
 async def test_auto_analyze_channel_ingests_new_videos_as_pending(api, sessionmaker):
-    """auto_analyze 頻道:初次 backfill 仍 discovered,後續新片直接 pending。"""
+    """auto_analyze channel: initial backfill stays discovered, subsequent new videos go straight to pending."""
     app, client = api
     await client.post("/api/channels", json={"channel_ids": "UC_fake_alpha"})
     await wait_refresh(app)
@@ -173,7 +173,7 @@ async def test_auto_analyze_channel_ingests_new_videos_as_pending(api, sessionma
             Video.__table__.select().where(Video.channel_id == "UC_fake_alpha")
         )).all()
         assert {v.status for v in videos} == {"discovered"}
-        # 模擬「只認得最舊一部」:刪掉較新兩部,下次 discover 視為新發布
+        # Simulate "only knows the oldest one": delete the two newer videos so the next discover treats them as newly published
         await s.execute(
             Video.__table__.delete().where(
                 Video.id.in_(["alpha_vid_2", "alpha_vid_3"])
@@ -196,6 +196,6 @@ async def test_auto_analyze_channel_ingests_new_videos_as_pending(api, sessionma
                 Video.id.in_(["alpha_vid_2", "alpha_vid_3"])
             )
         )).all()
-        # analyze job 還沒跑,所以是 pending(或已被 runner 接著跑掉 → analyzed)
+        # analyze job hasn't run yet, so pending (or already picked up by the runner → analyzed)
         assert all(r.status in ("pending", "analyzed") for r in rows)
         assert all(r.status != "discovered" for r in rows)

@@ -41,7 +41,7 @@ describe("PendingReviewBanner", () => {
 
   it("renders nothing when there is nothing to review", async () => {
     renderBanner(0);
-    // 等 SWR resolve 後仍不該出現
+    // Should still not appear after SWR resolves
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });

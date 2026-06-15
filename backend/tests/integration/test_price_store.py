@@ -14,7 +14,8 @@ class CountingFake(FakeMarketClient):
 
 
 class RescalingFake(CountingFake):
-    """模擬除權息後整條序列被重新調整:第二次起所有收盤價砍半。"""
+    """Simulate the whole series being re-adjusted after a dividend/split: from the
+    second call onward all close prices are halved."""
 
     async def get_daily_history(self, tickers, start, end):
         out = await super().get_daily_history(tickers, start, end)
@@ -35,7 +36,7 @@ async def test_first_call_fetches_and_persists(sessionmaker):
     store = PriceStore(sessionmaker, fake)
     start = date.today() - timedelta(days=30)
     out = await store.get_daily(["AAPL", "VOO"], start)
-    assert len(fake.calls) == 1  # 兩檔一次批次抓
+    assert len(fake.calls) == 1  # both tickers fetched in a single batch
     assert len(out["AAPL"]) > 10
     assert out["AAPL"][0].time >= start.isoformat()
 
@@ -46,7 +47,7 @@ async def test_second_call_within_hour_hits_db_only(sessionmaker):
     start = date.today() - timedelta(days=30)
     first = await store.get_daily(["AAPL"], start)
     second = await store.get_daily(["AAPL"], start)
-    assert len(fake.calls) == 1  # 第二次完全走 DB
+    assert len(fake.calls) == 1  # the second call goes entirely through the DB
     assert [c.close for c in second["AAPL"]] == [c.close for c in first["AAPL"]]
 
 
@@ -65,7 +66,7 @@ async def test_unknown_ticker_returns_empty_and_does_not_refetch(sessionmaker):
     start = date.today() - timedelta(days=30)
     assert (await store.get_daily(["ZZZZ"], start))["ZZZZ"] == []
     assert (await store.get_daily(["ZZZZ"], start))["ZZZZ"] == []
-    assert len(fake.calls) == 1  # coverage 記住了「查過沒資料」
+    assert len(fake.calls) == 1  # coverage remembers "queried, no data"
 
 
 async def test_rescaled_series_is_wiped_and_refetched(sessionmaker):
@@ -74,7 +75,7 @@ async def test_rescaled_series_is_wiped_and_refetched(sessionmaker):
     start = date.today() - timedelta(days=60)
     first = await store.get_daily(["AAPL"], start)
 
-    # 讓尾段同步條件成立:把涵蓋的 end_date 倒退、同步時間歸零
+    # make the trailing-sync condition true: roll the covered end_date back and zero the sync time
     from sqlalchemy import update
     from app.models import PriceCoverage
 
@@ -88,7 +89,7 @@ async def test_rescaled_series_is_wiped_and_refetched(sessionmaker):
         await session.commit()
 
     second = await store.get_daily(["AAPL"], start)
-    # overlap 比對發現砍半 → 整檔重抓,舊值不殘留
+    # overlap comparison detects the halving -> whole ticker refetched, no stale values left
     assert second["AAPL"][0].close < first["AAPL"][0].close
     closes = {c.time: c.close for c in second["AAPL"]}
     assert all(abs(v - first_c.close / 2) < 0.02
@@ -98,7 +99,7 @@ async def test_rescaled_series_is_wiped_and_refetched(sessionmaker):
 
 async def test_transient_empty_result_retries_on_later_sync(sessionmaker):
     class FlakyFake(CountingFake):
-        """第一次回空(模擬上游暫時失敗),之後恢復正常。"""
+        """Returns empty the first time (simulating a transient upstream failure), then recovers."""
 
         async def get_daily_history(self, tickers, start, end):
             self.calls.append((tuple(tickers), start, end))
@@ -111,11 +112,11 @@ async def test_transient_empty_result_retries_on_later_sync(sessionmaker):
     start = date.today() - timedelta(days=30)
     assert (await store.get_daily(["AAPL"], start))["AAPL"] == []
 
-    # 一小時內:不重打(節流仍生效)
+    # within an hour: no refetch (throttling still in effect)
     assert (await store.get_daily(["AAPL"], start))["AAPL"] == []
     assert len(fake.calls) == 1
 
-    # 模擬一小時後:同步時間倒退 → 尾段同步從頭重抓,自癒
+    # simulate an hour later: roll the sync time back -> trailing sync refetches from scratch, self-heals
     from sqlalchemy import update
     from app.models import PriceCoverage
 
@@ -133,10 +134,10 @@ async def test_batched_overfetch_extends_coverage(sessionmaker):
     store = PriceStore(sessionmaker, fake)
     deep = date.today() - timedelta(days=90)
     shallow = date.today() - timedelta(days=30)
-    # 先讓 VOO 已有 30 天涵蓋 → 之後與 AAPL(90 天)同批抓
+    # first give VOO 30 days of coverage -> later it's fetched in the same batch as AAPL (90 days)
     await store.get_daily(["VOO"], shallow)
-    await store.get_daily(["AAPL"], deep)  # 批次只含 AAPL
-    # AAPL 的涵蓋起點應該是 90 天前;再要 60 天不應觸發重抓
+    await store.get_daily(["AAPL"], deep)  # batch contains only AAPL
+    # AAPL's coverage start should be 90 days ago; asking for 60 days again must not trigger a refetch
     n_calls = len(fake.calls)
     out = await store.get_daily(["AAPL"], date.today() - timedelta(days=60))
     assert len(fake.calls) == n_calls
@@ -145,7 +146,7 @@ async def test_batched_overfetch_extends_coverage(sessionmaker):
 
 async def test_mixed_trailing_batch_only_rescaled_ticker_is_wiped(sessionmaker):
     class SelectiveRescalingFake(CountingFake):
-        """只有 AAPL 在後續呼叫被砍半;VOO 維持原值。"""
+        """Only AAPL is halved on subsequent calls; VOO keeps its original values."""
 
         async def get_daily_history(self, tickers, start, end):
             self.calls.append((tuple(tickers), start, end))
@@ -174,5 +175,5 @@ async def test_mixed_trailing_batch_only_rescaled_ticker_is_wiped(sessionmaker):
         await session.commit()
 
     second = await store.get_daily(["AAPL", "VOO"], start)
-    assert second["AAPL"][0].close < first["AAPL"][0].close      # AAPL 整檔重抓(砍半)
-    assert second["VOO"][0].close == first["VOO"][0].close       # VOO 不受影響
+    assert second["AAPL"][0].close < first["AAPL"][0].close      # AAPL refetched entirely (halved)
+    assert second["VOO"][0].close == first["VOO"][0].close       # VOO unaffected

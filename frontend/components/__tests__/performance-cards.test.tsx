@@ -80,7 +80,7 @@ describe("PerformanceCards", () => {
       qqq: { price: 478.91, changes },
     }));
     expect(await screen.findByText("My portfolio")).toBeInTheDocument();
-    // 組合 headline 被遮罩(百分比也遮 → 可能有多個 ••••)
+    // The portfolio headline is masked (percentages are masked too → there may be multiple ••••)
     expect(screen.getAllByText("••••").length).toBeGreaterThan(0);
     expect(screen.queryByText(/128,430/)).toBeNull();
     // VOO/QQQ are public market prices, not masked
@@ -97,10 +97,10 @@ describe("PerformanceCards", () => {
       qqq: { price: 478.91, changes },
     }));
     await screen.findByText("My portfolio");
-    // 隱私只遮投組:portfolio headline + 其 1D/各區間百分比 → 多個 ••••
+    // Privacy masks only the portfolio: the portfolio headline + its 1D/per-range percentages → multiple ••••
     expect(screen.getAllByText("••••").length).toBeGreaterThan(0);
     expect(screen.queryByText(/128,430/)).toBeNull();
-    // 但 VOO/QQQ 為公開市場數字,兩張卡的 1m 百分比依舊顯示真實數值(非遮罩)
+    // But VOO/QQQ are public market figures, so both cards' 1m percentages still show real values (not masked)
     expect(screen.getAllByText("+4.3%").length).toBe(2);
     expect(screen.getAllByText("-1.2%").length).toBe(2);
     for (const el of screen.getAllByText("+4.3%")) {

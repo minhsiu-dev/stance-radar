@@ -71,7 +71,7 @@ describe("OverviewTab", () => {
     expect(swrResponses["/api/stocks/AAPL/stance-summary?days=180"]).toBeDefined();
   });
 
-  it("clicking 全部/All window button uses days=3650", async () => {
+  it("clicking the All window button uses days=3650", async () => {
     seedBase(90);
     swrResponses["/api/stocks/AAPL/stance-summary?days=3650"] = {
       buy: 10, neutral: 3, sell: 2, window_days: 3650,
@@ -79,7 +79,7 @@ describe("OverviewTab", () => {
 
     render(<OverviewTab ticker="AAPL" />);
 
-    // Click the "全部/All" window button — the button text is "windowAll" per i18n mock
+    // Click the "All" window button — the button text is "windowAll" per i18n mock
     const btnAll = screen.getByRole("button", { name: "windowAll" });
     await userEvent.click(btnAll);
 

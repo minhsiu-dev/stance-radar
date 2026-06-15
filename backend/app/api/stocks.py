@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/stocks")
 
 _FINANCIAL_PERIODS = {"quarterly", "annual"}
 
-# 日 K 區間 → 往回的日曆天數(ytd 另計)
+# Daily-candle range -> number of calendar days to look back (ytd computed separately)
 _DAILY_RANGE_DAYS = {"1m": 31, "3m": 93, "6m": 186, "1y": 366, "3y": 1096, "5y": 1827}
 _INTRADAY_RANGES = {"1d", "5d"}
 
@@ -50,7 +50,7 @@ async def stock_search(
         hits = await market.search(q.strip())
     except Exception:
         logger.exception("search failed for %s", q)
-        return fail("搜尋暫時無法使用,稍後再試", status_code=502)
+        return fail("Search temporarily unavailable, please try again later", status_code=502)
     return ok([asdict(h) for h in hits])
 
 
@@ -92,9 +92,9 @@ async def stocks_trending(
     count_days: int | None = Query(None, ge=1, le=365),
     session: AsyncSession = Depends(get_session),
 ):
-    """`days` = 新鮮度:只收錄此區間內被提及過的股票。
-    `count_days`(預設 = days)= 統計頻道數與立場的區間。
-    排序鍵 = 不重複頻道數 → 最近提及 → ticker。"""
+    """`days` = freshness: only include stocks mentioned within this window.
+    `count_days` (defaults to days) = the window for counting channels and stances.
+    Sort key = distinct channel count -> most recent mention -> ticker."""
     now = datetime.now(timezone.utc)
     fresh_cutoff = now - timedelta(days=days)
     count_cutoff = now - timedelta(days=(count_days or days))
@@ -157,10 +157,10 @@ async def stock_summary(ticker: str, market: MarketClient = Depends(get_market))
     try:
         summary = await market.get_summary(ticker.upper())
     except StockNotFound:
-        return fail(f"查無股票 {ticker.upper()}", status_code=404)
+        return fail(f"No stock found: {ticker.upper()}", status_code=404)
     except Exception:
         logger.exception("summary fetch failed for %s", ticker)
-        return fail("行情資料暫時無法取得,稍後再試", status_code=502)
+        return fail("Market data temporarily unavailable, please try again later", status_code=502)
     return ok(asdict(summary))
 
 
@@ -172,16 +172,16 @@ async def stock_financials(
 ):
     if period not in _FINANCIAL_PERIODS:
         return fail(
-            f"period 必須是 {', '.join(sorted(_FINANCIAL_PERIODS))}",
+            f"period must be one of {', '.join(sorted(_FINANCIAL_PERIODS))}",
             status_code=422,
         )
     try:
         reports = await market.get_financials(ticker.upper(), period)  # type: ignore[arg-type]
     except StockNotFound:
-        return fail(f"查無股票 {ticker.upper()}", status_code=404)
+        return fail(f"No stock found: {ticker.upper()}", status_code=404)
     except Exception:
         logger.exception("financials fetch failed for %s", ticker)
-        return fail("財報資料暫時無法取得,稍後再試", status_code=502)
+        return fail("Financial data temporarily unavailable, please try again later", status_code=502)
     return ok([asdict(r) for r in reports])
 
 
@@ -191,7 +191,7 @@ async def stock_analyst(ticker: str, market: MarketClient = Depends(get_market))
         data = await market.get_analyst(ticker.upper())
     except Exception:
         logger.exception("analyst fetch failed for %s", ticker)
-        return fail("分析師資料暫時無法取得,稍後再試", status_code=502)
+        return fail("Analyst data temporarily unavailable, please try again later", status_code=502)
     return ok(asdict(data))
 
 
@@ -204,7 +204,7 @@ async def stock_candles(
 ):
     if range_key not in RANGE_TO_FETCH:
         return fail(
-            f"range 必須是 {', '.join(sorted(RANGE_TO_FETCH))}", status_code=422
+            f"range must be one of {', '.join(sorted(RANGE_TO_FETCH))}", status_code=422
         )
     t = ticker.upper()
     try:
@@ -214,12 +214,12 @@ async def stock_candles(
             today = datetime.now(timezone.utc).date()
             candles = (await store.get_daily([t], daily_range_start(range_key, today)))[t]
             if not candles:
-                return fail(f"查無股票 {t}", status_code=404)
+                return fail(f"No stock found: {t}", status_code=404)
     except StockNotFound:
-        return fail(f"查無股票 {t}", status_code=404)
+        return fail(f"No stock found: {t}", status_code=404)
     except Exception:
         logger.exception("candles fetch failed for %s", ticker)
-        return fail("行情資料暫時無法取得,稍後再試", status_code=502)
+        return fail("Market data temporarily unavailable, please try again later", status_code=502)
     return ok([asdict(c) for c in candles])
 
 
@@ -241,7 +241,7 @@ async def stance_summary(
     for stance, c in rows:
         counts[stance.value] = c
 
-    # 該窗內對這檔有立場的頻道(去重),給前端顯示頭像
+    # Channels (deduplicated) that hold a stance on this ticker within the window, for showing avatars on the frontend
     chan_rows = (await session.execute(
         select(Channel.id, Channel.title, Channel.thumbnail_url)
         .join(Video, Video.channel_id == Channel.id)
@@ -264,7 +264,7 @@ async def stock_stances(ticker: str, session: AsyncSession = Depends(get_session
         .join(Video, VideoStance.video_id == Video.id)
         .join(Channel, Video.channel_id == Channel.id)
         .where(VideoStance.ticker == ticker.upper())
-        .order_by(Video.published_at.asc())  # chart 標記需要時間遞增
+        .order_by(Video.published_at.asc())  # chart markers need ascending time
     )).all()
     return ok([
         {
@@ -290,7 +290,7 @@ def _majority_stance(mentions: list[Mention]) -> str:
 
 @router.get("/{ticker}/mentions")
 async def stock_mentions(ticker: str, session: AsyncSession = Depends(get_session)):
-    """一部影片一列:stance 取整部影片的總體立場,timestamps 列出每次提及。"""
+    """One row per video: stance is the video's overall stance, timestamps list each mention."""
     rows = (await session.execute(
         select(Mention, Video, Channel, VideoStance)
         .join(Video, Mention.video_id == Video.id)
@@ -339,7 +339,7 @@ async def stock_mentions(ticker: str, session: AsyncSession = Depends(get_sessio
                 f"&t={int(mention.start_seconds)}s"
             ),
         })
-    # 舊資料可能沒有 VideoStance → 以逐筆 mention 多數決補上
+    # Older data may lack a VideoStance -> backfill via majority vote over individual mentions
     result = [
         row if row["stance"] is not None
         else {**row, "stance": _majority_stance(video_mentions[row["video_id"]])}

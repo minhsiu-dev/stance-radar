@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import type { AppSettings } from "@/lib/types";
 
-/** 後端有開自動更新時顯示「每 N 分鐘自動更新」,沒開不佔空間。 */
+/** Shows "auto-refreshes every N minutes" when the backend has auto-refresh enabled; takes no space when disabled. */
 export function AutoRefreshHint() {
   const t = useTranslations("Dashboard.refresh");
   const { data } = useSWR<AppSettings>("/api/settings", {

@@ -22,7 +22,7 @@ def make_series(*pairs: tuple[str, float]) -> PriceSeries:
 
 
 class StubStore:
-    """duck-typed PriceStore:回傳預先寫好的日 K。"""
+    """duck-typed PriceStore: returns pre-written daily candles."""
 
     def __init__(self, data: dict[str, list]):
         self._data = data
@@ -32,7 +32,7 @@ class StubStore:
 
 
 def _linear_candles(ticker: str) -> list[Candle]:
-    """每天 +1 的價格序列;SPY 固定不動(alpha = raw return)。"""
+    """Price series rising +1 per day; SPY stays flat (alpha = raw return)."""
     days = (
         [f"2026-01-{d:02d}" for d in range(1, 32)]
         + [f"2026-02-{d:02d}" for d in range(1, 29)]
@@ -94,13 +94,13 @@ async def test_build_scorecard_linear_market_returns_and_alpha():
         },
     ])
     call = next(c for c in result["calls"] if c["ticker"] == "AAPL")
-    # entry 2026-01-10 close=109;+7 日曆日 → 2026-01-17 close=116
+    # entry 2026-01-10 close=109; +7 calendar days -> 2026-01-17 close=116
     assert call["entry_price"] == 109.0
     assert call["returns"]["7"] == pytest.approx(6.42, abs=0.01)
-    # SPY 不動 → alpha == raw return
+    # SPY flat -> alpha == raw return
     assert call["alpha"]["7"] == call["returns"]["7"]
     assert call["returns"]["30"] is not None
-    assert call["returns"]["90"] is not None  # 序列到 4/30,1/10+90 → 4/10
+    assert call["returns"]["90"] is not None  # series runs to 4/30, 1/10+90 -> 4/10
 
     gone = next(c for c in result["calls"] if c["ticker"] == "GONE")
     assert gone["has_data"] is False
@@ -109,7 +109,7 @@ async def test_build_scorecard_linear_market_returns_and_alpha():
     assert aggregates["buy"]["total"] == 1
     assert aggregates["buy"]["horizons"][7]["count"] == 1
     assert aggregates["buy"]["horizons"][7]["win_rate"] == 100.0
-    # GONE 無資料 → sell 沒有已實現樣本
+    # GONE has no data -> sell has no realized samples
     assert aggregates["sell"]["horizons"][7]["count"] == 0
     assert aggregates["sell"]["horizons"][7]["avg_return"] is None
 
@@ -132,7 +132,7 @@ def test_aggregate_sell_win_means_price_dropped():
     assert sell7["count"] == 2
     assert sell7["avg_return"] == 1.0
     assert sell7["win_rate"] == 50.0
-    assert sell7["avg_alpha"] == -4.0  # 只平均有 alpha 的樣本
+    assert sell7["avg_alpha"] == -4.0  # only average samples that have alpha
 
 
 async def test_build_scorecard_page_no_aggregates_voo_benchmark():
@@ -140,7 +140,7 @@ async def test_build_scorecard_page_no_aggregates_voo_benchmark():
 
     store = StubStore({
         "AAPL": _linear_candles("AAPL"),
-        "VOO": _linear_candles("SPY"),  # flat → alpha == raw return
+        "VOO": _linear_candles("SPY"),  # flat -> alpha == raw return
     })
     published = datetime(2026, 1, 10, 12, 0, tzinfo=timezone.utc)
     raw = [{

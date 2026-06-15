@@ -101,12 +101,12 @@ class MarketClient(Protocol):
 
 class YFinanceMarketClient:
     def __init__(self) -> None:
-        self._summary_cache = TTLCache(ttl_seconds=900)     # 15 分鐘
-        self._candles_cache = TTLCache(ttl_seconds=3600)    # 1 小時
-        self._exists_cache = TTLCache(ttl_seconds=86400)    # 1 天
-        self._search_cache = TTLCache(ttl_seconds=300)      # 5 分鐘
-        self._financials_cache = TTLCache(ttl_seconds=86400) # 24 小時,財報一季才變一次
-        self._analyst_cache = TTLCache(ttl_seconds=86400)  # 24 小時
+        self._summary_cache = TTLCache(ttl_seconds=900)     # 15 minutes
+        self._candles_cache = TTLCache(ttl_seconds=3600)    # 1 hour
+        self._exists_cache = TTLCache(ttl_seconds=86400)    # 1 day
+        self._search_cache = TTLCache(ttl_seconds=300)      # 5 minutes
+        self._financials_cache = TTLCache(ttl_seconds=86400) # 24 hours; financials change only once a quarter
+        self._analyst_cache = TTLCache(ttl_seconds=86400)  # 24 hours
 
     async def get_summary(self, ticker: str) -> StockSummary:
         cached = self._summary_cache.get(ticker)
@@ -190,7 +190,7 @@ class YFinanceMarketClient:
 
         try:
             return not yf.Ticker(ticker).history(period="5d").empty
-        except Exception:  # yfinance 例外型別不穩定,一律視為不存在並留 log
+        except Exception:  # yfinance exception types are unstable; treat any as nonexistent and log
             logger.warning("ticker_exists check failed for %s", ticker, exc_info=True)
             return False
 
@@ -217,8 +217,8 @@ class YFinanceMarketClient:
             if not symbol:
                 continue
             symbol = symbol.upper()
-            # 本產品只追美股:帶「.」的是外國交易所掛牌(AAPL.MX / AAPL.TO…),
-            # 一律排除;美股股別在 Yahoo 用「-」(BRK-B)不受影響。
+            # This product only tracks US stocks: symbols with a "." are listed on foreign exchanges
+            # (AAPL.MX / AAPL.TO ...), always excluded; US share classes use "-" on Yahoo (BRK-B) and are unaffected.
             if "." in symbol or symbol in seen:
                 continue
             if row.get("quoteType") not in (None, "EQUITY", "ETF"):
@@ -279,8 +279,8 @@ class YFinanceMarketClient:
     async def get_daily_history(
         self, tickers: list[str], start: date, end: date
     ) -> dict[str, list[Candle]]:
-        """多檔日 K 一次 HTTP 抓回(PriceStore 增量補抓用),不走 cache——
-        呼叫端(PriceStore)自己以 DB 為準。"""
+        """Fetch daily candles for multiple tickers in one HTTP call (used by PriceStore for incremental
+        backfill); does not use the cache -- the caller (PriceStore) treats the DB as the source of truth."""
         return await asyncio.to_thread(self._fetch_daily_history, tickers, start, end)
 
     def _fetch_daily_history(
@@ -292,7 +292,7 @@ class YFinanceMarketClient:
         df = yf.download(
             tickers=" ".join(tickers),
             start=start.isoformat(),
-            end=(end + timedelta(days=1)).isoformat(),  # yf 的 end 是開區間
+            end=(end + timedelta(days=1)).isoformat(),  # yf's end is exclusive
             interval="1d",
             auto_adjust=True,
             group_by="ticker",
@@ -314,7 +314,7 @@ class YFinanceMarketClient:
                     high=round(float(row.High), 4),
                     low=round(float(row.Low), 4),
                     close=round(float(row.Close), 4),
-                    volume=int(row.Volume) if row.Volume == row.Volume else 0,  # NaN 量能 → 0
+                    volume=int(row.Volume) if row.Volume == row.Volume else 0,  # NaN volume -> 0
                 )
                 for idx, row in zip(sub.index, sub.itertuples())
             ]
@@ -363,7 +363,7 @@ _FAKE_END_EPOCH = 1_780_000_000  # arbitrary deterministic epoch for fake intrad
 
 
 class FakeMarketClient:
-    """確定性假資料,測試與 USE_FAKE_ADAPTERS=true 模式使用。"""
+    """Deterministic fake data, used in tests and USE_FAKE_ADAPTERS=true mode."""
 
     KNOWN = {
         "AAPL": "Apple Inc.",
@@ -485,7 +485,7 @@ class FakeMarketClient:
             d = start
             while d <= end:
                 if d.weekday() < 5:
-                    # 以 toordinal 為相位:同一天的價格與抓取視窗無關 → 增量補抓可比對
+                    # Use toordinal as the phase: a given day's price is independent of the fetch window -> incremental backfill stays comparable
                     close = round(base + 10 * math.sin(d.toordinal() / 10), 2)
                     candles.append(Candle(
                         time=d.isoformat(),

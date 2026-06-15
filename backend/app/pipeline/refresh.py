@@ -32,7 +32,7 @@ class RefreshDeps:
 
 
 class RefreshRunner:
-    """同一時間只允許一個 refresh job。start() 啟動背景任務後立即回傳。"""
+    """Only one refresh job is allowed at a time. start() launches the background task and returns immediately."""
 
     def __init__(self, deps: RefreshDeps) -> None:
         self._deps = deps
@@ -42,7 +42,7 @@ class RefreshRunner:
     async def start(
         self, kind: JobKind = JobKind.discover, channel_id: str | None = None
     ) -> tuple[int, bool]:
-        """回傳 (job_id, created)。created=False 表示已有 job 在跑。"""
+        """Return (job_id, created). created=False means a job is already running."""
         async with self._start_lock:
             async with self._deps.sessionmaker() as session:
                 job, created = await jobs.start_job(session, kind=kind.value)
@@ -72,7 +72,7 @@ class RefreshRunner:
         except Exception as exc:
             logger.exception("job %s failed", job_id)
             await jobs.finish_job(
-                self._deps.sessionmaker, job_id, error=f"更新失敗:{exc}"
+                self._deps.sessionmaker, job_id, error=f"Update failed: {exc}"
             )
 
     async def _run_discover(self, job_id: int) -> None:
@@ -97,7 +97,7 @@ class RefreshRunner:
 
     async def _run_analyze(self, job_id: int) -> None:
         deps = self._deps
-        # 撿所有 pending:包含本次選取的,以及上次中斷殘留的(resume 語意)
+        # Pick up all pending: both the ones selected this round and leftovers from a prior interruption (resume semantics)
         async with deps.sessionmaker() as session:
             pending = list((await session.execute(
                 select(Video.id)
@@ -118,7 +118,7 @@ class RefreshRunner:
             async with semaphore:
                 try:
                     await self._process_video(video_id)
-                except Exception as exc:  # 單部影片失敗不拖垮整個 job
+                except Exception as exc:  # one video failing shouldn't take down the whole job
                     logger.exception("video %s processing failed", video_id)
                     await self._mark_video_failed(video_id, str(exc))
             async with progress_lock:
@@ -130,10 +130,10 @@ class RefreshRunner:
         await asyncio.gather(*(process(video_id) for video_id in pending))
 
     async def _ingest_channel_videos(self, channel: Channel) -> int:
-        """匯入該頻道的新影片(status=discovered),回傳新增數。
+        """Ingest the channel's new videos (status=discovered); returns the number added.
 
-        頻道開啟 auto_analyze 時,「後續新發布」的影片直接進 pending;
-        初次加入的 backfill(known_ids 為空)仍走 discovered 讓使用者挑選。
+        When the channel has auto_analyze enabled, "subsequently published" videos go straight to pending;
+        the initial backfill (known_ids empty) still goes to discovered for the user to select.
         """
         deps = self._deps
         async with deps.sessionmaker() as session:
@@ -167,7 +167,7 @@ class RefreshRunner:
             return len(new_videos)
 
     async def _run_load_older(self, job_id: int, *, channel_id: str) -> None:
-        """為單一頻道載入更早的影片(walk past 已知區塊),一律進 skipped。"""
+        """Load older videos for a single channel (walking past the known block); all go to skipped."""
         deps = self._deps
         async with deps.sessionmaker() as session:
             channel = await session.get(Channel, channel_id)
@@ -184,11 +184,11 @@ class RefreshRunner:
         })
 
     async def _ingest_older_channel_videos(self, channel: Channel) -> int:
-        """載入該頻道較舊的未知影片,一律 status=skipped,回傳新增數。
+        """Load the channel's older unknown videos, all with status=skipped; returns the number added.
 
-        老影片是使用者手動往回挖的範圍:預設不需要再 review,直接進 skipped
-        (不進 discovered 待挑選、也不走 auto_analyze)。使用者若想分析某部,
-        仍可在頻道頁對個別 skipped 影片按「分析」。
+        Older videos are the range the user manually digs back into: by default they don't need review and go
+        straight to skipped (not discovered-for-selection, and not auto_analyze). If the user wants to analyze
+        one, they can still press "Analyze" on an individual skipped video on the channel page.
         """
         deps = self._deps
         async with deps.sessionmaker() as session:
@@ -237,7 +237,7 @@ class RefreshRunner:
                 await session.commit()
                 return
 
-            # 冪等:failed 影片重撿時先清掉殘留資料
+            # Idempotent: when reprocessing a failed video, clear leftover data first
             await session.execute(delete(Mention).where(Mention.video_id == video_id))
             await session.execute(
                 delete(VideoStance).where(VideoStance.video_id == video_id)

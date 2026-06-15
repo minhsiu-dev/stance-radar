@@ -199,10 +199,10 @@ export function MentionsTable({
                           </p>
                         )}
                         {d.excerpt ? (
-                          // 新格式:提及附近的逐字稿原文(單段連續文字)
+                          // New format: the raw transcript text near the mention (a single continuous passage)
                           <p>{d.excerpt}</p>
                         ) : (
-                          // 舊格式:程式機械式抓的前後文 + quote
+                          // Old format: mechanically extracted surrounding context + quote
                           <>
                             {d.context_before && (
                               <p className="mb-2 text-muted-foreground">

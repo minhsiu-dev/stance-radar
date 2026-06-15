@@ -10,7 +10,7 @@ from app.portfolio.holdings import replay
 
 router = APIRouter(prefix="/api")
 
-# 未挑選(discovered)與已略過(skipped)不進 feed
+# Unselected (discovered) and skipped videos don't enter the feed
 HIDDEN_STATUSES = (VideoStatus.discovered, VideoStatus.skipped)
 
 
@@ -49,7 +49,7 @@ async def feed(
             try:
                 stance_conditions.append(VideoStance.stance == Stance(stance))
             except ValueError:
-                return fail(f"未知的立場:{stance}", status_code=400)
+                return fail(f"Unknown stance: {stance}", status_code=400)
         conditions.append(
             select(VideoStance).where(*stance_conditions).exists()
         )

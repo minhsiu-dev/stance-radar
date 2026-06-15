@@ -139,7 +139,7 @@ export function MarginsChart({ reports }: { reports: FinancialReport[] }) {
   );
 }
 
-/** 舊組合(成長表 + 利潤率圖);保留給既有測試 / 其他可能引用點。 */
+/** Legacy combo (growth table + margins chart); kept for existing tests / other possible references. */
 export function GrowthMargins({ reports }: { reports: FinancialReport[] }) {
   if (reports.length === 0) return null;
   return (

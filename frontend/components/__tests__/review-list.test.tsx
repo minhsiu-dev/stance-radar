@@ -90,7 +90,7 @@ describe("ReviewList", () => {
   it("select all per channel group", async () => {
     renderList();
     await screen.findByText("Video 1");
-    // 第一個頻道群組(Alpha)有 2 部影片
+    // The first channel group (Alpha) has 2 videos
     fireEvent.click(screen.getAllByRole("button", { name: "Select all" })[0]);
     expect(
       screen.getByRole("button", { name: "Analyze selected (2)" }),

@@ -31,7 +31,7 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
     },
     [channelId],
   );
-  // 要抓每檔股票的歷史 K 線,較慢:不自動 revalidate
+  // Fetches historical candles for each stock, which is slow: don't auto-revalidate
   const { data, error, isLoading, setSize, isValidating } =
     useSWRInfinite<Scorecard>(getKey, {
       revalidateOnFocus: false,

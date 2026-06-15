@@ -35,7 +35,7 @@ export function SettingsMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        // base-ui 用 render 取代 Radix 的 asChild
+        // base-ui uses render instead of Radix's asChild
         render={<Button variant="ghost" size="icon" aria-label={t("open")} />}
       >
         <Settings className="h-4 w-4" />
@@ -56,7 +56,7 @@ export function SettingsMenu() {
           {t("theme")}
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
-        {/* base-ui 的 GroupLabel 必須包在 Group 內 */}
+        {/* base-ui's GroupLabel must be wrapped inside a Group */}
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-xs text-muted-foreground">
             {t("language")}

@@ -25,7 +25,7 @@ export function alphaColor(value: number | null): string {
 
 export function ChannelLeaderboard() {
   const t = useTranslations("Dashboard.leaderboard");
-  // 排行榜要抓所有頻道的歷史 K 線,較慢:不自動 revalidate
+  // The leaderboard fetches historical candles for every channel, which is slow: don't auto-revalidate
   const { data, isLoading } = useSWR<LeaderboardResponse>(
     "/api/insights/leaderboard",
     { revalidateOnFocus: false, dedupingInterval: 10 * 60 * 1000 },

@@ -28,7 +28,7 @@ export default async function LocaleLayout({
     <html
       lang={locale}
       suppressHydrationWarning
-      // 字型變數必須在 html 上:font-sans 的 var(--font-geist-sans) 才解析得到
+      // The font variables must be on <html> so that font-sans's var(--font-geist-sans) resolves
       className={`${fontVariables} font-sans`}
     >
       <body className="min-h-screen bg-background text-foreground antialiased">

@@ -5,8 +5,8 @@ from app.models import Video, VideoStatus
 
 
 async def _seed_alpha_trimmed(api) -> None:
-    """加入 alpha,discover 匯入 3 部,然後刪掉兩部較舊的,
-    模擬初次 backfill 只抓到最新一部。"""
+    """Add alpha, discover imports 3 videos, then delete the two older ones,
+    simulating an initial backfill that only fetched the newest one."""
     app, client = api
     await client.post("/api/channels", json={"channel_ids": "UC_fake_alpha"})
     await wait_refresh(app)
@@ -21,7 +21,7 @@ async def test_load_older_pulls_older_videos_as_skipped(api):
     app, client = api
     await _seed_alpha_trimmed(api)
 
-    # 前置:只剩最新一部
+    # Precondition: only the newest one remains
     async with app.state.sessionmaker() as s:
         before = (await s.execute(
             select(Video.id).where(Video.channel_id == "UC_fake_alpha")
@@ -41,9 +41,9 @@ async def test_load_older_pulls_older_videos_as_skipped(api):
             select(Video.id, Video.status).where(Video.channel_id == "UC_fake_alpha")
         )).all()
     by_id = {vid: status for vid, status in rows}
-    # 兩部較舊的回來了
+    # The two older videos are back
     assert set(by_id) == {"alpha_vid_1", "alpha_vid_2", "alpha_vid_3"}
-    # 往回挖的較舊影片一律進 skipped(預設不需 review)
+    # Older videos pulled backward all go to skipped (no review needed by default)
     assert by_id["alpha_vid_1"] == VideoStatus.skipped
     assert by_id["alpha_vid_2"] == VideoStatus.skipped
 

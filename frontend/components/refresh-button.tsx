@@ -39,7 +39,7 @@ export function RefreshButton() {
   const { data: job } = useSWR<JobInfo | null>("/api/jobs/current", apiFetch, {
     refreshInterval: (latest) => (latest?.status === "running" ? 2000 : 0),
     onSuccess: (latest) => {
-      // running → done/failed 的瞬間:刷新資料,discover 有新片就導去挑選頁
+      // The moment running → done/failed: refresh data, and if discover found new videos navigate to the selection page
       if (prevStatus.current === "running" && latest?.status !== "running") {
         mutate(
           (key) =>

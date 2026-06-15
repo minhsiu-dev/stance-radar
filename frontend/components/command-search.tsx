@@ -142,7 +142,7 @@ export function CommandSearch() {
           <CommandEmpty>{t("empty")}</CommandEmpty>
           {!debounced && recent.length > 0 && (
             <CommandGroup heading={t("recent")}>
-              {/* 最近瀏覽是短 token,用 pill 橫排比整列好掃、好點 */}
+              {/* Recently viewed are short tokens; pills in a row are easier to scan and tap than full rows */}
               <div className="flex flex-wrap gap-1.5 px-2 pb-1.5 pt-0.5">
                 {recent.map((ticker) => (
                   <CommandItem

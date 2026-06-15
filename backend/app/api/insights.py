@@ -58,10 +58,10 @@ async def stance_flips(
     reversals_only: bool = Query(False),
     session: AsyncSession = Depends(get_session),
 ):
-    """近 N 天內發生的立場轉變(偵測需要全部歷史,過濾只看 curr 的時間)。
+    """Stance flips that occurred within the last N days (detection needs full history; the filter only looks at curr's time).
 
-    reversals_only=True 時只留 buy↔sell 反轉(排除進出 neutral)。過濾在 limit
-    之前做,否則 limit 會先砍掉、漏掉較舊的反轉。
+    When reversals_only=True, keep only buy<->sell reversals (excluding moves in/out of neutral). The filter runs
+    before limit; otherwise limit would cut first and miss older reversals.
     """
     points = await _load_stance_points(session)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
@@ -154,7 +154,7 @@ async def channel_scorecard(
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
-        return fail(f"頻道 {channel_id} 不存在", status_code=404)
+        return fail(f"Channel {channel_id} not found", status_code=404)
     calls, total = await _channel_calls_page(session, channel_id, page, page_size)
     scorecard = await build_scorecard_page(store, calls, total, page, page_size)
     return ok(scorecard)
@@ -165,7 +165,7 @@ async def channel_leaderboard(
     session: AsyncSession = Depends(get_session),
     store: PriceStore = Depends(get_price_store),
 ):
-    """所有頻道的 30 天 call 表現排行(已實現的 buy/sell call 加總)。"""
+    """Leaderboard of all channels' 30-day call performance (sum over realized buy/sell calls)."""
     channels = (await session.execute(select(Channel))).scalars().all()
     headline = 30
     items = []
@@ -175,7 +175,7 @@ async def channel_leaderboard(
             continue
         scorecard = await build_scorecard(store, calls)
         aggregates = scorecard["aggregates"]
-        # 單一排序指標:照他的話做(buy 做多、sell 視為避開),30 天平均 alpha
+        # Single ranking metric: follow their calls (buy = go long, sell = avoid), 30-day average alpha
         signed: list[float] = []
         for call in scorecard["calls"]:
             alpha = call["alpha"].get(str(headline))

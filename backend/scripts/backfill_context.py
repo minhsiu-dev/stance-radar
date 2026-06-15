@@ -46,7 +46,7 @@ async def main() -> None:
             logger.warning("skip %s: transcript not available", video_id)
             skipped += 1
             continue
-        except Exception as exc:  # 單部失敗不中斷整個 backfill
+        except Exception as exc:  # a single failure shouldn't abort the whole backfill
             logger.warning("skip %s: %s", video_id, exc)
             skipped += 1
             continue
@@ -59,7 +59,7 @@ async def main() -> None:
             await session.commit()
         updated += 1
         logger.info("updated %s (%d mentions)", video_id, len(video_mentions))
-        await asyncio.sleep(0.5)  # 避免打太快被 YouTube rate limit
+        await asyncio.sleep(0.5)  # avoid hitting YouTube's rate limit by going too fast
 
     logger.info("done: %d videos updated, %d skipped", updated, skipped)
     await engine.dispose()

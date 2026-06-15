@@ -19,15 +19,15 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   try {
     body = await resp.json();
   } catch {
-    throw new ApiError(`無法解析伺服器回應 (${resp.status})`, resp.status);
+    throw new ApiError(`Failed to parse server response (${resp.status})`, resp.status);
   }
   if (!resp.ok || !body.success) {
-    throw new ApiError(body.error ?? `請求失敗 (${resp.status})`, resp.status);
+    throw new ApiError(body.error ?? `Request failed (${resp.status})`, resp.status);
   }
   return body.data as T;
 }
 
-/** 不丟例外版本:channels 新增的部分失敗(400)也要讀 data。 */
+/** Non-throwing variant: read data even on partial failure (400) when adding channels. */
 export async function apiFetchEnvelope<T>(
   path: string,
   init?: RequestInit,

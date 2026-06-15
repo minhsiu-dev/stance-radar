@@ -26,8 +26,8 @@ class TranscriptClient(Protocol):
 
 
 def select_best(candidates: Sequence) -> object | None:
-    """candidates 需有 .language_code 與 .is_generated 屬性。
-    優先序:手動 zh-TW → 手動 zh → 手動 en → 自動(同語言順序)→ 任何手動 → 任何自動。
+    """candidates must have .language_code and .is_generated attributes.
+    Priority: manual zh-TW -> manual zh -> manual en -> auto-generated (same language order) -> any manual -> any auto.
     """
     manual = [c for c in candidates if not c.is_generated]
     generated = [c for c in candidates if c.is_generated]
@@ -68,7 +68,7 @@ class YouTubeTranscriptApiClient:
                 raise TranscriptNotAvailable(video_id)
             fetched = best.fetch()
         except CouldNotRetrieveTranscript as exc:
-            # 字幕關閉/不存在/影片不可用 → 永久性,標 no_transcript
+            # Captions disabled/absent/video unavailable -> permanent, mark no_transcript
             raise TranscriptNotAvailable(video_id) from exc
         raw = [{"start": s.start, "text": s.text} for s in fetched]
         return Transcript(
@@ -96,12 +96,12 @@ _FAKE_TRANSCRIPTS: dict[str, Transcript] = {
         {"start": 10.0, "text": "蘋果我持續加碼"},
         {"start": 200.0, "text": "輝達就觀望,等回檔"},
     ])),
-    # beta_vid_1 刻意缺席 → TranscriptNotAvailable(測 no_transcript 路徑)
+    # beta_vid_1 is intentionally absent -> TranscriptNotAvailable (exercises the no_transcript path)
 }
 
 
 class FakeTranscriptClient:
-    """確定性假資料;beta_vid_1 永遠丟 TranscriptNotAvailable。"""
+    """Deterministic fake data; beta_vid_1 always raises TranscriptNotAvailable."""
 
     async def fetch(self, video_id: str) -> Transcript:
         if video_id not in _FAKE_TRANSCRIPTS:

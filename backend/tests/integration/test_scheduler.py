@@ -14,13 +14,13 @@ async def test_run_once_discovers_then_analyzes_pending(api, sessionmaker):
         runner=app.state.runner, sessionmaker=sessionmaker, interval_minutes=60,
     )
 
-    # 全部 discovered、無 pending → 只跑 discover
+    # all discovered, none pending -> only discover runs
     await scheduler.run_once()
     async with sessionmaker() as s:
         kinds = [j.kind for j in (await s.execute(select(Job))).scalars()]
     assert kinds.count("analyze") == 0
 
-    # 有 pending → discover 後接著 analyze
+    # has pending -> analyze runs after discover
     async with sessionmaker() as s:
         video = await s.get(Video, "alpha_vid_3")
         video.status = VideoStatus.pending

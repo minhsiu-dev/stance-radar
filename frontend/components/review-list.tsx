@@ -25,7 +25,7 @@ export function ReviewList() {
   const { data, error, isLoading } = useSWR<DiscoveredResponse>(
     "/api/videos?status=discovered",
   );
-  // 預設全不選(opt-in):勾選要分析的;沒勾的在確認時一律略過
+  // Default to nothing selected (opt-in): check the ones to analyze; unchecked ones are all skipped on confirm
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

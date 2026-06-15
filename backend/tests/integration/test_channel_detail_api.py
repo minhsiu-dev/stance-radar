@@ -10,7 +10,7 @@ async def seed_two_phase(api) -> tuple:
         "/api/channels", json={"channel_ids": "UC_fake_alpha UC_fake_beta"}
     )
     await wait_refresh(app)
-    # 只分析 alpha 的兩部,略過一部;beta 維持 discovered
+    # Analyze only two of alpha's videos, skip one; beta stays discovered
     await client.post("/api/videos/analyze", json={
         "video_ids": ["alpha_vid_3", "alpha_vid_2"],
     })
@@ -27,7 +27,7 @@ async def test_channel_detail_stats(api):
     assert data["id"] == "UC_fake_alpha"
     assert data["title"] == "頻道 Alpha"
     assert data["status_counts"] == {"analyzed": 2, "skipped": 1}
-    # alpha_vid_3 → AAPL buy(fake adapter 固定資料)
+    # alpha_vid_3 → AAPL buy (fixed data from fake adapter)
     tickers = {t["ticker"]: t for t in data["top_tickers"]}
     assert "AAPL" in tickers
     assert tickers["AAPL"]["buy"] >= 1
@@ -77,8 +77,8 @@ async def test_channel_list_includes_video_counts(api):
 
 
 async def test_top_tickers_include_latest_stance(api):
-    # seed_two_phase 分析了 alpha_vid_3 (AAPL buy, 2026-06-08)
-    # 以及 alpha_vid_2 (NVDA sell, 2026-05-25);alpha_vid_1 被 skip
+    # seed_two_phase analyzed alpha_vid_3 (AAPL buy, 2026-06-08)
+    # and alpha_vid_2 (NVDA sell, 2026-05-25); alpha_vid_1 was skipped
     app, client = await seed_two_phase(api)
     resp = await client.get("/api/channels/UC_fake_alpha")
     assert resp.status_code == 200
@@ -97,9 +97,9 @@ async def test_top_tickers_include_latest_stance(api):
 
 
 async def test_latest_stance_newest_wins(api):
-    # seed_two_phase 已分析 alpha_vid_3 (AAPL buy, 2026-06-08)
-    # 直接插入一筆更舊的 AAPL neutral stance 到 alpha_vid_2 (2026-05-25)
-    # 斷言 latest_stance 仍為 "buy"(較新的 alpha_vid_3 獲勝)
+    # seed_two_phase already analyzed alpha_vid_3 (AAPL buy, 2026-06-08)
+    # Directly insert an older AAPL neutral stance on alpha_vid_2 (2026-05-25)
+    # Assert latest_stance is still "buy" (the newer alpha_vid_3 wins)
     app, client = await seed_two_phase(api)
 
     async with app.state.sessionmaker() as s:

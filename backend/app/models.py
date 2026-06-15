@@ -63,7 +63,7 @@ class Channel(Base):
     title: Mapped[str] = mapped_column(String(200))
     thumbnail_url: Mapped[str] = mapped_column(Text, default="")
     uploads_playlist_id: Mapped[str] = mapped_column(String(34))
-    # 開啟後,discover 抓到的「新發布」影片直接進分析,不需手動挑選
+    # When enabled, "newly published" videos found by discover go straight to analysis, no manual selection needed
     auto_analyze: Mapped[bool] = mapped_column(Boolean, default=False)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_refreshed_at: Mapped[datetime | None] = mapped_column(
@@ -91,7 +91,7 @@ class Video(Base):
     )
     transcript_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # LLM 回報但 ticker 驗證不過而被丟棄的代號(讓使用者知道有東西被略過)
+    # Tickers reported by the LLM but dropped because they failed ticker validation (lets the user know something was skipped)
     dropped_tickers: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     analyzed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -118,12 +118,12 @@ class Mention(Base):
     quote: Mapped[str] = mapped_column(Text)
     stance: Mapped[Stance] = mapped_column(_enum(Stance, "stance"))
     reasoning: Mapped[str] = mapped_column(Text)
-    # 舊格式:程式機械式抓的前後文(新影片改用 excerpt,這兩欄為 NULL)
+    # Old format: mechanically extracted surrounding context (newer videos use excerpt; these two columns are NULL)
     context_before: Mapped[str | None] = mapped_column(Text, nullable=True)
     context_after: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # 新格式:提及附近的逐字稿原文(合成單段;舊資料為 NULL)
+    # New format: raw transcript text around the mention (merged into a single passage; NULL for older data)
     excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # 立場細節(舊資料為 NULL):high|medium|low / short|long|unspecified
+    # Stance details (NULL for older data): high|medium|low / short|long|unspecified
     confidence: Mapped[str | None] = mapped_column(String(8), nullable=True)
     time_horizon: Mapped[str | None] = mapped_column(String(16), nullable=True)
     is_conditional: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
@@ -161,10 +161,10 @@ class Job(Base):
 
 
 class PriceBar(Base):
-    """日 K 快取:歷史日 K 不可變,存過就不再向 yfinance 重抓。
+    """Daily-candle cache: historical daily candles are immutable; once stored we don't re-fetch from yfinance.
 
-    OHLC 刻意用 Float(非 Numeric):這是可重抓的行情快取而非帳務資料,
-    全部下游計算(回推績效、記分板)都走 float,且與 Candle dataclass 一致。
+    OHLC intentionally uses Float (not Numeric): this is a re-fetchable market-data cache, not accounting data;
+    all downstream calculations (performance backtests, scorecard) use float, and this matches the Candle dataclass.
     """
 
     __tablename__ = "price_bars"
@@ -179,14 +179,14 @@ class PriceBar(Base):
 
 
 class PriceCoverage(Base):
-    """每檔 ticker 在 price_bars 中已涵蓋的連續日期區間。"""
+    """The contiguous date range each ticker already covers in price_bars."""
 
     __tablename__ = "price_coverage"
 
     ticker: Mapped[str] = mapped_column(String(10), primary_key=True)
     start_date: Mapped[date_type] = mapped_column(Date)
     end_date: Mapped[date_type] = mapped_column(Date)
-    last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # 由 PriceStore 同步時寫入,建立時不給預設
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # written by PriceStore on sync; no default at creation
 
 
 class PortfolioTransaction(Base):

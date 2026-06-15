@@ -1,12 +1,12 @@
-"""頻道記分板:每個 buy/sell call 之後 7/30/90 天的前瞻報酬,並對比 SPY。
+"""Channel scorecard: forward returns 7/30/90 days after each buy/sell call, benchmarked against SPY.
 
-報酬定義:
-- entry:影片發布日(含)之後第一個交易日收盤價
-- exit:entry 日 + N 個「日曆日」(含)之後第一個交易日收盤價
-- return = (exit / entry - 1) * 100;alpha = return - 同窗口 SPY return
-- 資料不足(影片太新 / 已下市)→ None,聚合時排除
+Return definitions:
+- entry: closing price on the first trading day on or after the video's publish date
+- exit: closing price on the first trading day on or after entry date + N "calendar days"
+- return = (exit / entry - 1) * 100; alpha = return - SPY return over the same window
+- insufficient data (video too new / delisted) -> None, excluded from aggregation
 
-neutral 立場無方向性,不參與記分。
+A neutral stance has no direction and is not scored.
 """
 import logging
 from bisect import bisect_left
@@ -20,12 +20,12 @@ logger = logging.getLogger(__name__)
 HORIZONS = (7, 30, 90)
 BENCHMARK = "SPY"  # aggregate/leaderboard path
 SCORECARD_BENCHMARK = "VOO"  # per-call paginated scorecard path
-_HISTORY_DAYS = 1827  # 5 年,涵蓋本工具的歷史 call
+_HISTORY_DAYS = 1827  # 5 years, covers this tool's historical calls
 
 
 @dataclass(frozen=True)
 class PriceSeries:
-    """已排序的 (date, close) 序列,提供「該日(含)之後第一個收盤價」查詢。"""
+    """A sorted (date, close) series providing "first closing price on or after a given date" lookups."""
 
     dates: tuple[date, ...]
     closes: tuple[float, ...]
@@ -48,7 +48,7 @@ class CallScore:
     published_at: str  # ISO datetime
     entry_date: str | None = None
     entry_price: float | None = None
-    # horizon(days)→ 報酬 %;尚未到期或無資料 → None
+    # horizon (days) -> return %; not yet matured or no data -> None
     returns: dict[int, float | None] = field(default_factory=dict)
     alpha: dict[int, float | None] = field(default_factory=dict)
     has_data: bool = True
@@ -58,7 +58,7 @@ def _to_series(candles) -> PriceSeries | None:
     dates: list[date] = []
     closes: list[float] = []
     for c in candles:
-        if not isinstance(c.time, str):  # 只認日 K
+        if not isinstance(c.time, str):  # only accept daily candles
             continue
         dates.append(date.fromisoformat(c.time))
         closes.append(c.close)
@@ -76,7 +76,7 @@ async def fetch_price_series(
 
 
 def _window_return(series: PriceSeries, published: date, horizon: int) -> tuple:
-    """回傳 (entry_date, entry_price, return_pct | None)。"""
+    """Return (entry_date, entry_price, return_pct | None)."""
     entry = series.close_on_or_after(published)
     if entry is None:
         return None, None, None
@@ -116,9 +116,9 @@ def score_call(
 
 
 def aggregate(calls: list[CallScore]) -> dict:
-    """per stance × horizon:已實現樣本數、平均報酬、平均 alpha、勝率。
+    """per stance x horizon: realized sample count, average return, average alpha, win rate.
 
-    勝率:buy call 漲了就算對;sell call 跌了就算對(看 raw return)。
+    Win rate: a buy call counts as correct if the stock rose; a sell call if it fell (using raw return).
     """
     out: dict = {}
     for stance in ("buy", "sell"):
@@ -189,8 +189,8 @@ async def build_scorecard(
     store: PriceStore,
     raw_calls: list[dict],
 ) -> dict:
-    """raw_calls:[{video_id, video_title, ticker, stance, confidence, summary,
-    published_at(datetime)}…],已含該頻道全部非 neutral 立場。"""
+    """raw_calls: [{video_id, video_title, ticker, stance, confidence, summary,
+    published_at(datetime)}...], already containing all of the channel's non-neutral stances."""
     tickers = {c["ticker"] for c in raw_calls}
     series_map = await fetch_price_series(store, tickers | {BENCHMARK})
     calls = _score_calls(raw_calls, series_map, series_map.get(BENCHMARK))

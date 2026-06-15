@@ -2,7 +2,7 @@ from app.market.client import MarketClient
 
 
 class TickerValidator:
-    """以 MarketClient 驗證 ticker 存在性,結果在程序生命週期內記憶。"""
+    """Validate ticker existence via MarketClient; results are memoized for the process lifetime."""
 
     def __init__(self, market: MarketClient) -> None:
         self._market = market

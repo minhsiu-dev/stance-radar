@@ -23,7 +23,7 @@ declare global {
 
 let apiPromise: Promise<void> | null = null;
 
-// 全域只載入一次 iframe_api;已載入則立即 resolve
+// Load iframe_api only once globally; resolve immediately if already loaded
 function loadApi(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   if (window.YT?.Player) return Promise.resolve();
