@@ -346,7 +346,14 @@ export interface HoldingsResponse {
     cost_basis: number;
     unrealized_pl: number | null;
     unrealized_pl_percent: number | null;
+    cash: number;
+    total_value: number | null;
+    cash_weight: number | null;
   };
+}
+
+export interface CashResponse {
+  amount: number;
 }
 
 export type PerfChanges = Record<string, number | null>;

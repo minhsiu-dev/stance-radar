@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { masked, usePrivacy } from "@/components/privacy-provider";
+import { CashDialog } from "@/components/cash-dialog";
 import type { HoldingsResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +51,14 @@ export function PortfolioSummary() {
         : `${money(totals.unrealized_pl)} (${plPositive ? "+" : ""}${totals.unrealized_pl_percent.toFixed(1)}%)`;
   return (
     <div className="grid gap-3 sm:grid-cols-3">
+      <Stat label={t("totalValue")} value={masked(hideAmounts, money(totals.total_value))} />
       <Stat label={t("marketValue")} value={masked(hideAmounts, money(totals.market_value))} />
+      <div className="relative">
+        <Stat label={t("cash")} value={masked(hideAmounts, money(totals.cash))} />
+        <div className="absolute top-2 right-2">
+          <CashDialog current={totals.cash} />
+        </div>
+      </div>
       <Stat label={t("costBasis")} value={masked(hideAmounts, money(totals.cost_basis))} />
       <Stat
         label={t("unrealizedPl")}

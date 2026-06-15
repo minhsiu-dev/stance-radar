@@ -321,7 +321,15 @@
     "totals": {
       "marketValue": "總市值",
       "costBasis": "總成本",
-      "unrealizedPl": "未實現損益"
+      "unrealizedPl": "未實現損益",
+      "totalValue": "總值",
+      "cash": "現金"
+    },
+    "cashDialog": {
+      "title": "設定現金 (USD)",
+      "placeholder": "0.00",
+      "save": "儲存",
+      "edit": "編輯"
     },
     "chart": {
       "title": "組合 vs VOO / QQQ(起點 = 100)",
@@ -337,6 +345,7 @@
       "marketValue": "市值",
       "pl": "損益",
       "weight": "比重",
+      "cash": "現金 (USD)",
       "empty": "尚無持股,先在下方新增一筆交易"
     },
     "transactions": {

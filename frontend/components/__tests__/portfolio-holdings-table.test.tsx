@@ -10,7 +10,7 @@ const messages = {
     holdings: {
       title: "Holdings", ticker: "Ticker", shares: "Shares", avgCost: "Avg cost",
       price: "Price", marketValue: "Value", pl: "P/L", weight: "Weight",
-      empty: "No holdings yet",
+      cash: "Cash (USD)", empty: "No holdings yet",
     },
   },
 };
@@ -37,7 +37,10 @@ describe("PortfolioHoldingsTable", () => {
         change_percent: 1.2, market_value: 1500, unrealized_pl: 500,
         unrealized_pl_percent: 50, weight: 100,
       }],
-      totals: { market_value: 1500, cost_basis: 1000, unrealized_pl: 500, unrealized_pl_percent: 50 },
+      totals: {
+        market_value: 1500, cost_basis: 1000, unrealized_pl: 500, unrealized_pl_percent: 50,
+        cash: 0, total_value: 1500, cash_weight: 0,
+      },
     }));
     expect(await screen.findByText("AAPL")).toBeInTheDocument();
     expect(screen.getByText("+50.0%")).toBeInTheDocument();
@@ -47,9 +50,45 @@ describe("PortfolioHoldingsTable", () => {
   it("shows empty state", async () => {
     wrap(vi.fn().mockResolvedValue({
       holdings: [],
-      totals: { market_value: 0, cost_basis: 0, unrealized_pl: 0, unrealized_pl_percent: null },
+      totals: {
+        market_value: 0, cost_basis: 0, unrealized_pl: 0, unrealized_pl_percent: null,
+        cash: 0, total_value: 0, cash_weight: null,
+      },
     }));
     expect(await screen.findByText("No holdings yet")).toBeInTheDocument();
+  });
+
+  it("renders a cash row with value and weight when cash != 0", async () => {
+    wrap(vi.fn().mockResolvedValue({
+      holdings: [{
+        ticker: "AAPL", shares: 10, avg_cost: 100, price: 150,
+        change_percent: 1.2, market_value: 1500, unrealized_pl: 500,
+        unrealized_pl_percent: 50, weight: 60,
+      }],
+      totals: {
+        market_value: 1500, cost_basis: 1000, unrealized_pl: 500, unrealized_pl_percent: 50,
+        cash: 1000, total_value: 2500, cash_weight: 40,
+      },
+    }));
+    expect(await screen.findByText("Cash (USD)")).toBeInTheDocument();
+    expect(screen.getByText("1,000.00")).toBeInTheDocument();
+    expect(screen.getByText("40.0%")).toBeInTheDocument();
+  });
+
+  it("hides the cash row when cash == 0", async () => {
+    wrap(vi.fn().mockResolvedValue({
+      holdings: [{
+        ticker: "AAPL", shares: 10, avg_cost: 100, price: 150,
+        change_percent: 1.2, market_value: 1500, unrealized_pl: 500,
+        unrealized_pl_percent: 50, weight: 100,
+      }],
+      totals: {
+        market_value: 1500, cost_basis: 1000, unrealized_pl: 500, unrealized_pl_percent: 50,
+        cash: 0, total_value: 1500, cash_weight: 0,
+      },
+    }));
+    expect(await screen.findByText("AAPL")).toBeInTheDocument();
+    expect(screen.queryByText("Cash (USD)")).toBeNull();
   });
 
   it("masks shares, cost and value but keeps price/percentages in privacy mode", async () => {
@@ -60,7 +99,10 @@ describe("PortfolioHoldingsTable", () => {
         change_percent: 1.2, market_value: 1500, unrealized_pl: 500,
         unrealized_pl_percent: 50, weight: 100,
       }],
-      totals: { market_value: 1500, cost_basis: 1000, unrealized_pl: 500, unrealized_pl_percent: 50 },
+      totals: {
+        market_value: 1500, cost_basis: 1000, unrealized_pl: 500, unrealized_pl_percent: 50,
+        cash: 0, total_value: 1500, cash_weight: 0,
+      },
     }));
     expect(await screen.findByText("AAPL")).toBeInTheDocument();
     expect(screen.getAllByText("••••").length).toBeGreaterThanOrEqual(3); // shares/avg_cost/value(+PL$)
