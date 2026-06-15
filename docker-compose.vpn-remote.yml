@@ -1,0 +1,16 @@
+# Use gluetun running on the HOST Docker (see docker-compose.gluetun.yml) from an
+# app running in a nested Docker (DinD) sandbox. Points the api at the host gluetun
+# via host.docker.internal — no gluetun runs inside the sandbox.
+#
+#   # 1) on the real host:    docker compose -f docker-compose.gluetun.yml up -d
+#   # 2) in the DinD sandbox: docker compose -f docker-compose.yml -f docker-compose.vpn-remote.yml up -d
+#
+# Quick reachability check from the sandbox once the host gluetun is up:
+#   docker exec <project>-api-1 python -c "import httpx; print(httpx.get('http://host.docker.internal:8000/v1/publicip/ip', timeout=5).json())"
+services:
+  api:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      FETCH_PROXY_URL: http://host.docker.internal:8888
+      GLUETUN_CONTROL_URL: http://host.docker.internal:8000

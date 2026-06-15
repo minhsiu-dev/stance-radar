@@ -1,0 +1,33 @@
+# Standalone gluetun (NordVPN) — run this ALONE on a real Docker host.
+#
+# Use this when the app (api/frontend) runs in a nested Docker (DinD) sandbox that
+# can't pass VPN tunnel traffic: run gluetun here on the real host (where the tunnel
+# works) and point the sandbox's api at it via docker-compose.vpn-remote.yml.
+#
+#   docker compose -f docker-compose.gluetun.yml up -d
+#   docker compose -f docker-compose.gluetun.yml logs -f gluetun   # wait for a non-empty "public ip"
+#
+# Needs OPENVPN_USER / OPENVPN_PASSWORD / SERVER_COUNTRIES in .env (NordVPN service
+# credentials — see .env.example).
+services:
+  gluetun:
+    image: qmcgaw/gluetun:v3.40.0
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      # ⚠️ host-local only — DO NOT expose these to the public internet (open HTTP
+      # proxy + a control server that can stop/rotate your VPN).
+      - "8888:8888"   # HTTP proxy (scrapers fetch through this)
+      - "8000:8000"   # control server (used by the app to rotate the exit IP)
+    environment:
+      VPN_SERVICE_PROVIDER: nordvpn
+      VPN_TYPE: openvpn
+      OPENVPN_USER: ${OPENVPN_USER}
+      OPENVPN_PASSWORD: ${OPENVPN_PASSWORD}
+      SERVER_COUNTRIES: ${SERVER_COUNTRIES:-United States}
+      HTTPPROXY: "on"
+      HTTPPROXY_LISTENING_ADDRESS: ":8888"
+    restart: unless-stopped
