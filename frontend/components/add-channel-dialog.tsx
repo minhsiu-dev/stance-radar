@@ -47,7 +47,7 @@ export function AddChannelDialog() {
       setMessage(parts.join(";"));
       if (data.added.length) {
         setInput("");
-        await mutate("/api/channels");
+        await mutate((key) => typeof key === "string" && key.startsWith("/api/channels"));
         setOpen(false);
       }
     } catch (error) {
