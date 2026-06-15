@@ -134,6 +134,15 @@
       "pendingBadge": "{count} 部待挑選",
       "autoBadge": "自動分析",
       "analyzedCount": "{count} 部已分析"
+    },
+    "activity": {
+      "legend": "發佈 / 已分析",
+      "tooltip": "發佈 {total} 部 · 已分析 {analyzed} 部"
+    },
+    "pager": {
+      "prev": "上一頁",
+      "next": "下一頁",
+      "page": "第 {page} / {pages} 頁"
     }
   },
   "Review": {

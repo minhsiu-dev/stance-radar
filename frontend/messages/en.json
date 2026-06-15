@@ -134,6 +134,15 @@
       "pendingBadge": "{count} awaiting review",
       "autoBadge": "Auto-analyze",
       "analyzedCount": "{count} analyzed"
+    },
+    "activity": {
+      "legend": "published / analyzed",
+      "tooltip": "{total} published · {analyzed} analyzed"
+    },
+    "pager": {
+      "prev": "Previous",
+      "next": "Next",
+      "page": "Page {page} / {pages}"
     }
   },
   "Review": {
