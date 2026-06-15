@@ -214,7 +214,7 @@ async def holdings(
 
 
 async def _one_day_changes(
-    market: MarketClient, held: dict[str, Holding]
+    market: MarketClient, held: dict[str, Holding], cash: float = 0.0
 ) -> tuple[float | None, dict[str, float | None], float | None]:
     """Return (portfolio 1d %, {benchmark: 1d %}, portfolio current value)."""
     # Holdings missing a quote are simply skipped -> the numbers are best-effort over the "quoted portion";
@@ -238,6 +238,8 @@ async def _one_day_changes(
             continue
         total_now += float(h.shares) * s.price
         total_prev += float(h.shares) * (s.price - (s.change or 0.0))
+    total_now += cash
+    total_prev += cash
     portfolio_1d = (
         round((total_now / total_prev - 1) * 100, 2) if total_prev else None
     )
@@ -255,13 +257,14 @@ async def performance_summary(
     store: PriceStore = Depends(get_price_store),
 ):
     held = await _held(session)
+    cash = float(await get_cash(session))
     today = datetime.now(timezone.utc).date()
     start = min(
         today - timedelta(days=_MAX_HISTORY_DAYS), date(today.year, 1, 1)
     )
     bars = await store.get_daily([*held, *BENCHMARKS], start)
 
-    portfolio_1d, bench_1d, total_value = await _one_day_changes(market, held)
+    portfolio_1d, bench_1d, total_value = await _one_day_changes(market, held, cash)
 
     def changes_for(values) -> dict:
         return {
@@ -281,7 +284,7 @@ async def performance_summary(
     portfolio_payload = None
     if held:
         values = portfolio_values(
-            {t: h.shares for t, h in held.items()}, bars
+            {t: h.shares for t, h in held.items()}, bars, cash=cash
         )
         portfolio_payload = {
             "total_value": total_value,
@@ -306,10 +309,11 @@ async def performance(
             f"range must be one of {', '.join(PERFORMANCE_RANGES)}", status_code=422
         )
     held = await _held(session)
+    cash = float(await get_cash(session))
     today = datetime.now(timezone.utc).date()
 
     if range_key == "1d":
-        portfolio_1d, bench_1d, _ = await _one_day_changes(market, held)
+        portfolio_1d, bench_1d, _ = await _one_day_changes(market, held, cash)
         return ok({
             "range": "1d",
             "effective_start": None,
@@ -328,7 +332,7 @@ async def performance(
     portfolio_sliced = None
     effective_start: date | None = None
     if held:
-        values = portfolio_values({t: h.shares for t, h in held.items()}, bars)
+        values = portfolio_values({t: h.shares for t, h in held.items()}, bars, cash=cash)
         portfolio_sliced = slice_for_range(values, range_key, today)
         if portfolio_sliced:
             effective_start = portfolio_sliced[0][0]
