@@ -330,7 +330,8 @@
       "costBasis": "Cost basis",
       "unrealizedPl": "Unrealized P/L",
       "totalValue": "Total value",
-      "cash": "Cash"
+      "cash": "Cash",
+      "todayPl": "Today's P/L"
     },
     "cashDialog": {
       "title": "Set cash (USD)",

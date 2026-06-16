@@ -330,7 +330,8 @@
       "costBasis": "總成本",
       "unrealizedPl": "未實現損益",
       "totalValue": "總值",
-      "cash": "現金"
+      "cash": "現金",
+      "todayPl": "今日損益"
     },
     "cashDialog": {
       "title": "設定現金 (USD)",

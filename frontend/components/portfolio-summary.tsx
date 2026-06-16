@@ -8,6 +8,7 @@ import { masked, usePrivacy } from "@/components/privacy-provider";
 import { CashDialog } from "@/components/cash-dialog";
 import type { HoldingsResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { todayPl } from "@/lib/portfolio";
 
 function money(v: number | null | undefined): string {
   if (v == null) return "—";
@@ -42,6 +43,16 @@ export function PortfolioSummary() {
     );
   }
   const { totals } = data;
+  const today = todayPl(data.holdings);
+  const todayPositive = (today.amount ?? 0) >= 0;
+  const todayValue =
+    today.amount == null
+      ? "—"
+      : `${money(today.amount)}${
+          today.percent == null
+            ? ""
+            : ` (${todayPositive ? "+" : ""}${today.percent.toFixed(1)}%)`
+        }`;
   const plPositive = (totals.unrealized_pl ?? 0) >= 0;
   const plValue =
     totals.unrealized_pl == null
@@ -66,6 +77,16 @@ export function PortfolioSummary() {
         valueClass={hideAmounts ? undefined : cn(
           totals.unrealized_pl != null &&
             (plPositive
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-rose-600 dark:text-rose-400"),
+        )}
+      />
+      <Stat
+        label={t("todayPl")}
+        value={masked(hideAmounts, todayValue)}
+        valueClass={hideAmounts ? undefined : cn(
+          today.amount != null &&
+            (todayPositive
               ? "text-emerald-600 dark:text-emerald-400"
               : "text-rose-600 dark:text-rose-400"),
         )}
