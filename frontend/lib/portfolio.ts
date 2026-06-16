@@ -15,6 +15,7 @@ export function todayPl(holdings: HoldingItem[]): TodayPl {
   for (const h of holdings) {
     if (h.price == null || h.change_percent == null) continue;
     const prevPrice = h.price / (1 + h.change_percent / 100);
+    if (!Number.isFinite(prevPrice)) continue; // e.g. change_percent === -100 -> divide by zero
     amount += h.shares * (h.price - prevPrice);
     prevValue += h.shares * prevPrice;
     any = true;

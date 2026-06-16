@@ -35,4 +35,13 @@ describe("todayPl", () => {
       .toEqual({ amount: null, percent: null });
     expect(todayPl([])).toEqual({ amount: null, percent: null });
   });
+
+  it("skips a holding with change_percent of -100 (delisted, would divide by zero)", () => {
+    const r = todayPl([
+      holding({ ticker: "DEAD", shares: 10, price: 0, change_percent: -100 }),
+      holding({ ticker: "AAPL", shares: 10, price: 150, change_percent: 2 }),
+    ]);
+    expect(Number.isFinite(r.amount!)).toBe(true);
+    expect(r.amount).toBeCloseTo(29.41, 1); // only AAPL contributes
+  });
 });
