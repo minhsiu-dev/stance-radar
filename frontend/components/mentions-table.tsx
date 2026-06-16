@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
@@ -35,18 +35,24 @@ export function MentionsTable({
   ticker,
   selectedVideoId,
   onRowHover,
+  stanceFilter,
+  channelFilter,
+  onStanceFilterChange,
+  onChannelFilterChange,
 }: {
   ticker: string;
   selectedVideoId: string | null;
   onRowHover?: (videoId: string | null) => void;
+  stanceFilter: StanceValue | "all";
+  channelFilter: string;
+  onStanceFilterChange: (v: StanceValue | "all") => void;
+  onChannelFilterChange: (v: string) => void;
 }) {
   const t = useTranslations("Mentions");
   const tStance = useTranslations("Stock.stance");
   const { data, error, isLoading } = useSWR<MentionRow[]>(
     `/api/stocks/${ticker}/mentions`,
   );
-  const [stanceFilter, setStanceFilter] = useState<StanceValue | "all">("all");
-  const [channelFilter, setChannelFilter] = useState<string>("all");
   const bodyRef = useRef<HTMLTableSectionElement>(null);
 
   const channels = useMemo(
@@ -98,7 +104,7 @@ export function MentionsTable({
         <h2 className="mr-auto text-lg font-semibold">{t("title")}</h2>
         <Select
           value={stanceFilter}
-          onValueChange={(v) => setStanceFilter(v as StanceValue | "all")}
+          onValueChange={(v) => onStanceFilterChange(v as StanceValue | "all")}
         >
           <SelectTrigger className="w-32">
             <SelectValue placeholder={t("filter.stance")} />
@@ -112,7 +118,7 @@ export function MentionsTable({
         </Select>
         <Select
           value={channelFilter}
-          onValueChange={(v) => setChannelFilter(v ?? "all")}
+          onValueChange={(v) => onChannelFilterChange(v ?? "all")}
         >
           <SelectTrigger className="w-40">
             <SelectValue placeholder={t("filter.channel")}>

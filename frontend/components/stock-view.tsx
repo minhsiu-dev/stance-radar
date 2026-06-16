@@ -6,12 +6,15 @@ import { PriceChart } from "@/components/price-chart";
 import { StockHeader } from "@/components/stock-header";
 import { OverviewTab } from "@/components/overview-tab";
 import { MentionsTab } from "@/components/mentions-tab";
+import type { StanceValue } from "@/lib/types";
 
 export function StockView({ ticker }: { ticker: string }) {
   const params = useSearchParams();
   const deepLinkVideo = params.get("video");
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(deepLinkVideo);
   const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
+  const [stanceFilter, setStanceFilter] = useState<StanceValue | "all">("all");
+  const [channelFilter, setChannelFilter] = useState<string>("all");
 
   return (
     <div className="space-y-6">
@@ -25,6 +28,8 @@ export function StockView({ ticker }: { ticker: string }) {
               ticker={ticker}
               hoveredVideoId={hoveredVideoId}
               onSelectVideo={setSelectedVideoId}
+              stanceFilter={stanceFilter}
+              channelFilter={channelFilter}
             />
           </div>
         </div>
@@ -33,6 +38,10 @@ export function StockView({ ticker }: { ticker: string }) {
             ticker={ticker}
             selectedVideoId={selectedVideoId}
             onRowHover={setHoveredVideoId}
+            stanceFilter={stanceFilter}
+            channelFilter={channelFilter}
+            onStanceFilterChange={setStanceFilter}
+            onChannelFilterChange={setChannelFilter}
           />
         </div>
       </div>

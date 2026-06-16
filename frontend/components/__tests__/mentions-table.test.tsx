@@ -45,12 +45,19 @@ const ROW = {
   ],
 };
 
-function setup(data = [ROW]) {
+function setup(data = [ROW], overrides: Record<string, unknown> = {}) {
   const fetcher = vi.fn().mockResolvedValue(data);
+  const props = {
+    stanceFilter: "all" as const,
+    channelFilter: "all",
+    onStanceFilterChange: vi.fn(),
+    onChannelFilterChange: vi.fn(),
+    ...overrides,
+  };
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <SWRConfig value={{ fetcher, provider: () => new Map() }}>
-        <MentionsTable ticker="GOOGL" selectedVideoId={null} />
+        <MentionsTable ticker="GOOGL" selectedVideoId={null} {...props} />
       </SWRConfig>
     </NextIntlClientProvider>,
   );
@@ -122,7 +129,15 @@ describe("MentionsTable", () => {
     render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <SWRConfig value={{ fetcher: vi.fn().mockResolvedValue([ROW]), provider: () => new Map() }}>
-          <MentionsTable ticker="GOOGL" selectedVideoId={null} onRowHover={onRowHover} />
+          <MentionsTable
+          ticker="GOOGL"
+          selectedVideoId={null}
+          onRowHover={onRowHover}
+          stanceFilter="all"
+          channelFilter="all"
+          onStanceFilterChange={vi.fn()}
+          onChannelFilterChange={vi.fn()}
+        />
         </SWRConfig>
       </NextIntlClientProvider>,
     );
@@ -131,5 +146,17 @@ describe("MentionsTable", () => {
     expect(onRowHover).toHaveBeenLastCalledWith("v1");
     fireEvent.mouseLeave(row);
     expect(onRowHover).toHaveBeenLastCalledWith(null);
+  });
+
+  it("applies the controlled stanceFilter to the rows shown", async () => {
+    const SELL_ROW = {
+      ...ROW,
+      video_id: "v2",
+      stance: "sell",
+      mentions: [{ ...ROW.mentions[0], quote: "Time to sell" }],
+    };
+    setup([ROW, SELL_ROW], { stanceFilter: "sell" });
+    expect(await screen.findByText(/Time to sell/)).toBeInTheDocument();
+    expect(screen.queryByText(/I'm bullish on Google/)).toBeNull();
   });
 });
