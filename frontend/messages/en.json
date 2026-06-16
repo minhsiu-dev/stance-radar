@@ -330,7 +330,8 @@
       "costBasis": "Cost basis",
       "unrealizedPl": "Unrealized P/L",
       "totalValue": "Total value",
-      "cash": "Cash"
+      "cash": "Cash",
+      "todayPl": "Today's P/L"
     },
     "cashDialog": {
       "title": "Set cash (USD)",
@@ -339,7 +340,7 @@
       "edit": "Edit"
     },
     "chart": {
-      "title": "Portfolio vs VOO / QQQ (start = 100)",
+      "title": "Portfolio vs VOO / QQQ (return %)",
       "portfolioSeries": "My portfolio",
       "noData": "Not enough price data yet"
     },
@@ -354,6 +355,18 @@
       "weight": "Weight",
       "cash": "Cash (USD)",
       "empty": "No holdings yet — add a transaction below"
+    },
+    "categories": {
+      "uncategorized": "Uncategorized",
+      "cash": "Cash",
+      "newPlaceholder": "New category name",
+      "add": "Add category",
+      "delete": "Delete",
+      "rename": "Rename",
+      "empty": "No holdings yet",
+      "dragHint": "Drag a ticker into a category",
+      "detailTab": "Detail",
+      "categoriesTab": "Categories"
     },
     "transactions": {
       "title": "Transactions",

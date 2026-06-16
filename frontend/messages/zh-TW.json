@@ -330,7 +330,8 @@
       "costBasis": "總成本",
       "unrealizedPl": "未實現損益",
       "totalValue": "總值",
-      "cash": "現金"
+      "cash": "現金",
+      "todayPl": "今日損益"
     },
     "cashDialog": {
       "title": "設定現金 (USD)",
@@ -339,7 +340,7 @@
       "edit": "編輯"
     },
     "chart": {
-      "title": "組合 vs VOO / QQQ(起點 = 100)",
+      "title": "組合 vs VOO / QQQ（報酬 %）",
       "portfolioSeries": "我的組合",
       "noData": "尚無足夠價格資料"
     },
@@ -354,6 +355,18 @@
       "weight": "比重",
       "cash": "現金 (USD)",
       "empty": "尚無持股,先在下方新增一筆交易"
+    },
+    "categories": {
+      "uncategorized": "未分類",
+      "cash": "現金",
+      "newPlaceholder": "新分類名稱",
+      "add": "新增分類",
+      "delete": "刪除",
+      "rename": "重新命名",
+      "empty": "尚無持股",
+      "dragHint": "把股票拖到分類即可歸類",
+      "detailTab": "明細",
+      "categoriesTab": "分類"
     },
     "transactions": {
       "title": "交易紀錄",
