@@ -4,7 +4,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.analysis.context import excerpt_around
@@ -105,19 +105,8 @@ class RefreshRunner:
 
     async def _run_analyze(self, job_id: int) -> None:
         deps = self._deps
-        # Pick up all pending: both the ones selected this round and leftovers from a prior interruption (resume semantics)
-        async with deps.sessionmaker() as session:
-            pending = list((await session.execute(
-                select(Video.id)
-                .where(Video.status == VideoStatus.pending)
-                .order_by(Video.published_at.desc())
-            )).scalars().all())
-
-        total = len(pending)
-        await jobs.update_progress(deps.sessionmaker, job_id, {
-            "stage": "analyzing", "videos_done": 0, "videos_total": total,
-        })
         done = 0
+        seen: set[str] = set()  # never reprocess an id within this job run
         progress_lock = asyncio.Lock()
         semaphore = asyncio.Semaphore(deps.settings.analysis_concurrency)
 
@@ -131,11 +120,40 @@ class RefreshRunner:
                     await self._mark_video_failed(video_id, str(exc))
             async with progress_lock:
                 done += 1
-                await jobs.update_progress(deps.sessionmaker, job_id, {
-                    "stage": "analyzing", "videos_done": done, "videos_total": total,
-                })
+                await self._report_analyze(job_id, done)
 
-        await asyncio.gather(*(process(video_id) for video_id in pending))
+        # Drain: keep pulling pending until none remain, so videos queued mid-run
+        # (resume semantics + the user selecting more while this job runs) fold into
+        # this same job. Each pass's query runs after the previous gather completes,
+        # so nothing is processed twice.
+        while True:
+            async with deps.sessionmaker() as session:
+                pending = list((await session.execute(
+                    select(Video.id)
+                    .where(Video.status == VideoStatus.pending)
+                    .order_by(Video.published_at.desc())
+                )).scalars().all())
+            batch = [vid for vid in pending if vid not in seen]
+            if not batch:
+                break
+            seen.update(batch)
+            await self._report_analyze(job_id, done)
+            await asyncio.gather(*(process(vid) for vid in batch))
+
+    async def _count_pending(self) -> int:
+        async with self._deps.sessionmaker() as session:
+            return (await session.execute(
+                select(func.count()).select_from(Video)
+                .where(Video.status == VideoStatus.pending)
+            )).scalar_one()
+
+    async def _report_analyze(self, job_id: int, done: int) -> None:
+        remaining = await self._count_pending()
+        await jobs.update_progress(self._deps.sessionmaker, job_id, {
+            "stage": "analyzing",
+            "videos_done": done,
+            "videos_total": done + remaining,
+        })
 
     async def _ingest_channel_videos(self, channel: Channel) -> int:
         """Ingest the channel's new videos (status=discovered); returns the number added.
