@@ -70,7 +70,7 @@ export function categoryBreakdown(
   for (const h of holdings) {
     const mv = h.market_value ?? 0;
     const cat = assignments[h.ticker];
-    if (cat) byCategory[cat] = (byCategory[cat] ?? 0) + mv;
+    if (cat != null) byCategory[cat] = (byCategory[cat] ?? 0) + mv;
     else uncategorized += mv;
   }
   return { byCategory, uncategorized, cash };

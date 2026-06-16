@@ -104,4 +104,22 @@ describe("categoryBreakdown", () => {
     );
     expect(r.uncategorized).toBe(0);
   });
+
+  it("partitions across multiple categories", () => {
+    const r = categoryBreakdown(
+      [
+        holding({ ticker: "AAPL", market_value: 1000 }),
+        holding({ ticker: "TSLA", market_value: 200 }),
+      ],
+      0,
+      { AAPL: "c1", TSLA: "c2" },
+    );
+    expect(r.byCategory).toEqual({ c1: 1000, c2: 200 });
+  });
+
+  it("handles empty holdings", () => {
+    expect(categoryBreakdown([], 500, {})).toEqual({
+      byCategory: {}, uncategorized: 0, cash: 500,
+    });
+  });
 });
