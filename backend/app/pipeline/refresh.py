@@ -74,14 +74,23 @@ class RefreshRunner:
     ) -> None:
         try:
             await run(job_id)
-            await jobs.finish_job(self._deps.sessionmaker, job_id)
         except QuotaExceededError as exc:
             await jobs.finish_job(self._deps.sessionmaker, job_id, error=str(exc))
+            return
         except Exception as exc:
             logger.exception("job %s failed", job_id)
             await jobs.finish_job(
                 self._deps.sessionmaker, job_id, error=f"Update failed: {exc}"
             )
+            return
+        await jobs.finish_job(self._deps.sessionmaker, job_id)
+        await self._continue_if_pending()
+
+    async def _continue_if_pending(self) -> None:
+        # After a clean finish, drain any pending videos via an analyze job. The DB
+        # single-job guard in start() makes this a no-op if one is already running.
+        if await self._count_pending() > 0:
+            await self.start(JobKind.analyze)
 
     async def _run_discover(self, job_id: int) -> None:
         deps = self._deps

@@ -75,7 +75,10 @@ async def api(engine, monkeypatch):
 
 
 async def wait_refresh(app) -> None:
-    """Wait for the background refresh job to finish (test helper)."""
+    """Wait for the background refresh job (and any auto-continued follow-up) to finish."""
     runner = app.state.runner
-    if runner.current_task is not None:
-        await runner.current_task
+    while True:
+        task = runner.current_task
+        if task is None or task.done():
+            break
+        await task

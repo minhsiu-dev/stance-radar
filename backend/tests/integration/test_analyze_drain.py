@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from app.models import Job, Video, VideoStatus
+from app.models import Job, JobKind, Video, VideoStatus
 from tests.conftest import wait_refresh
 
 
@@ -46,3 +46,46 @@ async def test_analyze_folds_in_videos_queued_mid_run(api, session, monkeypatch)
     prog = analyze_jobs[0].progress
     assert prog["videos_done"] == 2
     assert prog["videos_total"] == 2  # counter grew to include the late arrival
+
+
+async def test_pending_after_discover_auto_continues_to_analyze(api, session):
+    """Queueing happens during a non-analyze (discover) job: the pending video must
+    be analyzed by an auto-continued analyze job once discover finishes."""
+    app, client = api
+    await client.post("/api/channels", json={"channel_ids": "UC_fake_beta"})
+    await wait_refresh(app)
+
+    v = await session.get(Video, "beta_vid_3")
+    v.status = VideoStatus.pending  # queued, but no analyze job triggered
+    await session.commit()
+
+    await app.state.runner.start(JobKind.discover)  # a different job kind is running
+    await wait_refresh(app)
+
+    await session.refresh(v)
+    assert v.status == VideoStatus.analyzed  # auto-continued analyze processed it
+
+    analyze_jobs = (await session.execute(
+        select(Job).where(Job.kind == "analyze")
+    )).scalars().all()
+    assert len(analyze_jobs) == 1
+
+
+async def test_analyze_terminates_on_no_transcript(api, session):
+    """A video that can't be processed (no transcript) leaves `pending` and must NOT
+    cause an endless continuation loop."""
+    app, client = api
+    await client.post("/api/channels", json={"channel_ids": "UC_fake_beta"})
+    await wait_refresh(app)
+
+    # beta_vid_1 has no transcript -> ends `no_transcript`, off `pending`.
+    await client.post("/api/videos/analyze", json={"video_ids": ["beta_vid_1"]})
+    await wait_refresh(app)  # would hang if continuation looped forever
+
+    v = await session.get(Video, "beta_vid_1")
+    await session.refresh(v)
+    assert v.status == VideoStatus.no_transcript
+    analyze_jobs = (await session.execute(
+        select(Job).where(Job.kind == "analyze")
+    )).scalars().all()
+    assert len(analyze_jobs) == 1  # no extra continuation jobs
