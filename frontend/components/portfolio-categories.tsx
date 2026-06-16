@@ -47,9 +47,9 @@ function Chip({ ticker }: { ticker: string }) {
 }
 
 function Lane({
-  id, name, tickers, onDelete,
+  id, name, tickers, onDelete, deleteLabel,
 }: {
-  id: string; name: string; tickers: string[]; onDelete?: () => void;
+  id: string; name: string; tickers: string[]; onDelete?: () => void; deleteLabel?: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
@@ -61,7 +61,11 @@ function Lane({
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium">{name}</span>
         {onDelete && (
-          <button onClick={onDelete} className="text-xs text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onDelete}
+            aria-label={deleteLabel}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
             ✕
           </button>
         )}
@@ -105,7 +109,7 @@ export function PortfolioCategories() {
   ].filter((s) => s.value > 0);
 
   const config: ChartConfig = Object.fromEntries(
-    slices.map((s) => [s.key, { label: s.name, color: s.color }]),
+    slices.map((s) => [s.name, { label: s.name, color: s.color }]),
   );
 
   function onDragEnd(e: DragEndEvent) {
@@ -141,6 +145,7 @@ export function PortfolioCategories() {
                   name={c.name}
                   tickers={tickersFor(c.id)}
                   onDelete={() => deleteCategory(c.id)}
+                  deleteLabel={t("delete")}
                 />
               ))}
               <Lane id={UNCATEGORIZED} name={t("uncategorized")} tickers={tickersFor(null)} />
