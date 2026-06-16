@@ -314,13 +314,14 @@
     "loading": "Computing — fetching price history…",
     "loadError": "Failed to load latest mentions: {message}",
     "empty": "No buy/sell stances to score yet.",
-    "vsBenchmark": "excess {value}",
+    "vsBenchmark": "α {value}",
     "noData": "no data",
     "columns": {
       "date": "Date",
       "ticker": "Ticker",
       "stance": "Stance",
-      "horizon": "{days}d"
+      "horizon": "{days}d",
+      "now": "Now"
     }
   },
   "Portfolio": {
