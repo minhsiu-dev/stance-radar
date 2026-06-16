@@ -95,7 +95,7 @@ def _now_return(series: PriceSeries, published: date) -> tuple:
     if entry is None:
         return None, None, None
     entry_date, entry_price = entry
-    if entry_price == 0 or not series.closes:
+    if entry_price == 0:
         return entry_date, entry_price, None
     latest_close = series.closes[-1]
     return entry_date, entry_price, round((latest_close / entry_price - 1) * 100, 2)
