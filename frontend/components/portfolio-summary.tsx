@@ -38,7 +38,7 @@ export function PortfolioSummary() {
   if (!data) {
     return (
       <div className="grid gap-3 sm:grid-cols-3">
-        {[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
+        {[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
       </div>
     );
   }
