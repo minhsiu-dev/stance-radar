@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -22,7 +22,7 @@ const messages = {
   Portfolio: {
     categories: {
       uncategorized: "Uncategorized", cash: "Cash", newPlaceholder: "New category name",
-      add: "Add category", delete: "Delete", empty: "No holdings yet",
+      add: "Add category", delete: "Delete", rename: "Rename", empty: "No holdings yet",
       dragHint: "Drag a ticker into a category",
     },
   },
@@ -78,5 +78,18 @@ describe("PortfolioCategories", () => {
   it("shows the empty state when there are no holdings", async () => {
     wrap({ holdings: [], totals: { ...holdingsData.totals, cash: 0 } });
     expect(await screen.findByText("No holdings yet")).toBeInTheDocument();
+  });
+
+  it("renames a category inline", async () => {
+    localStorage.setItem("stance-radar-categories", JSON.stringify({
+      categories: [{ id: "c1", name: "Long-term" }], assignments: {},
+    }));
+    wrap(holdingsData);
+    const lane = await screen.findByTestId("lane-c1");
+    fireEvent.doubleClick(within(lane).getByText("Long-term"));
+    const input = within(lane).getByDisplayValue("Long-term");
+    fireEvent.change(input, { target: { value: "Core" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(within(lane).getByText("Core")).toBeInTheDocument();
   });
 });

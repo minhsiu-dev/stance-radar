@@ -362,6 +362,7 @@
       "newPlaceholder": "New category name",
       "add": "Add category",
       "delete": "Delete",
+      "rename": "Rename",
       "empty": "No holdings yet",
       "dragHint": "Drag a ticker into a category",
       "detailTab": "Detail",

@@ -47,28 +47,77 @@ function Chip({ ticker }: { ticker: string }) {
 }
 
 function Lane({
-  id, name, tickers, onDelete, deleteLabel,
+  id, name, tickers, onDelete, onRename, deleteLabel, renameLabel,
 }: {
-  id: string; name: string; tickers: string[]; onDelete?: () => void; deleteLabel?: string;
+  id: string;
+  name: string;
+  tickers: string[];
+  onDelete?: () => void;
+  onRename?: (name: string) => void;
+  deleteLabel?: string;
+  renameLabel?: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+
+  function startEdit() {
+    setDraft(name);
+    setEditing(true);
+  }
+  function commit() {
+    const next = draft.trim();
+    if (next && next !== name) onRename?.(next);
+    setEditing(false);
+  }
+
   return (
     <div
       ref={setNodeRef}
       data-testid={`lane-${id === UNCATEGORIZED ? "uncategorized" : id}`}
       className={`min-h-20 rounded-lg border p-3 ${isOver ? "border-primary bg-accent/40" : ""}`}
     >
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-medium">{name}</span>
-        {onDelete && (
-          <button
-            onClick={onDelete}
-            aria-label={deleteLabel}
-            className="text-xs text-muted-foreground hover:text-foreground"
+      <div className="mb-2 flex items-center justify-between gap-2">
+        {editing ? (
+          <Input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") setEditing(false);
+            }}
+            className="h-7 text-sm"
+          />
+        ) : (
+          <span
+            className={`text-sm font-medium ${onRename ? "cursor-text" : ""}`}
+            onDoubleClick={onRename ? startEdit : undefined}
           >
-            ✕
-          </button>
+            {name}
+          </span>
         )}
+        <div className="flex shrink-0 items-center gap-1">
+          {onRename && !editing && (
+            <button
+              onClick={startEdit}
+              aria-label={renameLabel}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              ✎
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              aria-label={deleteLabel}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {tickers.map((t) => <Chip key={t} ticker={t} />)}
@@ -81,7 +130,7 @@ export function PortfolioCategories() {
   const t = useTranslations("Portfolio.categories");
   const { hideAmounts } = usePrivacy();
   const { data } = useSWR<HoldingsResponse>("/api/portfolio/holdings");
-  const { categories, assignments, addCategory, deleteCategory, assign } =
+  const { categories, assignments, addCategory, renameCategory, deleteCategory, assign } =
     useHoldingCategories();
   const [newName, setNewName] = useState("");
 
@@ -145,7 +194,9 @@ export function PortfolioCategories() {
                   name={c.name}
                   tickers={tickersFor(c.id)}
                   onDelete={() => deleteCategory(c.id)}
+                  onRename={(n) => renameCategory(c.id, n)}
                   deleteLabel={t("delete")}
+                  renameLabel={t("rename")}
                 />
               ))}
               <Lane id={UNCATEGORIZED} name={t("uncategorized")} tickers={tickersFor(null)} />

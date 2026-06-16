@@ -362,6 +362,7 @@
       "newPlaceholder": "新分類名稱",
       "add": "新增分類",
       "delete": "刪除",
+      "rename": "重新命名",
       "empty": "尚無持股",
       "dragHint": "把股票拖到分類即可歸類",
       "detailTab": "明細",
