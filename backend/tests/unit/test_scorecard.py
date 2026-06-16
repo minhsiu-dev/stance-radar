@@ -162,3 +162,33 @@ async def test_build_scorecard_page_no_aggregates_voo_benchmark():
     assert call["ticker"] == "AAPL"
     assert call["returns"]["7"] == pytest.approx(6.42, abs=0.01)
     assert call["alpha"]["7"] == call["returns"]["7"]  # flat VOO
+
+
+def test_score_call_without_data_has_null_now():
+    from datetime import date
+
+    call = CallScore(
+        video_id="v", video_title="t", ticker="GONE", stance="buy",
+        confidence=None, summary="s", published_at="2026-01-10T00:00:00+00:00",
+    )
+    scored = score_call(call, None, None, date(2026, 1, 10))
+    assert scored.now_return is None
+    assert scored.now_alpha is None
+
+
+async def test_now_return_uses_latest_close():
+    store = StubStore({
+        "AAPL": _linear_candles("AAPL"),
+        "SPY": _linear_candles("SPY"),  # flat -> alpha == raw return
+    })
+    published = datetime(2026, 1, 10, 12, 0, tzinfo=timezone.utc)
+    result = await build_scorecard(store, [{
+        "video_id": "v1", "video_title": "t1", "ticker": "AAPL",
+        "stance": "buy", "confidence": "high", "summary": "s",
+        "published_at": published,
+    }])
+    call = result["calls"][0]
+    # entry 2026-01-10 close=109; latest close 2026-04-30 = 219
+    # (219/109 - 1) * 100 = 100.92
+    assert call["now_return"] == pytest.approx(100.92, abs=0.01)
+    assert call["now_alpha"] == call["now_return"]  # flat SPY benchmark
