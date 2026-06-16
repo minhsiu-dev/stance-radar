@@ -363,7 +363,9 @@
       "add": "新增分類",
       "delete": "刪除",
       "empty": "尚無持股",
-      "dragHint": "把股票拖到分類即可歸類"
+      "dragHint": "把股票拖到分類即可歸類",
+      "detailTab": "明細",
+      "categoriesTab": "分類"
     },
     "transactions": {
       "title": "交易紀錄",

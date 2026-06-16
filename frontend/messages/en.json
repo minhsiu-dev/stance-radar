@@ -363,7 +363,9 @@
       "add": "Add category",
       "delete": "Delete",
       "empty": "No holdings yet",
-      "dragHint": "Drag a ticker into a category"
+      "dragHint": "Drag a ticker into a category",
+      "detailTab": "Detail",
+      "categoriesTab": "Categories"
     },
     "transactions": {
       "title": "Transactions",
