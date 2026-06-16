@@ -150,6 +150,8 @@ export function PriceChart({
 
   // Recompute markers when the data or the filters change — without rebuilding
   // the chart. Also refresh the click/hover lookup maps.
+  // NOTE: must stay declared AFTER the chart-creation effect above — React flushes
+  // effects in declaration order, so markersApiRef.current is set before this runs.
   useEffect(() => {
     const markers = buildMarkers(
       filterStances(stances ?? [], stanceFilter, channelFilter),
