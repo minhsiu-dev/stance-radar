@@ -111,20 +111,31 @@ async def _channel_calls(session: AsyncSession, channel_id: str) -> list[dict]:
 
 
 async def _channel_calls_page(
-    session: AsyncSession, channel_id: str, page: int, page_size: int
+    session: AsyncSession,
+    channel_id: str,
+    page: int,
+    page_size: int,
+    stance: Stance | None = None,
+    ticker: str | None = None,
 ) -> tuple[list[dict], int]:
+    conds = [
+        Video.channel_id == channel_id,
+        VideoStance.stance != Stance.neutral,
+    ]
+    if stance is not None:
+        conds.append(VideoStance.stance == stance)
+    if ticker is not None:
+        conds.append(VideoStance.ticker == ticker)
     total = (await session.execute(
         select(func.count())
         .select_from(VideoStance)
         .join(Video, VideoStance.video_id == Video.id)
-        .where(Video.channel_id == channel_id)
-        .where(VideoStance.stance != Stance.neutral)
+        .where(*conds)
     )).scalar_one()
     rows = (await session.execute(
         select(VideoStance, Video)
         .join(Video, VideoStance.video_id == Video.id)
-        .where(Video.channel_id == channel_id)
-        .where(VideoStance.stance != Stance.neutral)
+        .where(*conds)
         .order_by(Video.published_at.desc(), Video.id.desc(), VideoStance.ticker.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
@@ -133,15 +144,27 @@ async def _channel_calls_page(
         {
             "video_id": video.id,
             "video_title": video.title,
-            "ticker": stance.ticker,
-            "stance": stance.stance.value,
-            "confidence": stance.confidence,
-            "summary": stance.summary,
+            "ticker": stance_row.ticker,
+            "stance": stance_row.stance.value,
+            "confidence": stance_row.confidence,
+            "summary": stance_row.summary,
             "published_at": video.published_at,
         }
-        for stance, video in rows
+        for stance_row, video in rows
     ]
     return calls, total
+
+
+async def _channel_call_tickers(session: AsyncSession, channel_id: str) -> list[str]:
+    rows = (await session.execute(
+        select(VideoStance.ticker)
+        .join(Video, VideoStance.video_id == Video.id)
+        .where(Video.channel_id == channel_id)
+        .where(VideoStance.stance != Stance.neutral)
+        .distinct()
+        .order_by(VideoStance.ticker.asc())
+    )).all()
+    return [r[0] for r in rows]
 
 
 @router.get("/channels/{channel_id}/scorecard")
@@ -149,14 +172,21 @@ async def channel_scorecard(
     channel_id: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    stance: str | None = Query(None),
+    ticker: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
     store: PriceStore = Depends(get_price_store),
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
         return fail(f"Channel {channel_id} not found", status_code=404)
-    calls, total = await _channel_calls_page(session, channel_id, page, page_size)
+    stance_filter = {"buy": Stance.buy, "sell": Stance.sell}.get(stance)
+    calls, total = await _channel_calls_page(
+        session, channel_id, page, page_size,
+        stance=stance_filter, ticker=ticker,
+    )
     scorecard = await build_scorecard_page(store, calls, total, page, page_size)
+    scorecard["tickers"] = await _channel_call_tickers(session, channel_id)
     return ok(scorecard)
 
 

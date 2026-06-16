@@ -162,6 +162,47 @@ async def test_leaderboard_ranks_channels(api, sessionmaker):
     assert "buy" in item and "sell" in item
 
 
+async def test_scorecard_filter_by_stance(api, sessionmaker):
+    _, client = api
+    await seed_stances(sessionmaker)
+    buy = (await client.get("/api/channels/ch1/scorecard?stance=buy")).json()["data"]
+    assert buy["total"] == 3
+    assert all(c["stance"] == "buy" for c in buy["calls"])
+    sell = (await client.get("/api/channels/ch1/scorecard?stance=sell")).json()["data"]
+    assert sell["total"] == 1
+    assert sell["calls"][0]["ticker"] == "AAPL"
+
+
+async def test_scorecard_filter_by_ticker(api, sessionmaker):
+    _, client = api
+    await seed_stances(sessionmaker)
+    aapl = (await client.get("/api/channels/ch1/scorecard?ticker=AAPL")).json()["data"]
+    assert aapl["total"] == 2
+    assert {c["ticker"] for c in aapl["calls"]} == {"AAPL"}
+    combo = (await client.get(
+        "/api/channels/ch1/scorecard?ticker=AAPL&stance=sell"
+    )).json()["data"]
+    assert combo["total"] == 1
+
+
+async def test_scorecard_lists_distinct_tickers(api, sessionmaker):
+    _, client = api
+    await seed_stances(sessionmaker)
+    data = (await client.get("/api/channels/ch1/scorecard")).json()["data"]
+    assert data["tickers"] == ["AAPL", "NVDA"]
+    filtered = (await client.get(
+        "/api/channels/ch1/scorecard?stance=sell"
+    )).json()["data"]
+    assert filtered["tickers"] == ["AAPL", "NVDA"]
+
+
+async def test_scorecard_invalid_stance_ignored(api, sessionmaker):
+    _, client = api
+    await seed_stances(sessionmaker)
+    data = (await client.get("/api/channels/ch1/scorecard?stance=foo")).json()["data"]
+    assert data["total"] == 4
+
+
 async def test_auto_analyze_channel_ingests_new_videos_as_pending(api, sessionmaker):
     """auto_analyze channel: initial backfill stays discovered, subsequent new videos go straight to pending."""
     app, client = api
