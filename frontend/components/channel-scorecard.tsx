@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
@@ -15,6 +15,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { alphaColor } from "@/components/channel-leaderboard";
 import { formatDate, formatPercent } from "@/lib/format";
 import type { Scorecard, ScorecardCall } from "@/lib/types";
@@ -24,12 +31,19 @@ const PAGE_SIZE = 20;
 
 export function ChannelScorecard({ channelId }: { channelId: string }) {
   const t = useTranslations("Scorecard");
+  const tStance = useTranslations("Stock.stance");
+  const [stanceFilter, setStanceFilter] = useState<"all" | "buy" | "sell">("all");
+  const [tickerFilter, setTickerFilter] = useState<string>("all");
   const getKey = useMemo(
     () => (pageIndex: number, previous: Scorecard | null) => {
       if (previous && previous.calls.length < PAGE_SIZE) return null;
-      return `/api/channels/${channelId}/scorecard?page=${pageIndex + 1}&page_size=${PAGE_SIZE}`;
+      return (
+        `/api/channels/${channelId}/scorecard?page=${pageIndex + 1}&page_size=${PAGE_SIZE}` +
+        (stanceFilter === "all" ? "" : `&stance=${stanceFilter}`) +
+        (tickerFilter === "all" ? "" : `&ticker=${tickerFilter}`)
+      );
     },
-    [channelId],
+    [channelId, stanceFilter, tickerFilter],
   );
   // Fetches historical candles for each stock, which is slow: don't auto-revalidate
   const { data, error, isLoading, setSize, isValidating } =
@@ -46,6 +60,7 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
   const reachedEnd = last ? last.calls.length < PAGE_SIZE : false;
   const horizons = pages[0]?.horizons ?? [7, 30, 90];
   const benchmark = pages[0]?.benchmark ?? "";
+  const tickers = pages[0]?.tickers ?? [];
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -92,8 +107,41 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
 
   return (
     <Card data-testid="channel-scorecard">
-      <CardHeader>
-        <CardTitle className="text-base">{t("title")}</CardTitle>
+      <CardHeader className="space-y-2">
+        <div className="flex flex-row flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-base">{t("title")}</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={stanceFilter}
+              onValueChange={(v) => setStanceFilter((v as "all" | "buy" | "sell") ?? "all")}
+            >
+              <SelectTrigger className="w-28">
+                <SelectValue placeholder={t("filter.stance")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("filter.allStances")}</SelectItem>
+                <SelectItem value="buy">{tStance("buy")}</SelectItem>
+                <SelectItem value="sell">{tStance("sell")}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={tickerFilter}
+              onValueChange={(v) => setTickerFilter((v as string) ?? "all")}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue placeholder={t("filter.ticker")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("filter.allTickers")}</SelectItem>
+                {tickers.map((tk) => (
+                  <SelectItem key={tk} value={tk}>
+                    {tk}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <p className="text-xs text-muted-foreground">
           {t("description", { benchmark })}
         </p>
@@ -131,7 +179,7 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
               </Table>
             </div>
             {!reachedEnd && (
-              <div ref={sentinelRef} aria-hidden className="h-1" />
+              <div ref={sentinelRef} data-testid="scorecard-sentinel" aria-hidden className="h-1" />
             )}
           </>
         )}

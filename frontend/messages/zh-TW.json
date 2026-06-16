@@ -322,6 +322,12 @@
       "stance": "立場",
       "horizon": "{days} 天",
       "now": "至今"
+    },
+    "filter": {
+      "stance": "立場",
+      "allStances": "全部立場",
+      "ticker": "股票",
+      "allTickers": "全部股票"
     }
   },
   "Portfolio": {
