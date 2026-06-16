@@ -340,7 +340,7 @@
       "edit": "編輯"
     },
     "chart": {
-      "title": "組合 vs VOO / QQQ(起點 = 100)",
+      "title": "組合 vs VOO / QQQ（報酬 %）",
       "portfolioSeries": "我的組合",
       "noData": "尚無足夠價格資料"
     },

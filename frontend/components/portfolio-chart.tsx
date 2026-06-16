@@ -3,7 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -11,7 +11,8 @@ import {
   ChartTooltipContent, type ChartConfig,
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { PerformanceRangeResponse, SeriesPoint } from "@/lib/types";
+import type { PerformanceRangeResponse } from "@/lib/types";
+import { mergePerformance } from "@/lib/portfolio";
 
 const CHART_RANGES = ["1m", "3m", "6m", "ytd", "1y"] as const;
 type ChartRange = (typeof CHART_RANGES)[number];
@@ -19,26 +20,6 @@ const RANGE_LABEL: Record<ChartRange, string> = {
   "1m": "1M", "3m": "3M", "6m": "6M", ytd: "YTD", "1y": "1Y",
 };
 
-function merge(
-  portfolio: SeriesPoint[] | null,
-  voo: SeriesPoint[] | null,
-  qqq: SeriesPoint[] | null,
-): Record<string, number | string>[] {
-  const rows = new Map<string, Record<string, number | string>>();
-  const put = (key: "portfolio" | "voo" | "qqq", points: SeriesPoint[] | null) => {
-    for (const p of points ?? []) {
-      const row = rows.get(p.date) ?? { date: p.date };
-      row[key] = p.value;
-      rows.set(p.date, row);
-    }
-  };
-  put("portfolio", portfolio);
-  put("voo", voo);
-  put("qqq", qqq);
-  return [...rows.values()].sort((a, b) =>
-    String(a.date).localeCompare(String(b.date)),
-  );
-}
 
 export function PortfolioChart() {
   const t = useTranslations("Portfolio.chart");
@@ -54,7 +35,7 @@ export function PortfolioChart() {
     qqq: { label: "QQQ", color: "var(--chart-3)" },
   };
   const rows = data
-    ? merge(data.portfolio?.series ?? null, data.voo.series, data.qqq.series)
+    ? mergePerformance(data.portfolio?.series ?? null, data.voo.series, data.qqq.series)
     : [];
 
   return (
@@ -86,8 +67,19 @@ export function PortfolioChart() {
             <LineChart data={rows}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" minTickGap={32} />
-              <YAxis domain={["auto", "auto"]} width={48} />
-              <ChartTooltip content={<ChartTooltipContent />} />
+              <YAxis
+                domain={["auto", "auto"]}
+                width={48}
+                tickFormatter={(v) => `${v > 0 ? "+" : ""}${v}%`}
+              />
+              <ReferenceLine y={0} stroke="var(--foreground)" strokeWidth={1.5} />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value, name) => `${name}: ${Number(value) > 0 ? "+" : ""}${Number(value).toFixed(2)}%`}
+                  />
+                }
+              />
               <ChartLegend content={<ChartLegendContent />} />
               {data.portfolio && (
                 <Line dataKey="portfolio" stroke="var(--color-portfolio)" dot={false} />

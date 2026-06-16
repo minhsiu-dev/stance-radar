@@ -340,7 +340,7 @@
       "edit": "Edit"
     },
     "chart": {
-      "title": "Portfolio vs VOO / QQQ (start = 100)",
+      "title": "Portfolio vs VOO / QQQ (return %)",
       "portfolioSeries": "My portfolio",
       "noData": "Not enough price data yet"
     },
