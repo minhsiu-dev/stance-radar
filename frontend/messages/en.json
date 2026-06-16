@@ -356,6 +356,15 @@
       "cash": "Cash (USD)",
       "empty": "No holdings yet — add a transaction below"
     },
+    "categories": {
+      "uncategorized": "Uncategorized",
+      "cash": "Cash",
+      "newPlaceholder": "New category name",
+      "add": "Add category",
+      "delete": "Delete",
+      "empty": "No holdings yet",
+      "dragHint": "Drag a ticker into a category"
+    },
     "transactions": {
       "title": "Transactions",
       "add": "Add",

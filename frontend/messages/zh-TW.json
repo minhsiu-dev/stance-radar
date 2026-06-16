@@ -356,6 +356,15 @@
       "cash": "現金 (USD)",
       "empty": "尚無持股,先在下方新增一筆交易"
     },
+    "categories": {
+      "uncategorized": "未分類",
+      "cash": "現金",
+      "newPlaceholder": "新分類名稱",
+      "add": "新增分類",
+      "delete": "刪除",
+      "empty": "尚無持股",
+      "dragHint": "把股票拖到分類即可歸類"
+    },
     "transactions": {
       "title": "交易紀錄",
       "add": "新增",
