@@ -322,6 +322,12 @@
       "stance": "Stance",
       "horizon": "{days}d",
       "now": "Now"
+    },
+    "filter": {
+      "stance": "Stance",
+      "allStances": "All stances",
+      "ticker": "Ticker",
+      "allTickers": "All tickers"
     }
   },
   "Portfolio": {

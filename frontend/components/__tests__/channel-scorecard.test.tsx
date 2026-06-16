@@ -14,6 +14,7 @@ const messages = {
     vsBenchmark: "α {value}",
     noData: "no data",
     columns: { date: "Date", ticker: "Ticker", stance: "Stance", horizon: "{days}d", now: "Now" },
+    filter: { stance: "Stance", allStances: "All stances", ticker: "Ticker", allTickers: "All tickers" },
   },
   Stock: { stance: { buy: "Buy", sell: "Sell", neutral: "Neutral" } },
 };
@@ -46,21 +47,39 @@ function page(n: number, count: number) {
     total: 23,
     page: n,
     page_size: PAGE_SIZE,
+    tickers: ["TK0", "TK1"],
     calls: Array.from({ length: count }, (_, k) => makeCall((n - 1) * PAGE_SIZE + k)),
   };
 }
 
-// Capturing IntersectionObserver mock so the test can drive page 2.
-let ioCb: IntersectionObserverCallback | null = null;
-beforeEach(() => {
-  ioCb = null;
-  vi.stubGlobal("IntersectionObserver", class {
-    constructor(cb: IntersectionObserverCallback) { ioCb = cb; }
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-    takeRecords() { return []; }
+// Controllable IntersectionObserver: track each (callback, element) pair so we
+// can fire the sentinel specifically, even when Base UI Select also registers an observer.
+let observed: { cb: IntersectionObserverCallback; el: Element }[] = [];
+class MockIntersectionObserver {
+  cb: IntersectionObserverCallback;
+  constructor(cb: IntersectionObserverCallback) { this.cb = cb; }
+  observe(el: Element) { observed.push({ cb: this.cb, el }); }
+  unobserve() {}
+  disconnect() {}
+  takeRecords() { return []; }
+}
+
+function triggerSentinel() {
+  const hits = observed.filter(
+    (o) => o.el?.getAttribute?.("data-testid") === "scorecard-sentinel",
+  );
+  const hit = hits[hits.length - 1];
+  act(() => {
+    hit?.cb(
+      [{ isIntersecting: true, target: hit.el } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
   });
+}
+
+beforeEach(() => {
+  observed = [];
+  vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -93,10 +112,15 @@ describe("ChannelScorecard", () => {
     wrap(fetcher);
     await screen.findByText("TK0");
     expect(screen.queryByText("TK20")).toBeNull();
-    act(() => {
-      ioCb?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
-    });
+    triggerSentinel();
     await waitFor(() => expect(screen.getByText("TK20")).toBeInTheDocument());
+  });
+
+  it("renders stance and ticker filter controls", async () => {
+    const fetcher = vi.fn(async () => page(1, PAGE_SIZE));
+    const { container } = wrap(fetcher);
+    await screen.findByText("TK0");
+    expect(container.querySelectorAll('[data-slot="select-trigger"]').length).toBe(2);
   });
 
   it("shows the empty state when there are no calls", async () => {
