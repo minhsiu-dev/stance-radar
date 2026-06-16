@@ -156,15 +156,14 @@ async def _channel_calls_page(
 
 
 async def _channel_call_tickers(session: AsyncSession, channel_id: str) -> list[str]:
-    rows = (await session.execute(
+    return list((await session.execute(
         select(VideoStance.ticker)
         .join(Video, VideoStance.video_id == Video.id)
         .where(Video.channel_id == channel_id)
         .where(VideoStance.stance != Stance.neutral)
         .distinct()
         .order_by(VideoStance.ticker.asc())
-    )).all()
-    return [r[0] for r in rows]
+    )).scalars().all())
 
 
 @router.get("/channels/{channel_id}/scorecard")
@@ -186,6 +185,7 @@ async def channel_scorecard(
         stance=stance_filter, ticker=ticker,
     )
     scorecard = await build_scorecard_page(store, calls, total, page, page_size)
+    # Full ticker list, independent of the active filters, so the dropdown stays populated.
     scorecard["tickers"] = await _channel_call_tickers(session, channel_id)
     return ok(scorecard)
 
