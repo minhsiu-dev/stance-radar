@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { todayPl, mergePerformance } from "@/lib/portfolio";
+import { todayPl, mergePerformance, categoryBreakdown } from "@/lib/portfolio";
 import type { HoldingItem } from "@/lib/types";
 
 function holding(p: Partial<HoldingItem>): HoldingItem {
@@ -79,5 +79,29 @@ describe("mergePerformance", () => {
       null, null,
     );
     expect(rows.map((r) => r.date)).toEqual(["2026-01-01", "2026-01-03"]);
+  });
+});
+
+describe("categoryBreakdown", () => {
+  it("sums market value per category, plus uncategorized and cash", () => {
+    const r = categoryBreakdown(
+      [
+        holding({ ticker: "AAPL", market_value: 1000 }),
+        holding({ ticker: "MSFT", market_value: 500 }),
+        holding({ ticker: "TSLA", market_value: 200 }), // unassigned
+      ],
+      300, // cash
+      { AAPL: "c1", MSFT: "c1" },
+    );
+    expect(r.byCategory).toEqual({ c1: 1500 });
+    expect(r.uncategorized).toBe(200);
+    expect(r.cash).toBe(300);
+  });
+
+  it("treats a null market_value as 0", () => {
+    const r = categoryBreakdown(
+      [holding({ ticker: "X", market_value: null })], 0, {},
+    );
+    expect(r.uncategorized).toBe(0);
   });
 });

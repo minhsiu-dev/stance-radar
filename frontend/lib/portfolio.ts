@@ -51,3 +51,27 @@ export function mergePerformance(
   put("qqq", qqq);
   return [...rows.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
+
+export interface CategoryBreakdown {
+  byCategory: Record<string, number>;
+  uncategorized: number;
+  cash: number;
+}
+
+/** Group holdings' market value by assigned category id; unassigned tickers go to
+ *  `uncategorized`. Cash is passed through unchanged. */
+export function categoryBreakdown(
+  holdings: HoldingItem[],
+  cash: number,
+  assignments: Record<string, string>,
+): CategoryBreakdown {
+  const byCategory: Record<string, number> = {};
+  let uncategorized = 0;
+  for (const h of holdings) {
+    const mv = h.market_value ?? 0;
+    const cat = assignments[h.ticker];
+    if (cat) byCategory[cat] = (byCategory[cat] ?? 0) + mv;
+    else uncategorized += mv;
+  }
+  return { byCategory, uncategorized, cash };
+}
