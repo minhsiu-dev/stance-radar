@@ -53,5 +53,8 @@ describe("useHoldingCategories", () => {
     const { result } = renderHook(() => useHoldingCategories());
     expect(result.current.categories).toEqual([{ id: "x", name: "Seed" }]);
     expect(result.current.assignments).toEqual({ MSFT: "x" });
+    // mounting must NOT overwrite the stored data
+    expect(JSON.parse(localStorage.getItem("stance-radar-categories")!))
+      .toEqual({ categories: [{ id: "x", name: "Seed" }], assignments: { MSFT: "x" } });
   });
 });
