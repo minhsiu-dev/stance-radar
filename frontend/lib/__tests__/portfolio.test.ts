@@ -63,4 +63,21 @@ describe("mergePerformance", () => {
     expect(mergePerformance(null, [{ date: "2026-01-01", value: 100 }], null))
       .toEqual([{ date: "2026-01-01", voo: 0 }]);
   });
+
+  it("returns [] when all series are null", () => {
+    expect(mergePerformance(null, null, null)).toEqual([]);
+  });
+
+  it("rounds return % to 2 decimal places", () => {
+    const rows = mergePerformance([{ date: "2026-01-01", value: 101.126 }], null, null);
+    expect(rows).toEqual([{ date: "2026-01-01", portfolio: 1.13 }]);
+  });
+
+  it("sorts rows ascending by date regardless of input order", () => {
+    const rows = mergePerformance(
+      [{ date: "2026-01-03", value: 103 }, { date: "2026-01-01", value: 101 }],
+      null, null,
+    );
+    expect(rows.map((r) => r.date)).toEqual(["2026-01-01", "2026-01-03"]);
+  });
 });

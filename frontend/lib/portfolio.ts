@@ -24,14 +24,21 @@ export function todayPl(holdings: HoldingItem[]): TodayPl {
   return { amount, percent: prevValue ? (amount / prevValue) * 100 : null };
 }
 
+export interface PerformanceRow {
+  date: string;
+  portfolio?: number;
+  voo?: number;
+  qqq?: number;
+}
+
 /** Merge portfolio/voo/qqq base-100 series by date, converting each to return %
  *  (value − 100). Missing points are simply omitted for that key on that date. */
 export function mergePerformance(
   portfolio: SeriesPoint[] | null,
   voo: SeriesPoint[] | null,
   qqq: SeriesPoint[] | null,
-): Record<string, number | string>[] {
-  const rows = new Map<string, Record<string, number | string>>();
+): PerformanceRow[] {
+  const rows = new Map<string, PerformanceRow>();
   const put = (key: "portfolio" | "voo" | "qqq", points: SeriesPoint[] | null) => {
     for (const p of points ?? []) {
       const row = rows.get(p.date) ?? { date: p.date };
@@ -42,7 +49,5 @@ export function mergePerformance(
   put("portfolio", portfolio);
   put("voo", voo);
   put("qqq", qqq);
-  return [...rows.values()].sort((a, b) =>
-    String(a.date).localeCompare(String(b.date)),
-  );
+  return [...rows.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
