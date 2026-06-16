@@ -158,12 +158,12 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
                     <TableHead>{t("columns.date")}</TableHead>
                     <TableHead>{t("columns.ticker")}</TableHead>
                     <TableHead>{t("columns.stance")}</TableHead>
+                    <TableHead className="text-right">{t("columns.now")}</TableHead>
                     {horizons.map((h) => (
                       <TableHead key={h} className="text-right">
                         {t("columns.horizon", { days: h })}
                       </TableHead>
                     ))}
-                    <TableHead className="text-right">{t("columns.now")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -249,6 +249,11 @@ function ScorecardRow({
       <TableCell title={call.summary}>
         <StanceBadge stance={call.stance} confidence={call.confidence} />
       </TableCell>
+      <ReturnAlphaCell
+        value={call.now_return}
+        alpha={call.now_alpha}
+        hasData={call.has_data}
+      />
       {horizons.map((h) => (
         <ReturnAlphaCell
           key={h}
@@ -257,11 +262,6 @@ function ScorecardRow({
           hasData={call.has_data}
         />
       ))}
-      <ReturnAlphaCell
-        value={call.now_return}
-        alpha={call.now_alpha}
-        hasData={call.has_data}
-      />
     </TableRow>
   );
 }

@@ -71,7 +71,7 @@ def test_score_call_without_data_marks_has_data_false():
 
     scored = score_call(call, None, None, date(2026, 1, 10))
     assert scored.has_data is False
-    assert scored.returns == {7: None, 30: None, 90: None}
+    assert scored.returns == {30: None, 90: None}
 
 
 async def test_build_scorecard_linear_market_returns_and_alpha():
@@ -94,12 +94,11 @@ async def test_build_scorecard_linear_market_returns_and_alpha():
         },
     ])
     call = next(c for c in result["calls"] if c["ticker"] == "AAPL")
-    # entry 2026-01-10 close=109; +7 calendar days -> 2026-01-17 close=116
+    # entry 2026-01-10 close=109; +30 calendar days -> 2026-02-09 close=139
     assert call["entry_price"] == 109.0
-    assert call["returns"]["7"] == pytest.approx(6.42, abs=0.01)
+    assert call["returns"]["30"] == pytest.approx(27.52, abs=0.01)
     # SPY flat -> alpha == raw return
-    assert call["alpha"]["7"] == call["returns"]["7"]
-    assert call["returns"]["30"] is not None
+    assert call["alpha"]["30"] == call["returns"]["30"]
     assert call["returns"]["90"] is not None  # series runs to 4/30, 1/10+90 -> 4/10
 
     gone = next(c for c in result["calls"] if c["ticker"] == "GONE")
@@ -107,32 +106,32 @@ async def test_build_scorecard_linear_market_returns_and_alpha():
 
     aggregates = result["aggregates"]
     assert aggregates["buy"]["total"] == 1
-    assert aggregates["buy"]["horizons"][7]["count"] == 1
-    assert aggregates["buy"]["horizons"][7]["win_rate"] == 100.0
+    assert aggregates["buy"]["horizons"][30]["count"] == 1
+    assert aggregates["buy"]["horizons"][30]["win_rate"] == 100.0
     # GONE has no data -> sell has no realized samples
-    assert aggregates["sell"]["horizons"][7]["count"] == 0
-    assert aggregates["sell"]["horizons"][7]["avg_return"] is None
+    assert aggregates["sell"]["horizons"][30]["count"] == 0
+    assert aggregates["sell"]["horizons"][30]["avg_return"] is None
 
 
 def test_aggregate_sell_win_means_price_dropped():
     win = CallScore(
         video_id="a", video_title="a", ticker="X", stance="sell",
         confidence=None, summary="s", published_at="2026-01-01T00:00:00+00:00",
-        returns={7: -3.0, 30: None, 90: None},
-        alpha={7: -4.0, 30: None, 90: None},
+        returns={30: -3.0, 90: None},
+        alpha={30: -4.0, 90: None},
     )
     loss = CallScore(
         video_id="b", video_title="b", ticker="Y", stance="sell",
         confidence=None, summary="s", published_at="2026-01-01T00:00:00+00:00",
-        returns={7: 5.0, 30: None, 90: None},
-        alpha={7: None, 30: None, 90: None},
+        returns={30: 5.0, 90: None},
+        alpha={30: None, 90: None},
     )
     out = aggregate([win, loss])
-    sell7 = out["sell"]["horizons"][7]
-    assert sell7["count"] == 2
-    assert sell7["avg_return"] == 1.0
-    assert sell7["win_rate"] == 50.0
-    assert sell7["avg_alpha"] == -4.0  # only average samples that have alpha
+    sell30 = out["sell"]["horizons"][30]
+    assert sell30["count"] == 2
+    assert sell30["avg_return"] == 1.0
+    assert sell30["win_rate"] == 50.0
+    assert sell30["avg_alpha"] == -4.0  # only average samples that have alpha
 
 
 async def test_build_scorecard_page_no_aggregates_voo_benchmark():
@@ -155,13 +154,13 @@ async def test_build_scorecard_page_no_aggregates_voo_benchmark():
     assert result["total"] == 5
     assert result["page"] == 2
     assert result["page_size"] == 1
-    assert result["horizons"] == [7, 30, 90]
+    assert result["horizons"] == [30, 90]
     assert "aggregates" not in result
     assert len(result["calls"]) == 1
     call = result["calls"][0]
     assert call["ticker"] == "AAPL"
-    assert call["returns"]["7"] == pytest.approx(6.42, abs=0.01)
-    assert call["alpha"]["7"] == call["returns"]["7"]  # flat VOO
+    assert call["returns"]["30"] == pytest.approx(27.52, abs=0.01)
+    assert call["alpha"]["30"] == call["returns"]["30"]  # flat VOO
 
 
 def test_score_call_without_data_has_null_now():

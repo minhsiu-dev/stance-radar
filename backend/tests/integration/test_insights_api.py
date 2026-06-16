@@ -109,7 +109,7 @@ async def test_scorecard_shape_with_fake_market(api, sessionmaker):
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["benchmark"] == "VOO"
-    assert data["horizons"] == [7, 30, 90]
+    assert data["horizons"] == [30, 90]
     assert data["total"] == 4
     assert data["page"] == 1
     assert data["page_size"] == 20
@@ -121,9 +121,9 @@ async def test_scorecard_shape_with_fake_market(api, sessionmaker):
         "video_id", "ticker", "stance", "returns", "alpha", "has_data",
     }
     # FakeMarketClient has a VOO series → realized windows have alpha
-    realized = [c for c in data["calls"] if c["returns"]["7"] is not None]
+    realized = [c for c in data["calls"] if c["returns"]["30"] is not None]
     assert realized
-    assert all(c["alpha"]["7"] is not None for c in realized)
+    assert all(c["alpha"]["30"] is not None for c in realized)
 
 
 async def test_scorecard_pagination(api, sessionmaker):
