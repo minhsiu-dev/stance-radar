@@ -47,3 +47,23 @@ export function buildMarkers(
   }
   return markers.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
 }
+
+/** Subset of stance rows matching the table's filters (stance AND channel).
+ *  "all" means no constraint on that dimension.
+ *
+ *  Mirrors the predicate the mentions table applies to its rows. Note the chart's
+ *  markers come from /stances (VideoStance rows) while the table's channel/stance
+ *  options come from /mentions (which can use a majority-vote stance fallback when
+ *  a video has mentions but no VideoStance) — so in that rare case the two can
+ *  diverge and a filtered table row may have no corresponding chart marker. */
+export function filterStances(
+  stances: StanceRow[],
+  stanceFilter: StanceValue | "all",
+  channelFilter: string,
+): StanceRow[] {
+  return stances.filter(
+    (s) =>
+      (stanceFilter === "all" || s.stance === stanceFilter) &&
+      (channelFilter === "all" || s.channel_id === channelFilter),
+  );
+}

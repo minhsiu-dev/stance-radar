@@ -23,7 +23,7 @@ vi.mock("lightweight-charts", () => {
   };
   return {
     createChart: () => chart,
-    createSeriesMarkers: vi.fn(),
+    createSeriesMarkers: vi.fn(() => ({ setMarkers: vi.fn() })),
     CandlestickSeries: { kind: "candlestick" },
     HistogramSeries: { kind: "histogram" },
     ColorType: { Solid: "solid" },

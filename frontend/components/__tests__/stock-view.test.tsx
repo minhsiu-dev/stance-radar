@@ -6,9 +6,13 @@ const capturedPriceChartProps: Array<{
   hoveredVideoId?: string | null;
   onSelectVideo?: (id: string) => void;
   height?: number;
+  stanceFilter?: string;
+  channelFilter?: string;
 }> = [];
 let capturedMentionsRowHover: ((id: string | null) => void) | null = null;
 let capturedMentionsSelectedVideoId: string | null = "untouched";
+let capturedMentionsStanceChange: ((v: string) => void) | null = null;
+let capturedMentionsChannelChange: ((v: string) => void) | null = null;
 
 vi.mock("@/components/price-chart", () => ({
   PriceChart: (props: {
@@ -16,11 +20,15 @@ vi.mock("@/components/price-chart", () => ({
     hoveredVideoId?: string | null;
     onSelectVideo?: (id: string) => void;
     height?: number;
+    stanceFilter?: string;
+    channelFilter?: string;
   }) => {
     capturedPriceChartProps.push({
       hoveredVideoId: props.hoveredVideoId,
       onSelectVideo: props.onSelectVideo,
       height: props.height,
+      stanceFilter: props.stanceFilter,
+      channelFilter: props.channelFilter,
     });
     return <div data-testid="chart" />;
   },
@@ -35,12 +43,18 @@ vi.mock("@/components/mentions-tab", () => ({
   MentionsTab: ({
     onRowHover,
     selectedVideoId,
+    onStanceFilterChange,
+    onChannelFilterChange,
   }: {
     onRowHover: (id: string | null) => void;
     selectedVideoId: string | null;
+    onStanceFilterChange: (v: string) => void;
+    onChannelFilterChange: (v: string) => void;
   }) => {
     capturedMentionsRowHover = onRowHover;
     capturedMentionsSelectedVideoId = selectedVideoId;
+    capturedMentionsStanceChange = onStanceFilterChange;
+    capturedMentionsChannelChange = onChannelFilterChange;
     return <div data-testid="mentions" />;
   },
 }));
@@ -56,6 +70,8 @@ describe("StockView", () => {
     capturedPriceChartProps.length = 0;
     capturedMentionsRowHover = null;
     capturedMentionsSelectedVideoId = "untouched";
+    capturedMentionsStanceChange = null;
+    capturedMentionsChannelChange = null;
     searchParamsValue.current = new URLSearchParams();
   });
 
@@ -90,5 +106,23 @@ describe("StockView", () => {
     render(<StockView ticker="AAPL" />);
     expect(screen.getByTestId("mentions")).toBeInTheDocument();
     expect(capturedMentionsSelectedVideoId).toBe("vid-99");
+  });
+
+  it("stance filter change from mentions propagates to the chart", () => {
+    const { rerender } = render(<StockView ticker="AAPL" />);
+    expect(capturedPriceChartProps.at(-1)?.stanceFilter).toBe("all");
+    expect(capturedMentionsStanceChange).not.toBeNull();
+    act(() => capturedMentionsStanceChange!("sell"));
+    rerender(<StockView ticker="AAPL" />);
+    expect(capturedPriceChartProps.at(-1)?.stanceFilter).toBe("sell");
+  });
+
+  it("channel filter change from mentions propagates to the chart", () => {
+    const { rerender } = render(<StockView ticker="AAPL" />);
+    expect(capturedPriceChartProps.at(-1)?.channelFilter).toBe("all");
+    expect(capturedMentionsChannelChange).not.toBeNull();
+    act(() => capturedMentionsChannelChange!("ch_xyz"));
+    rerender(<StockView ticker="AAPL" />);
+    expect(capturedPriceChartProps.at(-1)?.channelFilter).toBe("ch_xyz");
   });
 });

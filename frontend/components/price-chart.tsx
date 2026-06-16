@@ -10,6 +10,8 @@ import {
   HistogramSeries,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
+  type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
 import { useTranslations } from "next-intl";
@@ -17,8 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
-import { buildMarkers, type ChartMarker } from "@/lib/markers";
-import type { CandleDto, StanceRow } from "@/lib/types";
+import { buildMarkers, filterStances, type ChartMarker } from "@/lib/markers";
+import type { CandleDto, StanceRow, StanceValue } from "@/lib/types";
 
 const RANGES = ["1d", "5d", "1m", "3m", "6m", "ytd", "1y", "3y", "5y"] as const;
 type RangeKey = (typeof RANGES)[number];
@@ -30,17 +32,23 @@ export function PriceChart({
   hoveredVideoId,
   onSelectVideo,
   height = 380,
+  stanceFilter = "all",
+  channelFilter = "all",
 }: {
   ticker: string;
   hoveredVideoId?: string | null;
   onSelectVideo?: (videoId: string) => void;
   height?: number;
+  stanceFilter?: StanceValue | "all";
+  channelFilter?: string;
 }) {
   const tErr = useTranslations("Errors");
   const [range, setRange] = useState<RangeKey>("6m");
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const markersApiRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const markersByTimeRef = useRef<Map<string | number, ChartMarker[]>>(new Map());
   const markersByVideoId = useRef<Map<string, ChartMarker>>(new Map());
   const candleByTime = useRef<Map<string | number, CandleDto>>(new Map());
 
@@ -53,6 +61,8 @@ export function PriceChart({
     apiFetch,
   );
 
+  // Create the chart once per (candles, range). Markers are managed by a
+  // separate effect so changing a filter never rebuilds the chart (preserves zoom).
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !candles || candles.length === 0) return;
@@ -101,28 +111,20 @@ export function PriceChart({
       })),
     );
 
-    const markers = buildMarkers(stances ?? [], candles);
-    createSeriesMarkers(series, markers);
+    markersApiRef.current = createSeriesMarkers(series, []);
     chart.timeScale().fitContent();
     chart.timeScale().applyOptions({
       timeVisible: INTRADAY.has(range),
       secondsVisible: false,
     });
 
-    const markersByTime = new Map<string | number, ChartMarker[]>();
-    const byVideo = new Map<string, ChartMarker>();
-    for (const m of markers) {
-      markersByTime.set(m.time, [...(markersByTime.get(m.time) ?? []), m]);
-      byVideo.set(m.id, m);
-    }
-    markersByVideoId.current = byVideo;
     const byTime = new Map<string | number, CandleDto>();
     for (const c of candles) byTime.set(c.time, c);
     candleByTime.current = byTime;
 
     chart.subscribeClick((param) => {
       const time = param.time as string | number | undefined;
-      const hits = time != null ? markersByTime.get(time) : undefined;
+      const hits = time != null ? markersByTimeRef.current.get(time) : undefined;
       if (hits?.length && onSelectVideo) onSelectVideo(hits[0].id);
     });
 
@@ -142,8 +144,30 @@ export function PriceChart({
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
+      markersApiRef.current = null;
     };
-  }, [candles, stances, onSelectVideo, range]);
+  }, [candles, onSelectVideo, range, height]);
+
+  // Recompute markers when the data or the filters change — without rebuilding
+  // the chart. Also refresh the click/hover lookup maps.
+  // NOTE: must stay declared AFTER the chart-creation effect above — React flushes
+  // effects in declaration order, so markersApiRef.current is set before this runs.
+  useEffect(() => {
+    const markers = buildMarkers(
+      filterStances(stances ?? [], stanceFilter, channelFilter),
+      candles ?? [],
+    );
+    markersApiRef.current?.setMarkers(markers);
+
+    const byTime = new Map<string | number, ChartMarker[]>();
+    const byVideo = new Map<string, ChartMarker>();
+    for (const m of markers) {
+      byTime.set(m.time, [...(byTime.get(m.time) ?? []), m]);
+      byVideo.set(m.id, m);
+    }
+    markersByTimeRef.current = byTime;
+    markersByVideoId.current = byVideo;
+  }, [candles, stances, stanceFilter, channelFilter]);
 
   useEffect(() => {
     const chart = chartRef.current;
