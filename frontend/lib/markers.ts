@@ -47,3 +47,17 @@ export function buildMarkers(
   }
   return markers.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
 }
+
+/** Subset of stance rows matching the table's filters (stance AND channel).
+ *  "all" means no constraint on that dimension. */
+export function filterStances(
+  stances: StanceRow[],
+  stanceFilter: StanceValue | "all",
+  channelFilter: string,
+): StanceRow[] {
+  return stances.filter(
+    (s) =>
+      (stanceFilter === "all" || s.stance === stanceFilter) &&
+      (channelFilter === "all" || s.channel_id === channelFilter),
+  );
+}

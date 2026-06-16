@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMarkers, snapToTradingDay } from "@/lib/markers";
+import { buildMarkers, filterStances, snapToTradingDay } from "@/lib/markers";
 import type { CandleDto, StanceRow } from "@/lib/types";
 
 const DAYS = ["2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09"]; // Thu Fri Mon Tue
@@ -65,5 +65,32 @@ describe("marker palette", () => {
 
   it("neutral is zinc-400", () => {
     expect(buildMarkers([stance("v-neutral", "2026-06-04T00:00:00+00:00", "neutral")], candles)[0].color).toBe("#a1a1aa");
+  });
+});
+
+describe("filterStances", () => {
+  const rows: StanceRow[] = [
+    { video_id: "v1", video_title: "t1", channel_id: "cA", channel_title: "A",
+      published_at: "2026-06-04T00:00:00Z", stance: "buy", summary: "s", confidence: null },
+    { video_id: "v2", video_title: "t2", channel_id: "cB", channel_title: "B",
+      published_at: "2026-06-05T00:00:00Z", stance: "sell", summary: "s", confidence: null },
+    { video_id: "v3", video_title: "t3", channel_id: "cA", channel_title: "A",
+      published_at: "2026-06-08T00:00:00Z", stance: "neutral", summary: "s", confidence: null },
+  ];
+
+  it("returns all rows when both filters are 'all'", () => {
+    expect(filterStances(rows, "all", "all")).toHaveLength(3);
+  });
+  it("filters by stance", () => {
+    expect(filterStances(rows, "buy", "all").map((r) => r.video_id)).toEqual(["v1"]);
+  });
+  it("filters by channel", () => {
+    expect(filterStances(rows, "all", "cA").map((r) => r.video_id)).toEqual(["v1", "v3"]);
+  });
+  it("applies stance AND channel together", () => {
+    expect(filterStances(rows, "neutral", "cA").map((r) => r.video_id)).toEqual(["v3"]);
+  });
+  it("returns [] when nothing matches", () => {
+    expect(filterStances(rows, "buy", "cB")).toEqual([]);
   });
 });
