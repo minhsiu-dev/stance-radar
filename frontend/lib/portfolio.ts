@@ -1,4 +1,4 @@
-import type { HoldingItem } from "@/lib/types";
+import type { HoldingItem, SeriesPoint } from "@/lib/types";
 
 export interface TodayPl {
   amount: number | null;
@@ -22,4 +22,27 @@ export function todayPl(holdings: HoldingItem[]): TodayPl {
   }
   if (!any) return { amount: null, percent: null };
   return { amount, percent: prevValue ? (amount / prevValue) * 100 : null };
+}
+
+/** Merge portfolio/voo/qqq base-100 series by date, converting each to return %
+ *  (value − 100). Missing points are simply omitted for that key on that date. */
+export function mergePerformance(
+  portfolio: SeriesPoint[] | null,
+  voo: SeriesPoint[] | null,
+  qqq: SeriesPoint[] | null,
+): Record<string, number | string>[] {
+  const rows = new Map<string, Record<string, number | string>>();
+  const put = (key: "portfolio" | "voo" | "qqq", points: SeriesPoint[] | null) => {
+    for (const p of points ?? []) {
+      const row = rows.get(p.date) ?? { date: p.date };
+      row[key] = Math.round((p.value - 100) * 100) / 100;
+      rows.set(p.date, row);
+    }
+  };
+  put("portfolio", portfolio);
+  put("voo", voo);
+  put("qqq", qqq);
+  return [...rows.values()].sort((a, b) =>
+    String(a.date).localeCompare(String(b.date)),
+  );
 }

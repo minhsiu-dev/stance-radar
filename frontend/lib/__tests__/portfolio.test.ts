@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { todayPl } from "@/lib/portfolio";
+import { todayPl, mergePerformance } from "@/lib/portfolio";
 import type { HoldingItem } from "@/lib/types";
 
 function holding(p: Partial<HoldingItem>): HoldingItem {
@@ -43,5 +43,24 @@ describe("todayPl", () => {
     ]);
     expect(Number.isFinite(r.amount!)).toBe(true);
     expect(r.amount).toBeCloseTo(29.41, 1); // only AAPL contributes
+  });
+});
+
+describe("mergePerformance", () => {
+  it("merges by date and converts base-100 values to return %", () => {
+    const rows = mergePerformance(
+      [{ date: "2026-01-01", value: 100 }, { date: "2026-01-02", value: 105 }],
+      [{ date: "2026-01-01", value: 100 }, { date: "2026-01-02", value: 102 }],
+      [{ date: "2026-01-02", value: 110 }],
+    );
+    expect(rows).toEqual([
+      { date: "2026-01-01", portfolio: 0, voo: 0 },
+      { date: "2026-01-02", portfolio: 5, voo: 2, qqq: 10 },
+    ]);
+  });
+
+  it("handles null series", () => {
+    expect(mergePerformance(null, [{ date: "2026-01-01", value: 100 }], null))
+      .toEqual([{ date: "2026-01-01", voo: 0 }]);
   });
 });
