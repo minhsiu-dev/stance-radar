@@ -115,6 +115,7 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
                         {t("columns.horizon", { days: h })}
                       </TableHead>
                     ))}
+                    <TableHead className="text-right">{t("columns.now")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -123,6 +124,7 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
                       key={`${call.video_id}-${call.ticker}`}
                       call={call}
                       horizons={horizons}
+                      channelId={channelId}
                     />
                   ))}
                 </TableBody>
@@ -138,14 +140,45 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
   );
 }
 
+function ReturnAlphaCell({
+  value,
+  alpha,
+  hasData,
+}: {
+  value: number | null;
+  alpha: number | null;
+  hasData: boolean;
+}) {
+  const t = useTranslations("Scorecard");
+  return (
+    <TableCell className="text-right align-top">
+      {hasData ? (
+        <div className="space-y-0.5">
+          <p className={cn("font-mono tabular-nums", alphaColor(value))}>
+            {formatPercent(value)}
+          </p>
+          {alpha != null && (
+            <p className={cn("font-mono text-xs tabular-nums", alphaColor(alpha))}>
+              {t("vsBenchmark", { value: formatPercent(alpha) })}
+            </p>
+          )}
+        </div>
+      ) : (
+        <span className="text-muted-foreground">{t("noData")}</span>
+      )}
+    </TableCell>
+  );
+}
+
 function ScorecardRow({
   call,
   horizons,
+  channelId,
 }: {
   call: ScorecardCall;
   horizons: number[];
+  channelId: string;
 }) {
-  const t = useTranslations("Scorecard");
   return (
     <TableRow>
       <TableCell className="whitespace-nowrap tabular-nums">
@@ -159,7 +192,7 @@ function ScorecardRow({
       </TableCell>
       <TableCell>
         <Link
-          href={`/stocks/${call.ticker}`}
+          href={`/stocks/${call.ticker}?channel=${channelId}`}
           className="font-mono font-semibold hover:underline"
         >
           {call.ticker}
@@ -168,33 +201,19 @@ function ScorecardRow({
       <TableCell title={call.summary}>
         <StanceBadge stance={call.stance} confidence={call.confidence} />
       </TableCell>
-      {horizons.map((h) => {
-        const value = call.returns[String(h)];
-        const alpha = call.alpha[String(h)];
-        return (
-          <TableCell key={h} className="text-right align-top">
-            {call.has_data ? (
-              <div className="space-y-0.5">
-                <p
-                  className={cn(
-                    "font-mono tabular-nums",
-                    alphaColor(value),
-                  )}
-                >
-                  {formatPercent(value)}
-                </p>
-                {alpha != null && (
-                  <p className="font-mono text-xs tabular-nums text-muted-foreground">
-                    {t("vsBenchmark", { value: formatPercent(alpha) })}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <span className="text-muted-foreground">{t("noData")}</span>
-            )}
-          </TableCell>
-        );
-      })}
+      {horizons.map((h) => (
+        <ReturnAlphaCell
+          key={h}
+          value={call.returns[String(h)]}
+          alpha={call.alpha[String(h)]}
+          hasData={call.has_data}
+        />
+      ))}
+      <ReturnAlphaCell
+        value={call.now_return}
+        alpha={call.now_alpha}
+        hasData={call.has_data}
+      />
     </TableRow>
   );
 }

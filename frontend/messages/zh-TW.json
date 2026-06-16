@@ -314,13 +314,14 @@
     "loading": "計算中,需抓取歷史股價…",
     "loadError": "最新提及讀取失敗:{message}",
     "empty": "尚無 buy/sell 立場可評分。",
-    "vsBenchmark": "超額 {value}",
+    "vsBenchmark": "α {value}",
     "noData": "無資料",
     "columns": {
       "date": "日期",
       "ticker": "股票",
       "stance": "立場",
-      "horizon": "{days} 天"
+      "horizon": "{days} 天",
+      "now": "至今"
     }
   },
   "Portfolio": {

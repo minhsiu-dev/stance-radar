@@ -302,6 +302,8 @@ export interface ScorecardCall {
   entry_price: number | null;
   returns: Record<string, number | null>;
   alpha: Record<string, number | null>;
+  now_return: number | null;
+  now_alpha: number | null;
   has_data: boolean;
 }
 

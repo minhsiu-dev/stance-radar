@@ -51,6 +51,8 @@ class CallScore:
     # horizon (days) -> return %; not yet matured or no data -> None
     returns: dict[int, float | None] = field(default_factory=dict)
     alpha: dict[int, float | None] = field(default_factory=dict)
+    now_return: float | None = None
+    now_alpha: float | None = None
     has_data: bool = True
 
 
@@ -87,6 +89,18 @@ def _window_return(series: PriceSeries, published: date, horizon: int) -> tuple:
     return entry_date, entry_price, round((exit_[1] / entry_price - 1) * 100, 2)
 
 
+def _now_return(series: PriceSeries, published: date) -> tuple:
+    """Return (entry_date, entry_price, return_pct | None) from entry to the latest close."""
+    entry = series.close_on_or_after(published)
+    if entry is None:
+        return None, None, None
+    entry_date, entry_price = entry
+    if entry_price == 0:
+        return entry_date, entry_price, None
+    latest_close = series.closes[-1]
+    return entry_date, entry_price, round((latest_close / entry_price - 1) * 100, 2)
+
+
 def score_call(
     call: CallScore,
     series: PriceSeries | None,
@@ -97,6 +111,8 @@ def score_call(
         call.has_data = False
         call.returns = {h: None for h in HORIZONS}
         call.alpha = {h: None for h in HORIZONS}
+        call.now_return = None
+        call.now_alpha = None
         return call
     for h in HORIZONS:
         entry_date, entry_price, ret = _window_return(series, published, h)
@@ -112,6 +128,16 @@ def score_call(
             if ret is not None and bench_ret is not None
             else None
         )
+    _, _, now_ret = _now_return(series, published)
+    call.now_return = now_ret
+    bench_now = None
+    if benchmark is not None:
+        _, _, bench_now = _now_return(benchmark, published)
+    call.now_alpha = (
+        round(now_ret - bench_now, 2)
+        if now_ret is not None and bench_now is not None
+        else None
+    )
     return call
 
 
@@ -156,6 +182,8 @@ def _serialize_call(c: CallScore) -> dict:
         "entry_price": c.entry_price,
         "returns": {str(h): c.returns.get(h) for h in HORIZONS},
         "alpha": {str(h): c.alpha.get(h) for h in HORIZONS},
+        "now_return": c.now_return,
+        "now_alpha": c.now_alpha,
         "has_data": c.has_data,
     }
 

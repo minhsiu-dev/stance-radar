@@ -125,4 +125,10 @@ describe("StockView", () => {
     rerender(<StockView ticker="AAPL" />);
     expect(capturedPriceChartProps.at(-1)?.channelFilter).toBe("ch_xyz");
   });
+
+  it("deep-links ?channel= to the channel filter", () => {
+    searchParamsValue.current = new URLSearchParams("channel=ch_x");
+    render(<StockView ticker="AAPL" />);
+    expect(capturedPriceChartProps.at(-1)?.channelFilter).toBe("ch_x");
+  });
 });

@@ -11,9 +11,9 @@ const messages = {
     loading: "Computing…",
     loadError: "Failed: {message}",
     empty: "No buy/sell stances to score yet.",
-    vsBenchmark: "excess {value}",
+    vsBenchmark: "α {value}",
     noData: "no data",
-    columns: { date: "Date", ticker: "Ticker", stance: "Stance", horizon: "{days}d" },
+    columns: { date: "Date", ticker: "Ticker", stance: "Stance", horizon: "{days}d", now: "Now" },
   },
   Stock: { stance: { buy: "Buy", sell: "Sell", neutral: "Neutral" } },
 };
@@ -33,6 +33,8 @@ function makeCall(i: number) {
     entry_price: 100,
     returns: { "7": 8.2, "30": null, "90": null },
     alpha: { "7": 1.4, "30": null, "90": null },
+    now_return: 15.0,
+    now_alpha: 2.0,
     has_data: true,
   };
 }
@@ -73,12 +75,15 @@ function wrap(fetcher: (key: string) => Promise<unknown>) {
 }
 
 describe("ChannelScorecard", () => {
-  it("renders the first page with return % and inline alpha", async () => {
+  it("renders the first page with return %, α, and the Now column", async () => {
     const fetcher = vi.fn(async () => page(1, PAGE_SIZE));
     wrap(fetcher);
     expect(await screen.findByText("TK0")).toBeInTheDocument();
     expect(screen.getAllByText("+8.20%").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("excess +1.40%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("α +1.40%").length).toBeGreaterThan(0);
+    expect(screen.getByText("Now")).toBeInTheDocument();
+    expect(screen.getAllByText("+15.00%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("α +2.00%").length).toBeGreaterThan(0);
   });
 
   it("loads the next page when the sentinel intersects", async () => {
