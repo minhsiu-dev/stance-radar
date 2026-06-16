@@ -17,7 +17,7 @@ from app.market.store import PriceStore
 
 logger = logging.getLogger(__name__)
 
-HORIZONS = (7, 30, 90)
+HORIZONS = (30, 90)
 BENCHMARK = "SPY"  # aggregate/leaderboard path
 SCORECARD_BENCHMARK = "VOO"  # per-call paginated scorecard path
 _HISTORY_DAYS = 1827  # 5 years, covers this tool's historical calls

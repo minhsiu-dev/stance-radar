@@ -32,8 +32,8 @@ function makeCall(i: number) {
     published_at: "2026-06-10T00:00:00Z",
     entry_date: "2026-06-11",
     entry_price: 100,
-    returns: { "7": 8.2, "30": null, "90": null },
-    alpha: { "7": 1.4, "30": null, "90": null },
+    returns: { "30": 8.2, "90": null },
+    alpha: { "30": 1.4, "90": null },
     now_return: 15.0,
     now_alpha: 2.0,
     has_data: true,
@@ -42,7 +42,7 @@ function makeCall(i: number) {
 
 function page(n: number, count: number) {
   return {
-    horizons: [7, 30, 90],
+    horizons: [30, 90],
     benchmark: "VOO",
     total: 23,
     page: n,
@@ -105,6 +105,20 @@ describe("ChannelScorecard", () => {
     expect(screen.getAllByText("α +2.00%").length).toBeGreaterThan(0);
   });
 
+  it("orders performance columns as Now, 30d, 90d and drops 7d", async () => {
+    const fetcher = vi.fn(async () => page(1, PAGE_SIZE));
+    wrap(fetcher);
+    await screen.findByText("TK0");
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).not.toContain("7d");
+    const now = headers.indexOf("Now");
+    const d30 = headers.indexOf("30d");
+    const d90 = headers.indexOf("90d");
+    expect(now).toBeGreaterThan(-1);
+    expect(now).toBeLessThan(d30);
+    expect(d30).toBeLessThan(d90);
+  });
+
   it("loads the next page when the sentinel intersects", async () => {
     const fetcher = vi.fn(async (key: string) =>
       key.includes("page=2") ? page(2, 3) : page(1, PAGE_SIZE),
@@ -125,7 +139,7 @@ describe("ChannelScorecard", () => {
 
   it("shows the empty state when there are no calls", async () => {
     const fetcher = vi.fn(async () => ({
-      horizons: [7, 30, 90], benchmark: "VOO", total: 0, page: 1, page_size: PAGE_SIZE, calls: [],
+      horizons: [30, 90], benchmark: "VOO", total: 0, page: 1, page_size: PAGE_SIZE, calls: [],
     }));
     wrap(fetcher);
     expect(await screen.findByText("No buy/sell stances to score yet.")).toBeInTheDocument();
