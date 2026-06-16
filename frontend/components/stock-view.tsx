@@ -11,10 +11,11 @@ import type { StanceValue } from "@/lib/types";
 export function StockView({ ticker }: { ticker: string }) {
   const params = useSearchParams();
   const deepLinkVideo = params.get("video");
+  const deepLinkChannel = params.get("channel");
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(deepLinkVideo);
   const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
   const [stanceFilter, setStanceFilter] = useState<StanceValue | "all">("all");
-  const [channelFilter, setChannelFilter] = useState<string>("all");
+  const [channelFilter, setChannelFilter] = useState<string>(deepLinkChannel ?? "all");
 
   return (
     <div className="space-y-6">
