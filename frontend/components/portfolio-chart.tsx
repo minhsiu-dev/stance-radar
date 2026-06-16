@@ -76,7 +76,21 @@ export function PortfolioChart() {
               <ChartTooltip
                 content={
                   <ChartTooltipContent
-                    formatter={(value, name) => `${name}: ${Number(value) > 0 ? "+" : ""}${Number(value).toFixed(2)}%`}
+                    formatter={(value, name, item) => (
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                            style={{ backgroundColor: (item as { color?: string }).color }}
+                          />
+                          {config[name as keyof typeof config]?.label ?? name}
+                        </span>
+                        <span className="font-mono font-medium tabular-nums text-foreground">
+                          {Number(value) > 0 ? "+" : ""}
+                          {Number(value).toFixed(2)}%
+                        </span>
+                      </div>
+                    )}
                   />
                 }
               />
