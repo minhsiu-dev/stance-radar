@@ -1,105 +1,165 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from app.insights.scorecard import CallScore, PriceSeries, _adjusted_alpha, _adjusted_return, score_call
+from app.insights.scorecard import PriceSeries
 from app.insights.ticker_perf import channel_ticker_performance
 from app.models import Channel, PriceBar, Stance, Video, VideoStance, VideoStatus
 
 pytestmark = pytest.mark.asyncio
 
-# VOO is NON-flat (100 -> 110 over the window) so avg_return (raw) differs from avg_alpha (excess vs VOO).
-CANDLES: dict[str, list[tuple[date, float]]] = {
-    "VOO": [(date(2026, 1, 10), 100.0), (date(2026, 3, 10), 105.0), (date(2026, 6, 1), 110.0)],
-    "AAA": [(date(2026, 1, 10), 100.0), (date(2026, 6, 1), 130.0)],   # buy: raw +30, alpha +20
-    "BBB": [(date(2026, 1, 10), 100.0), (date(2026, 6, 1), 80.0)],    # sell: raw -20 -> adj +20, alpha -30 -> adj +30
-    "CCC": [(date(2026, 1, 10), 100.0), (date(2026, 3, 10), 200.0), (date(2026, 6, 1), 120.0)],
-}
-CALLS = [
-    ("v_aaa", date(2026, 1, 10), "AAA", Stance.buy),
-    ("v_bbb", date(2026, 1, 10), "BBB", Stance.sell),
-    ("v_ccc1", date(2026, 1, 10), "CCC", Stance.buy),   # entry 100 -> 120 raw +20, bench +10 -> alpha +10 (win)
-    ("v_ccc2", date(2026, 3, 10), "CCC", Stance.buy),   # entry 200 -> 120 raw -40, bench 4.76 -> alpha -44.76 (loss)
-    ("v_ddd", date(2026, 1, 10), "DDD", Stance.neutral),  # neutral -> excluded
+_NOW = datetime.now(timezone.utc)
+_TODAY = _NOW.date()
+
+
+def _d(days_ago: int) -> date:
+    return _TODAY - timedelta(days=days_ago)
+
+
+# Deterministic daily close: ticker-specific base + a small date-driven wiggle. Dense (every
+# calendar day) so any window end (te) lands on a bar. The Python oracle reads the SAME formula.
+def _close(ticker: str, day: date) -> float:
+    base = 100 + (sum(ord(c) for c in ticker) % 50)
+    return round(base + (day.toordinal() % 23) * 0.5, 2)
+
+
+_TICKERS = ["AAA", "BBB", "CCC", "VOO"]
+# (video_id, days_ago, ticker, stance)
+_CALLS = [
+    # AAA: buy reversed EARLY (10d after) -> closed, scored over the 10-day window (NOT to today)
+    ("v_aaa_b", 150, "AAA", Stance.buy),
+    ("v_aaa_s", 140, "AAA", Stance.sell),
+    # BBB: buy then -> NEUTRAL (a change) 30d later -> closed at the neutral date
+    ("v_bbb_b", 160, "BBB", Stance.buy),
+    ("v_bbb_n", 130, "BBB", Stance.neutral),
+    # CCC: one open MATURE buy (120d old, never reversed -> mark-to-market today) and
+    #      one open IMMATURE buy (20d old -> pending)
+    ("v_ccc_old", 120, "CCC", Stance.buy),
+    ("v_ccc_new", 20, "CCC", Stance.buy),
 ]
 
 
 async def _seed(session) -> None:
     session.add(Channel(id="ch1", title="c", thumbnail_url="", uploads_playlist_id="UU1"))
-    for ticker, bars in CANDLES.items():
-        for d, close in bars:
-            session.add(PriceBar(
-                ticker=ticker, date=d, open=close, high=close, low=close,
-                close=close, volume=1,
-            ))
-    for vid, d, ticker, stance in CALLS:
+    start = _d(210)
+    for t in _TICKERS:
+        day = start
+        while day <= _TODAY:
+            c = _close(t, day)
+            session.add(PriceBar(ticker=t, date=day, open=c, high=c, low=c, close=c, volume=1))
+            day += timedelta(days=1)
+    for vid, ago, ticker, stance in _CALLS:
         session.add(Video(
             id=vid, channel_id="ch1", title=f"t {vid}",
-            published_at=datetime(d.year, d.month, d.day, 12, 0, tzinfo=timezone.utc),
+            published_at=_NOW - timedelta(days=ago),
             thumbnail_url="", duration_seconds=60, status=VideoStatus.analyzed,
         ))
         session.add(VideoStance(video_id=vid, ticker=ticker, stance=stance, summary="s"))
     await session.commit()
 
 
-async def test_channel_ticker_performance_slices(session):
-    await _seed(session)
-    perf = await channel_ticker_performance(session, "ch1")
-
-    assert perf["AAA"] == {
-        "all":  {"n": 1, "avg_alpha": 20.0, "avg_return": 30.0, "win_rate": 100.0},
-        "buy":  {"n": 1, "avg_alpha": 20.0, "avg_return": 30.0, "win_rate": 100.0},
-        "sell": {"n": 0, "avg_alpha": None, "avg_return": None, "win_rate": None},
-    }
-    assert perf["BBB"] == {
-        "all":  {"n": 1, "avg_alpha": 30.0, "avg_return": 20.0, "win_rate": 100.0},
-        "buy":  {"n": 0, "avg_alpha": None, "avg_return": None, "win_rate": None},
-        "sell": {"n": 1, "avg_alpha": 30.0, "avg_return": 20.0, "win_rate": 100.0},
-    }
-    assert perf["CCC"] == {
-        "all":  {"n": 2, "avg_alpha": -17.38, "avg_return": -10.0, "win_rate": 50.0},
-        "buy":  {"n": 2, "avg_alpha": -17.38, "avg_return": -10.0, "win_rate": 50.0},
-        "sell": {"n": 0, "avg_alpha": None, "avg_return": None, "win_rate": None},
-    }
-    # avg_return is the RAW stock move, distinct from avg_alpha (excess vs the non-flat VOO)
-    assert perf["AAA"]["all"]["avg_return"] != perf["AAA"]["all"]["avg_alpha"]
-    assert "DDD" not in perf
+# ---- independent Python oracle (mirrors spec §2, NOT the SQL) ----
+def _series(ticker: str) -> PriceSeries:
+    days = []
+    day = _d(210)
+    while day <= _TODAY:
+        days.append(day)
+        day += timedelta(days=1)
+    return PriceSeries(dates=tuple(days), closes=tuple(_close(ticker, d) for d in days))
 
 
-async def test_channel_ticker_performance_matches_score_call(session):
-    """The lean SQL must agree, per ticker, with score_call's 至今 alpha AND raw return."""
-    await _seed(session)
-    perf = await channel_ticker_performance(session, "ch1")
+def _close_on_or_after(s: PriceSeries, target: date):
+    hit = s.close_on_or_after(target)
+    return hit[1] if hit is not None else s.closes[-1]  # te past last bar -> latest (mark-to-market)
 
-    series = {
-        t: PriceSeries(dates=tuple(d for d, _ in bars), closes=tuple(c for _, c in bars))
-        for t, bars in CANDLES.items()
-    }
-    alpha_by: dict[str, list[float]] = {}
-    ret_by: dict[str, list[float]] = {}
-    for vid, d, ticker, stance in CALLS:
+
+def _oracle() -> dict:
+    # all directional calls with their (ticker, stance, d); all stances for tc detection
+    all_stances = [(t, st, _d(ago)) for (_, ago, t, st) in _CALLS]
+    voo = _series("VOO")
+    voo_latest = voo.closes[-1]
+    out: dict = {}
+    for vid, ago, ticker, stance in _CALLS:
         if stance == Stance.neutral:
             continue
-        pub = datetime(d.year, d.month, d.day, 12, 0, tzinfo=timezone.utc)
-        cs = CallScore(
-            video_id=vid, video_title="", ticker=ticker, stance=stance.value,
-            confidence=None, summary="", published_at=pub.isoformat(),
-        )
-        score_call(cs, series.get(ticker), series["VOO"], pub.date())
-        a = _adjusted_alpha(cs, "now")
-        r = _adjusted_return(cs, "now")
-        if a is not None:
-            alpha_by.setdefault(ticker, []).append(a)
-        if r is not None:
-            ret_by.setdefault(ticker, []).append(r)
+        d0 = _d(ago)
+        later = [ad for (at, ast, ad) in all_stances if at == ticker and ad > d0 and ast != stance]
+        tc = min(later) if later else None
+        matured = tc is not None or (d0 + timedelta(days=90)) <= _TODAY
+        te = tc if tc is not None else _TODAY
+        slot = out.setdefault(ticker, {"alphas": {"buy": [], "sell": []}, "rets": {"buy": [], "sell": []},
+                                       "pending": {"buy": 0, "sell": 0}})
+        sl = stance.value
+        if not matured:
+            slot["pending"][sl] += 1
+            continue
+        s = _series(ticker)
+        entry = s.close_on_or_after(d0)
+        if entry is None or entry[1] <= 0:
+            continue
+        exit_px = _close_on_or_after(s, te)
+        voo_e = voo.close_on_or_after(d0)
+        if voo_e is None or voo_e[1] <= 0:
+            continue
+        voo_l = _close_on_or_after(voo, te)
+        stock = round((exit_px / entry[1] - 1) * 100, 2)
+        bench = round((voo_l / voo_e[1] - 1) * 100, 2)
+        alpha = round(stock - bench, 2)
+        adj_a = alpha if stance == Stance.buy else -alpha
+        adj_r = stock if stance == Stance.buy else -stock
+        slot["alphas"][sl].append(adj_a)
+        slot["rets"][sl].append(adj_r)
+    return out
 
-    assert set(perf) == set(alpha_by)
-    for ticker, alphas in alpha_by.items():
-        n = len(alphas)
-        rets = ret_by[ticker]
-        assert perf[ticker]["all"]["n"] == n
-        assert perf[ticker]["all"]["avg_alpha"] == pytest.approx(round(sum(alphas) / n, 2))
-        assert perf[ticker]["all"]["avg_return"] == pytest.approx(round(sum(rets) / len(rets), 2))
-        assert perf[ticker]["all"]["win_rate"] == pytest.approx(
-            round(100.0 * sum(1 for a in alphas if a > 0) / n, 1)
-        )
+
+def _expected_slice(slot, which: str) -> dict:
+    if which == "all":
+        alphas = slot["alphas"]["buy"] + slot["alphas"]["sell"]
+        rets = slot["rets"]["buy"] + slot["rets"]["sell"]
+        pending = slot["pending"]["buy"] + slot["pending"]["sell"]
+    else:
+        alphas, rets, pending = slot["alphas"][which], slot["rets"][which], slot["pending"][which]
+    n = len(alphas)
+    return {
+        "n": n,
+        "avg_alpha": round(sum(alphas) / n, 2) if n else None,
+        "avg_return": round(sum(rets) / n, 2) if n else None,
+        "win_rate": round(100.0 * sum(1 for a in alphas if a > 0) / n, 1) if n else None,
+        "pending": pending,
+    }
+
+
+async def test_track_record_window_structural(session):
+    await _seed(session)
+    perf = await channel_ticker_performance(session, "ch1")
+
+    # AAA buy (150d ago) was reversed by sell (140d ago) -> CLOSED, scored over 10-day window
+    # AAA sell (140d ago) is open, BUT 140d >= 90d so it is MATURE -> scored to today (not pending)
+    assert perf["AAA"]["buy"]["n"] == 1
+    assert perf["AAA"]["sell"]["n"] == 1   # mature (140d old) open sell -> scored to today
+    assert perf["AAA"]["sell"]["pending"] == 0
+    assert perf["AAA"]["all"]["n"] == 2
+    # BBB buy was closed by a move to NEUTRAL -> scored (neutral counts as a change)
+    assert perf["BBB"]["buy"]["n"] == 1
+    assert perf["BBB"]["buy"]["pending"] == 0
+    # CCC: one mature open buy (120d, scored to today) + one immature open buy (20d -> pending)
+    assert perf["CCC"]["buy"]["n"] == 1
+    assert perf["CCC"]["buy"]["pending"] == 1
+
+
+async def test_track_record_window_matches_oracle(session):
+    await _seed(session)
+    perf = await channel_ticker_performance(session, "ch1")
+    oracle = _oracle()
+    assert set(perf) == set(oracle)
+    for ticker, slot in oracle.items():
+        for which in ("all", "buy", "sell"):
+            exp = _expected_slice(slot, which)
+            got = perf[ticker][which]
+            assert got["n"] == exp["n"], (ticker, which, "n")
+            assert got["pending"] == exp["pending"], (ticker, which, "pending")
+            for k in ("avg_alpha", "avg_return", "win_rate"):
+                if exp[k] is None:
+                    assert got[k] is None, (ticker, which, k)
+                else:
+                    assert got[k] == pytest.approx(exp[k]), (ticker, which, k)

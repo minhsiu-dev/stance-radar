@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api")
 _PERFORMANCE_WINDOW_DAYS = 180
 
 _EMPTY_PERF = {
-    s: {"win_rate": None, "avg_alpha": None, "avg_return": None, "n": 0}
+    s: {"win_rate": None, "avg_alpha": None, "avg_return": None, "n": 0, "pending": 0}
     for s in ("all", "buy", "sell")
 }
 
