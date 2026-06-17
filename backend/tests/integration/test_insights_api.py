@@ -276,34 +276,42 @@ async def test_channel_tickers_unknown_channel_404(api):
     assert resp.status_code == 404
 
 
-async def test_channel_recent_feed(api, sessionmaker):
+async def test_channel_recent_grouped_by_video(api, sessionmaker):
     _, client = api
-    await seed_stances(sessionmaker)  # AAPL sell(2d), NVDA buy(3d), NVDA buy(30d), AAPL buy(40d)
+    await seed_stances(sessionmaker)  # 4 single-stance videos
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Video(
+            id="v_multi", channel_id="ch1", title="basket",
+            published_at=now - timedelta(days=1), thumbnail_url="",
+            duration_seconds=60, status=VideoStatus.analyzed,
+        ))
+        for tk, st in (("TSLA", Stance.buy), ("AMD", Stance.sell), ("GOOG", Stance.neutral)):
+            s.add(VideoStance(video_id="v_multi", ticker=tk, stance=st, summary="s"))
+        await s.commit()
 
     resp = await client.get("/api/channels/ch1/recent")
     assert resp.status_code == 200
     data = resp.json()["data"]
-    assert data["total"] == 4
-    assert data["page"] == 1
-    assert [i["ticker"] for i in data["items"]] == ["AAPL", "NVDA", "NVDA", "AAPL"]
-    first = data["items"][0]
-    assert first["stance"] == "sell"  # newest call is AAPL sell (2d ago)
-    assert set(first) >= {
-        "published_at", "video_id", "video_title", "ticker", "stance",
-        "confidence", "summary",
-    }
+    assert data["total"] == 5  # 4 seed videos + v_multi, paginated BY VIDEO
+    first = data["items"][0]   # v_multi is newest (1d ago)
+    assert first["video_id"] == "v_multi"
+    assert first["video_title"] == "basket"
+    assert set(first) >= {"video_id", "video_title", "published_at", "stances"}
+    # all stances incl. neutral, ordered by ticker asc, grouped into ONE item
+    assert [s["ticker"] for s in first["stances"]] == ["AMD", "GOOG", "TSLA"]
+    assert set(first["stances"][0]) >= {"ticker", "stance", "summary", "confidence"}
 
 
-async def test_channel_recent_pagination(api, sessionmaker):
+async def test_channel_recent_paginates_by_video(api, sessionmaker):
     _, client = api
-    await seed_stances(sessionmaker)
-    resp = await client.get("/api/channels/ch1/recent?page=2&page_size=2")
+    await seed_stances(sessionmaker)  # v_a2(2d), v_n2(3d), v_n1(30d), v_a1(40d)
+    resp = await client.get("/api/channels/ch1/recent?page=1&page_size=2")
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["total"] == 4
-    assert data["page"] == 2
-    assert len(data["items"]) == 2
-    assert [i["ticker"] for i in data["items"]] == ["NVDA", "AAPL"]  # 3rd + 4th newest
+    assert len(data["items"]) == 2  # 2 VIDEOS, not 2 stances
+    assert [i["video_id"] for i in data["items"]] == ["v_a2", "v_n2"]
 
 
 async def test_channel_recent_unknown_channel_404(api):

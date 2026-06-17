@@ -260,39 +260,52 @@ async def channel_tickers(
 async def channel_recent(
     channel_id: str,
     page: int = Query(1, ge=1),
-    page_size: int = Query(30, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
 ):
-    """最新提及: newest-first digest of the channel's VideoStances (all stances,
-    one row per video x ticker), joined to the video. Paginated."""
+    """最新提及: newest-first digest grouped BY VIDEO (one item per video, its stances nested).
+    Paginated by video so a video's tickers never split across a page boundary."""
     channel = await session.get(Channel, channel_id)
     if channel is None:
         return fail(f"Channel {channel_id} not found", status_code=404)
     total = (await session.execute(
-        select(func.count())
+        select(func.count(func.distinct(VideoStance.video_id)))
         .select_from(VideoStance)
         .join(Video, VideoStance.video_id == Video.id)
         .where(Video.channel_id == channel_id)
     )).scalar_one()
-    rows = (await session.execute(
-        select(VideoStance, Video)
-        .join(Video, VideoStance.video_id == Video.id)
+    video_rows = (await session.execute(
+        select(Video.id, Video.title, Video.published_at)
+        .join(VideoStance, VideoStance.video_id == Video.id)
         .where(Video.channel_id == channel_id)
-        .order_by(Video.published_at.desc(), Video.id.desc(), VideoStance.ticker.asc())
+        .group_by(Video.id, Video.title, Video.published_at)
+        .order_by(Video.published_at.desc(), Video.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )).all()
+    video_ids = [r.id for r in video_rows]
+    by_video: dict[str, list[dict]] = {vid: [] for vid in video_ids}
+    if video_ids:
+        stance_rows = (await session.execute(
+            select(VideoStance)
+            .where(VideoStance.video_id.in_(video_ids))
+            .order_by(VideoStance.ticker.asc())
+        )).scalars().all()
+        for s in stance_rows:
+            by_video[s.video_id].append({
+                "ticker": s.ticker,
+                "stance": s.stance.value,
+                "summary": s.summary,
+                "confidence": s.confidence,
+            })
     items = [
         {
-            "published_at": video.published_at.isoformat(),
-            "video_id": video.id,
-            "video_title": video.title,
-            "ticker": stance.ticker,
-            "stance": stance.stance.value,
-            "confidence": stance.confidence,
-            "summary": stance.summary,
+            "video_id": r.id,
+            "video_title": r.title,
+            "published_at": r.published_at.isoformat(),
+            "stances": by_video.get(r.id, []),
         }
-        for stance, video in rows
+        for r in video_rows
     ]
     return ok({"items": items, "total": total, "page": page, "page_size": page_size})
 
