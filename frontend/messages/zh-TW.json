@@ -133,7 +133,8 @@
       "removePrompt": "移除「{name}」?其影片與分析資料將一併刪除。",
       "pendingBadge": "{count} 部待挑選",
       "autoBadge": "自動分析",
-      "analyzedCount": "{count} 部已分析"
+      "analyzedCount": "{count} 部已分析",
+      "perfLine": "近180天 vs VOO · 勝率 {winRate} · 中位數 {median}"
     },
     "activity": {
       "legend": "發佈 / 已分析",

@@ -133,7 +133,8 @@
       "removePrompt": "Remove \"{name}\"? Its videos and analysis will also be deleted.",
       "pendingBadge": "{count} awaiting review",
       "autoBadge": "Auto-analyze",
-      "analyzedCount": "{count} analyzed"
+      "analyzedCount": "{count} analyzed",
+      "perfLine": "180d vs VOO · Win {winRate} · Median {median}"
     },
     "activity": {
       "legend": "published / analyzed",

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { ChannelManager } from "@/components/channel-manager";
-import type { ChannelOverviewItem, ChannelOverviewResponse } from "@/lib/types";
+import type { ChannelOverviewItem, ChannelOverviewResponse, ChannelPerformanceDto } from "@/lib/types";
 
 // Controllable IntersectionObserver: remember each observe's (callback, element) so the test
 // can manually fire the scroll sentinel (mirrors the channel-detail infinite-scroll test).
@@ -95,8 +95,33 @@ function page(n: number): ChannelOverviewResponse {
   return { items: ids.map(item), total: 15, page: n, page_size: 10 };
 }
 
+const zeroPerfDto: ChannelPerformanceDto = {
+  benchmark: "VOO",
+  window_days: 180,
+  horizons: ["now", "30", "90"],
+  summary: {
+    all: {
+      now: { win_rate: null, avg: null, median: null, n: 0 },
+      "30": { win_rate: null, avg: null, median: null, n: 0 },
+      "90": { win_rate: null, avg: null, median: null, n: 0 },
+    },
+    buy: {
+      now: { win_rate: null, avg: null, median: null, n: 0 },
+      "30": { win_rate: null, avg: null, median: null, n: 0 },
+      "90": { win_rate: null, avg: null, median: null, n: 0 },
+    },
+    sell: {
+      now: { win_rate: null, avg: null, median: null, n: 0 },
+      "30": { win_rate: null, avg: null, median: null, n: 0 },
+      "90": { win_rate: null, avg: null, median: null, n: 0 },
+    },
+  },
+  counts: { all: 0, buy: 0, sell: 0 },
+};
+
 function wrap() {
   const fetcher = vi.fn((key: string) => {
+    if (key.includes("/performance")) return Promise.resolve(zeroPerfDto);
     const p = new URL(key, "http://x").searchParams.get("page") ?? "1";
     return Promise.resolve(page(Number(p)));
   });

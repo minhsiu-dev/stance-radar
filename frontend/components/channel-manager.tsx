@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChannelActivityBars } from "@/components/channel-activity-bars";
+import { ChannelPerfLine } from "@/components/channel-perf-line";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type { ChannelOverviewItem, ChannelOverviewResponse } from "@/lib/types";
@@ -104,6 +105,7 @@ export function ChannelManager() {
                     ? t("list.lastUpdated", { date: formatDate(channel.last_refreshed_at) })
                     : t("list.neverUpdated")}
                 </p>
+                <ChannelPerfLine channelId={channel.id} />
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {channel.auto_analyze && (
                     <Badge
