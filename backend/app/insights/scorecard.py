@@ -182,25 +182,49 @@ def _adjusted_alpha(call: CallScore, horizon: str) -> float | None:
     return alpha if call.stance == "buy" else -alpha
 
 
+def _adjusted_return(call: CallScore, horizon: str) -> float | None:
+    """Raw % return, sign-flipped for sells so a short's return is positive when
+    the stock falls. For buys it is just the stock's return."""
+    ret = call.now_return if horizon == "now" else call.returns.get(int(horizon))
+    if ret is None:
+        return None
+    return ret if call.stance == "buy" else -ret
+
+
 def _summary_cell(calls: list[CallScore], horizon: str) -> dict:
-    vals = [a for a in (_adjusted_alpha(c, horizon) for c in calls) if a is not None]
-    n = len(vals)
+    pairs: list[tuple[float, float | None]] = []
+    for c in calls:
+        a = _adjusted_alpha(c, horizon)
+        if a is None:
+            continue
+        pairs.append((a, _adjusted_return(c, horizon)))
+    n = len(pairs)
     if n == 0:
-        return {"win_rate": None, "avg": None, "median": None, "n": 0}
-    wins = sum(1 for v in vals if v > 0)
+        return {
+            "win_rate": None, "avg": None, "median": None,
+            "avg_return": None, "median_return": None, "n": 0,
+        }
+    alphas = [a for a, _ in pairs]
+    returns = [r for _, r in pairs if r is not None]
+    wins = sum(1 for a in alphas if a > 0)
     return {
         "win_rate": round(wins / n * 100, 1),
-        "avg": round(sum(vals) / n, 2),
-        "median": round(statistics.median(vals), 2),
+        "avg": round(sum(alphas) / n, 2),
+        "median": round(statistics.median(alphas), 2),
+        "avg_return": round(sum(returns) / len(returns), 2) if returns else None,
+        "median_return": (
+            round(statistics.median(returns), 2) if returns else None
+        ),
         "n": n,
     }
 
 
 def summarize_channel_calls(calls: list[CallScore]) -> dict:
-    """all/buy/sell x now/30/90 of stance-adjusted alpha vs VOO.
+    """all/buy/sell x now/30/90 of stance-adjusted alpha + raw return vs VOO.
 
     `calls` are already-scored directional (buy/sell) CallScores. Win = adjusted
-    alpha > 0 (strict); avg/median over realized calls; n = realized count.
+    alpha > 0 (strict); avg/median (excess) and avg_return/median_return (raw,
+    stance-adjusted) over realized calls; n = realized count.
     """
     groups = {
         "all": calls,

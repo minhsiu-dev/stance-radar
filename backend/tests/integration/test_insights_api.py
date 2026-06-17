@@ -221,7 +221,8 @@ async def test_channel_performance_shape_and_window(api, sessionmaker):
     assert data["summary"]["all"]["now"]["win_rate"] is not None
     # No call is 90+ days old (max 40d) -> 90 horizon empty.
     assert data["summary"]["all"]["90"] == {
-        "win_rate": None, "avg": None, "median": None, "n": 0,
+        "win_rate": None, "avg": None, "median": None,
+        "avg_return": None, "median_return": None, "n": 0,
     }
     # At least the 40-day-old AAPL buy has matured to 30d.
     assert data["summary"]["all"]["30"]["n"] >= 1
