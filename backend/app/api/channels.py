@@ -229,6 +229,71 @@ async def channels_overview(
     return ok({"items": items, "total": total, "page": page, "page_size": page_size})
 
 
+async def channel_ticker_stance_mix(
+    session: AsyncSession, channel_id: str, limit: int | None = None
+) -> list[dict]:
+    """Per-ticker stance mix for a channel: videos count + buy/neutral/sell split +
+    latest stance/date. `limit` caps to the top-N by video count (the channel-detail
+    card); omit it for the uncapped 個股戰績 table."""
+    videos_count = func.count(VideoStance.video_id)
+    query = (
+        select(
+            VideoStance.ticker,
+            videos_count.label("videos"),
+            videos_count.filter(VideoStance.stance == Stance.buy).label("buy"),
+            videos_count.filter(VideoStance.stance == Stance.neutral).label("neutral"),
+            videos_count.filter(VideoStance.stance == Stance.sell).label("sell"),
+        )
+        .join(Video, Video.id == VideoStance.video_id)
+        .where(Video.channel_id == channel_id)
+        .group_by(VideoStance.ticker)
+        .order_by(videos_count.desc(), VideoStance.ticker)
+    )
+    if limit is not None:
+        query = query.limit(limit)
+    rows = (await session.execute(query)).all()
+
+    tickers = [row.ticker for row in rows]
+    latest_map: dict[str, tuple[str, str]] = {}
+    if tickers:
+        ranked = (
+            select(
+                VideoStance.ticker,
+                VideoStance.stance,
+                Video.published_at,
+                func.row_number().over(
+                    partition_by=VideoStance.ticker,
+                    order_by=[Video.published_at.desc(), VideoStance.video_id.desc()],
+                ).label("rn"),
+            )
+            .join(Video, Video.id == VideoStance.video_id)
+            .where(
+                Video.channel_id == channel_id,
+                VideoStance.ticker.in_(tickers),
+            )
+            .subquery()
+        )
+        latest_rows = (await session.execute(
+            select(ranked.c.ticker, ranked.c.stance, ranked.c.published_at)
+            .where(ranked.c.rn == 1)
+        )).all()
+        latest_map = {
+            ticker: (stance.value if hasattr(stance, "value") else stance,
+                     published_at.date().isoformat())
+            for ticker, stance, published_at in latest_rows
+        }
+
+    return [
+        {
+            "ticker": row.ticker, "videos": row.videos,
+            "buy": row.buy, "neutral": row.neutral, "sell": row.sell,
+            "latest_stance": (ls := latest_map.get(row.ticker, (None, None)))[0],
+            "latest_date": ls[1],
+        }
+        for row in rows
+    ]
+
+
 @router.get("/{channel_id}")
 async def channel_detail(
     channel_id: str, session: AsyncSession = Depends(get_session)
@@ -244,66 +309,10 @@ async def channel_detail(
     )).all()
     status_counts = {status.value: n for status, n in status_rows}
 
-    videos_count = func.count(VideoStance.video_id)
-    top_rows = (await session.execute(
-        select(
-            VideoStance.ticker,
-            videos_count.label("videos"),
-            videos_count.filter(VideoStance.stance == Stance.buy).label("buy"),
-            videos_count.filter(
-                VideoStance.stance == Stance.neutral
-            ).label("neutral"),
-            videos_count.filter(VideoStance.stance == Stance.sell).label("sell"),
-        )
-        .join(Video, Video.id == VideoStance.video_id)
-        .where(Video.channel_id == channel_id)
-        .group_by(VideoStance.ticker)
-        .order_by(videos_count.desc(), VideoStance.ticker)
-        .limit(5)
-    )).all()
-
-    top_tickers = [row.ticker for row in top_rows]
-    latest_map: dict[str, tuple[str, str]] = {}
-    if top_tickers:
-        ranked = (
-            select(
-                VideoStance.ticker,
-                VideoStance.stance,
-                Video.published_at,
-                func.row_number().over(
-                    partition_by=VideoStance.ticker,
-                    order_by=[Video.published_at.desc(), VideoStance.video_id.desc()],
-                ).label("rn"),
-            )
-            .join(Video, Video.id == VideoStance.video_id)
-            .where(
-                Video.channel_id == channel_id,
-                VideoStance.ticker.in_(top_tickers),
-            )
-            .subquery()
-        )
-        latest_rows = (await session.execute(
-            select(ranked.c.ticker, ranked.c.stance, ranked.c.published_at)
-            .where(ranked.c.rn == 1)
-        )).all()
-        latest_map = {
-            ticker: (stance.value if hasattr(stance, "value") else stance,
-                     published_at.date().isoformat())
-            for ticker, stance, published_at in latest_rows
-        }
-
     return ok({
         **channel_to_dict(channel),
         "status_counts": status_counts,
-        "top_tickers": [
-            {
-                "ticker": row.ticker, "videos": row.videos,
-                "buy": row.buy, "neutral": row.neutral, "sell": row.sell,
-                "latest_stance": (ls := latest_map.get(row.ticker, (None, None)))[0],
-                "latest_date": ls[1],
-            }
-            for row in top_rows
-        ],
+        "top_tickers": await channel_ticker_stance_mix(session, channel_id, limit=5),
     })
 
 

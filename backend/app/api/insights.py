@@ -4,10 +4,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.channels import channel_ticker_stance_mix
 from app.api.deps import get_price_store, get_session
 from app.envelope import fail, ok
 from app.insights.flips import StancePoint, detect_flips
 from app.insights.scorecard import build_channel_performance, build_scorecard, build_scorecard_page
+from app.insights.ticker_perf import channel_ticker_performance
 from app.market.store import PriceStore
 from app.models import Channel, Stance, Video, VideoStance
 
@@ -213,6 +215,40 @@ async def channel_performance(
     return ok(await build_channel_performance(
         store, raw_calls, window_days=_PERFORMANCE_WINDOW_DAYS,
     ))
+
+
+@router.get("/channels/{channel_id}/tickers")
+async def channel_tickers(
+    channel_id: str,
+    session: AsyncSession = Depends(get_session),
+    store: PriceStore = Depends(get_price_store),
+):
+    """個股戰績: every ticker the channel covers (uncapped), stance mix left-joined
+    to all-time 至今 stance-adjusted performance vs VOO. Ensures price coverage with
+    a lean ensure_daily (network only for cold tickers), then runs the indexed
+    per-ticker SQL aggregation."""
+    channel = await session.get(Channel, channel_id)
+    if channel is None:
+        return fail(f"Channel {channel_id} not found", status_code=404)
+
+    mix = await channel_ticker_stance_mix(session, channel_id)
+    # Earliest directional-call date -> coverage spans every call's entry.
+    earliest = (await session.execute(
+        select(func.min(Video.published_at))
+        .join(VideoStance, VideoStance.video_id == Video.id)
+        .where(Video.channel_id == channel_id, VideoStance.stance != Stance.neutral)
+    )).scalar_one_or_none()
+    perf: dict[str, dict] = {}
+    if earliest is not None:
+        call_tickers = await _channel_call_tickers(session, channel_id)
+        await store.ensure_daily(sorted(set(call_tickers) | {"VOO"}), earliest.date())
+        perf = await channel_ticker_performance(session, channel_id)
+
+    rows = [
+        {**row, **perf.get(row["ticker"], {"win_rate": None, "avg_alpha": None, "n": 0})}
+        for row in mix
+    ]
+    return ok(rows)
 
 
 @router.get("/insights/leaderboard")
