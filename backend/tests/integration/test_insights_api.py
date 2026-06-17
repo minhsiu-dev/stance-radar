@@ -275,6 +275,42 @@ async def test_channel_tickers_unknown_channel_404(api):
     assert resp.status_code == 404
 
 
+async def test_channel_recent_feed(api, sessionmaker):
+    _, client = api
+    await seed_stances(sessionmaker)  # AAPL sell(2d), NVDA buy(3d), NVDA buy(30d), AAPL buy(40d)
+
+    resp = await client.get("/api/channels/ch1/recent")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["total"] == 4
+    assert data["page"] == 1
+    assert [i["ticker"] for i in data["items"]] == ["AAPL", "NVDA", "NVDA", "AAPL"]
+    first = data["items"][0]
+    assert first["stance"] == "sell"  # newest call is AAPL sell (2d ago)
+    assert set(first) >= {
+        "published_at", "video_id", "video_title", "ticker", "stance",
+        "confidence", "summary",
+    }
+
+
+async def test_channel_recent_pagination(api, sessionmaker):
+    _, client = api
+    await seed_stances(sessionmaker)
+    resp = await client.get("/api/channels/ch1/recent?page=2&page_size=2")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["total"] == 4
+    assert data["page"] == 2
+    assert len(data["items"]) == 2
+    assert [i["ticker"] for i in data["items"]] == ["NVDA", "AAPL"]  # 3rd + 4th newest
+
+
+async def test_channel_recent_unknown_channel_404(api):
+    _, client = api
+    resp = await client.get("/api/channels/nope/recent")
+    assert resp.status_code == 404
+
+
 async def test_auto_analyze_channel_ingests_new_videos_as_pending(api, sessionmaker):
     """auto_analyze channel: initial backfill stays discovered, subsequent new videos go straight to pending."""
     app, client = api
