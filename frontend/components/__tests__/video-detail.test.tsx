@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { VideoDetail } from "@/components/video-detail";
@@ -12,23 +12,23 @@ vi.mock("@/components/video-scorecard", () => ({
   VideoScorecard: () => <div data-testid="video-scorecard-mock" />,
 }));
 
-// No ?ticker by default
+const nav = vi.hoisted(() => ({ params: new URLSearchParams("") }));
 vi.mock("next/navigation", async (orig) => ({
   ...(await orig<typeof import("next/navigation")>()),
-  useSearchParams: () => new URLSearchParams(""),
+  useSearchParams: () => nav.params,
 }));
 
 const messages = {
   VideoDetail: {
     loadError: "Failed: {message}",
     notFound: "Video not found",
-    backToVideos: "Back",
     watchOnYoutube: "Open on YouTube",
-    mentionsHeading: "Mentions & stances",
     mentionCount: "{count} mentions",
     stockCount: "{count} stocks",
     noMentions: "No mentions",
-    viewStock: "Stock page",
+    callPerformance: "Call performance",
+    byStock: "By stock",
+    quotesByTime: "Quotes",
   },
   Stock: {
     stance: { buy: "Buy", neutral: "Neutral", sell: "Sell" },
@@ -46,12 +46,9 @@ const DATA = {
   },
   groups: [
     {
-      ticker: "AAPL",
-      stance: "buy",
-      summary: "Bullish",
-      confidence: "high",
+      ticker: "AAPL", stance: "buy", summary: "Bullish", confidence: "high",
       mentions: [
-        { start_seconds: 134, quote: "up", stance: "buy", confidence: "high", time_horizon: null, is_conditional: null, condition: null },
+        { start_seconds: 134, quote: "up", excerpt: null, stance: "buy", confidence: "high", time_horizon: null, is_conditional: null, condition: null },
       ],
     },
   ],
@@ -68,12 +65,20 @@ function wrap(fetcher: (key: string) => Promise<unknown>) {
 }
 
 describe("VideoDetail", () => {
-  it("renders the title, player and grouped mentions", async () => {
+  beforeEach(() => {
+    nav.params = new URLSearchParams("");
+  });
+
+  it("renders the title, player and the scorecard tab by default", async () => {
     wrap(vi.fn().mockResolvedValue(DATA));
     expect(await screen.findByText("My Video")).toBeInTheDocument();
     expect(screen.getByTestId("yt-player-mock")).toBeInTheDocument();
-    expect(screen.getByText("Bullish")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "2:14" })).toBeInTheDocument();
+    // default tab = scorecard
+    expect(screen.getByTestId("video-scorecard-mock")).toBeInTheDocument();
+    // all three tab triggers exist
+    expect(screen.getByRole("tab", { name: "Call performance" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "By stock" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Quotes" })).toBeInTheDocument();
   });
 
   it("shows not-found when fetch 404s", async () => {
@@ -82,10 +87,11 @@ describe("VideoDetail", () => {
     expect(await screen.findByText("Video not found")).toBeInTheDocument();
   });
 
-  it("renders the player and mentions in a two-column layout", async () => {
+  it("opens the by-stock tab when a ?ticker is present", async () => {
+    nav.params = new URLSearchParams("ticker=AAPL");
     wrap(vi.fn().mockResolvedValue(DATA));
-    expect(await screen.findByTestId("yt-player-mock")).toBeInTheDocument();
-    expect(screen.getByText("My Video")).toBeInTheDocument();
-    expect(screen.getByText("Bullish")).toBeInTheDocument(); // a mention group
+    // by-stock tab is default -> its card summary renders; scorecard tab is not active
+    expect(await screen.findByText("Bullish")).toBeInTheDocument();
+    expect(screen.queryByTestId("video-scorecard-mock")).toBeNull();
   });
 });

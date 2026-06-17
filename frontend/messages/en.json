@@ -298,7 +298,7 @@
     "mentionCount": "{count} mentions",
     "stockCount": "{count} stocks",
     "byStock": "By stock",
-    "quotesByTime": "Quotes (in order)",
+    "quotesByTime": "Quotes",
     "noMentions": "No U.S. stock mentions detected in this video",
     "reanalyze": "Re-analyze",
     "reanalyzing": "Re-analyzing…",
