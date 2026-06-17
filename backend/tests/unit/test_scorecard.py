@@ -242,3 +242,38 @@ def test_summarize_flat_alpha_is_not_a_win():
     assert out["summary"]["buy"]["now"] == {
         "win_rate": 0.0, "avg": 0.0, "median": 0.0, "n": 1,
     }
+
+
+from app.insights.scorecard import build_channel_performance
+
+
+async def test_build_channel_performance_vs_voo_sign_flip():
+    # VOO flat (alpha == raw return); AAPL & ZZZ both rise +1/day.
+    store = StubStore({
+        "VOO": _linear_candles("SPY"),   # "SPY" branch returns the flat series
+        "AAPL": _linear_candles("AAPL"),
+        "ZZZ": _linear_candles("ZZZ"),
+    })
+    published = datetime(2026, 1, 10, 12, 0, tzinfo=timezone.utc)
+    out = await build_channel_performance(store, [
+        {"video_id": "v1", "video_title": "t", "ticker": "AAPL",
+         "stance": "buy", "confidence": None, "summary": "s",
+         "published_at": published},
+        {"video_id": "v2", "video_title": "t", "ticker": "ZZZ",
+         "stance": "sell", "confidence": None, "summary": "s",
+         "published_at": published},
+    ])
+
+    assert out["benchmark"] == "VOO"
+    assert out["window_days"] == 180
+    assert out["horizons"] == ["now", "30", "90"]
+    assert out["counts"] == {"all": 2, "buy": 1, "sell": 1}
+
+    # Rising stock vs flat VOO -> positive alpha.
+    buy_now = out["summary"]["buy"]["now"]
+    assert buy_now["win_rate"] == 100.0 and buy_now["n"] == 1 and buy_now["avg"] > 0
+    # Same rising stock, but it's a SELL -> adjusted alpha negative -> a loss.
+    sell_now = out["summary"]["sell"]["now"]
+    assert sell_now["win_rate"] == 0.0 and sell_now["n"] == 1 and sell_now["avg"] < 0
+    # Mixed bag -> 1 of 2 wins.
+    assert out["summary"]["all"]["now"]["win_rate"] == 50.0

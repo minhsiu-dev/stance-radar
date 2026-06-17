@@ -302,3 +302,27 @@ async def build_scorecard_page(
         "page_size": page_size,
         "calls": [_serialize_call(c) for c in calls],
     }
+
+
+async def build_channel_performance(
+    store: PriceStore,
+    raw_calls: list[dict],
+    window_days: int = 180,
+    benchmark: str = SCORECARD_BENCHMARK,
+) -> dict:
+    """Score every directional call in the window and summarize all/buy/sell x
+    now/30/90 vs VOO. `raw_calls` is every non-neutral stance in the window.
+
+    Caller must pre-filter `raw_calls` to the window; `window_days` is only echoed
+    into the response, not applied here.
+    Benchmark defaults to VOO (`SCORECARD_BENCHMARK`), unlike `build_scorecard` which uses SPY.
+    """
+    tickers = {c["ticker"] for c in raw_calls}
+    series_map = await fetch_price_series(store, tickers | {benchmark})
+    calls = _score_calls(raw_calls, series_map, series_map.get(benchmark))
+    return {
+        "benchmark": benchmark,
+        "window_days": window_days,
+        "horizons": list(_SUMMARY_HORIZONS),  # ["now", "30", "90"] — same keys as `summary`
+        **summarize_channel_calls(calls),
+    }
