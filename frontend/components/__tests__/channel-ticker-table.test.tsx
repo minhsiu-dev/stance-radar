@@ -22,12 +22,14 @@ function slice(n: number, win: number | null, alpha: number | null, ret: number 
 }
 const rows = [
   { ticker: "AAA", videos: 3, buy: 2, neutral: 1, sell: 0, latest_stance: "buy", latest_date: "2026-06-01",
-    perf: { all: slice(2, 50, 4.2, 9.1), buy: slice(2, 50, 4.2, 9.1), sell: slice(0, null, null, null) } },
+    perf: { all: slice(2, 50, 4.2, 9.1), buy: slice(2, 50, 4.2, 9.1), sell: slice(0, null, null, null) },
+    perf_incl: { all: slice(3, 33.3, 1.0, 2.0), buy: slice(3, 33.3, 1.0, 2.0), sell: slice(0, null, null, null) } },
   { ticker: "BBB", videos: 9, buy: 1, neutral: 0, sell: 8, latest_stance: "sell", latest_date: "2026-06-10",
-    perf: { all: slice(9, 25, -3.1, -5.0), buy: slice(1, 100, 8.0, 8.0), sell: slice(8, 12.5, -4.0, -6.0) } },
-  // CCC: no scored calls but 2 pending (open & <90d)
+    perf: { all: slice(9, 25, -3.1, -5.0), buy: slice(1, 100, 8.0, 8.0), sell: slice(8, 12.5, -4.0, -6.0) },
+    perf_incl: { all: slice(9, 25, -3.1, -5.0), buy: slice(1, 100, 8.0, 8.0), sell: slice(8, 12.5, -4.0, -6.0) } },
   { ticker: "CCC", videos: 1, buy: 0, neutral: 1, sell: 0, latest_stance: "neutral", latest_date: "2026-05-01",
-    perf: { all: slice(0, null, null, null, 2), buy: slice(0, null, null, null, 2), sell: slice(0, null, null, null, 0) } },
+    perf: { all: slice(0, null, null, null, 2), buy: slice(0, null, null, null, 2), sell: slice(0, null, null, null) },
+    perf_incl: { all: slice(2, 50, 1.0, 1.0, 0), buy: slice(2, 50, 1.0, 1.0, 0), sell: slice(0, null, null, null) } },
 ];
 function tickerOrder(): string[] {
   return screen.getAllByTestId(/^ticker-row-/).map((el) => el.getAttribute("data-ticker")!);
@@ -70,5 +72,19 @@ describe("ChannelTickerTable", () => {
     const ccc = screen.getByTestId("ticker-row-CCC");
     // samples cell surfaces the pending count (the mocked t() returns the raw key "pending")
     expect(within(ccc).getByText(/pending/)).toBeInTheDocument();
+  });
+
+  it("switches to the inclusive (min-90d) window when 含待定 is toggled", () => {
+    swrResponses["/api/channels/ch1/tickers"] = rows;
+    render(<ChannelTickerTable channelId="ch1" />);
+    // default (matured): AAA all-slice win-rate 50%
+    expect(within(screen.getByTestId("ticker-row-AAA")).getByText("50%")).toBeInTheDocument();
+    // CCC is all-pending under matured
+    expect(within(screen.getByTestId("ticker-row-CCC")).getByText(/pending/)).toBeInTheDocument();
+    // toggle 含待定 (the mocked t() returns the raw key "windowIncl")
+    fireEvent.click(screen.getByRole("button", { name: "windowIncl" }));
+    // incl: AAA win-rate now 33.3%, and CCC is counted (no pending annotation, win-rate 50%)
+    expect(within(screen.getByTestId("ticker-row-AAA")).getByText("33.3%")).toBeInTheDocument();
+    expect(within(screen.getByTestId("ticker-row-CCC")).getByText("50%")).toBeInTheDocument();
   });
 });

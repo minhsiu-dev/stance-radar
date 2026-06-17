@@ -73,11 +73,9 @@ def _close_on_or_after(s: PriceSeries, target: date):
     return hit[1] if hit is not None else s.closes[-1]  # te past last bar -> latest (mark-to-market)
 
 
-def _oracle() -> dict:
-    # all directional calls with their (ticker, stance, d); all stances for tc detection
+def _oracle(mode: str = "matured") -> dict:
     all_stances = [(t, st, _d(ago)) for (_, ago, t, st) in _CALLS]
     voo = _series("VOO")
-    voo_latest = voo.closes[-1]
     out: dict = {}
     for vid, ago, ticker, stance in _CALLS:
         if stance == Stance.neutral:
@@ -85,8 +83,12 @@ def _oracle() -> dict:
         d0 = _d(ago)
         later = [ad for (at, ast, ad) in all_stances if at == ticker and ad > d0 and ast != stance]
         tc = min(later) if later else None
-        matured = tc is not None or (d0 + timedelta(days=90)) <= _TODAY
-        te = tc if tc is not None else _TODAY
+        if mode == "incl":
+            matured = True
+            te = min(d0 + timedelta(days=90), tc if tc is not None else _TODAY)
+        else:
+            matured = tc is not None or (d0 + timedelta(days=90)) <= _TODAY
+            te = tc if tc is not None else _TODAY
         slot = out.setdefault(ticker, {"alphas": {"buy": [], "sell": []}, "rets": {"buy": [], "sell": []},
                                        "pending": {"buy": 0, "sell": 0}})
         sl = stance.value
@@ -149,17 +151,28 @@ async def test_track_record_window_structural(session):
 
 async def test_track_record_window_matches_oracle(session):
     await _seed(session)
-    perf = await channel_ticker_performance(session, "ch1")
-    oracle = _oracle()
-    assert set(perf) == set(oracle)
-    for ticker, slot in oracle.items():
-        for which in ("all", "buy", "sell"):
-            exp = _expected_slice(slot, which)
-            got = perf[ticker][which]
-            assert got["n"] == exp["n"], (ticker, which, "n")
-            assert got["pending"] == exp["pending"], (ticker, which, "pending")
-            for k in ("avg_alpha", "avg_return", "win_rate"):
-                if exp[k] is None:
-                    assert got[k] is None, (ticker, which, k)
-                else:
-                    assert got[k] == pytest.approx(exp[k]), (ticker, which, k)
+    for mode in ("matured", "incl"):
+        perf = await channel_ticker_performance(session, "ch1", mode=mode)
+        oracle = _oracle(mode)
+        assert set(perf) == set(oracle), mode
+        for ticker, slot in oracle.items():
+            for which in ("all", "buy", "sell"):
+                exp = _expected_slice(slot, which)
+                got = perf[ticker][which]
+                assert got["n"] == exp["n"], (mode, ticker, which, "n")
+                assert got["pending"] == exp["pending"], (mode, ticker, which, "pending")
+                for k in ("avg_alpha", "avg_return", "win_rate"):
+                    if exp[k] is None:
+                        assert got[k] is None, (mode, ticker, which, k)
+                    else:
+                        assert got[k] == pytest.approx(exp[k]), (mode, ticker, which, k)
+
+
+async def test_track_record_incl_counts_young(session):
+    await _seed(session)
+    matured = await channel_ticker_performance(session, "ch1", mode="matured")
+    incl = await channel_ticker_performance(session, "ch1", mode="incl")
+    # CCC has a mature open buy (scored) + a 20-day open buy (pending under matured):
+    assert matured["CCC"]["buy"]["n"] == 1 and matured["CCC"]["buy"]["pending"] == 1
+    # incl folds the young buy in (scored to-date) -> 2 scored, none pending:
+    assert incl["CCC"]["buy"]["n"] == 2 and incl["CCC"]["buy"]["pending"] == 0

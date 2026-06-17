@@ -172,7 +172,10 @@
       "pending": "Queued"
     },
     "trackRecord": {
-      "description": "Track record: held until they reversed; calls <90d are pending (vs VOO)",
+      "title": "Track record",
+      "methodology": "Each ticker's buy/sell call track record, vs VOO. Window: held from the call until the channel next changes its stance on it (incl. to neutral); if unchanged, to today (counted only once ≥90 days old — younger calls are 'pending'). Toggle 'Incl. pending' to score with min(90d, reversal) instead, folding in the <90-day calls and capping every call at 90 days. Win = stance-adjusted excess (α vs VOO) > 0. Avg return is the raw return, avg excess is vs VOO. Directional (buy/sell) calls only.",
+      "windowMatured": "Matured",
+      "windowIncl": "Incl. pending",
       "empty": "No data yet",
       "ticker": "Ticker",
       "mentions": "Mentions",
