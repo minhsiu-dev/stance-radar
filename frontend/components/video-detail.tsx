@@ -46,7 +46,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   return (
     <div className="lg:grid lg:grid-cols-[2fr_3fr] lg:gap-6">
       {/* sticky video + info: pins through the scroll, content scrolls under it */}
-      <div className="sticky top-14 z-10 self-start space-y-3 bg-background pb-4">
+      <div className="sticky top-14 z-10 self-start space-y-3 bg-background pb-4 -mx-0.5 px-0.5">
         <YouTubePlayer ref={playerRef} videoId={data.video.id} />
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight leading-snug line-clamp-2">
@@ -86,7 +86,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
         defaultValue={initialTicker ? "byStock" : "scorecard"}
         className="mt-6 lg:mt-0"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 lg:sticky lg:top-14 lg:z-[5] lg:bg-background lg:py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 lg:sticky lg:top-14 lg:z-[5] lg:bg-background lg:py-2 lg:-mx-0.5 lg:px-0.5">
           <TabsList>
             <TabsTrigger value="scorecard">{t("callPerformance")}</TabsTrigger>
             <TabsTrigger value="byStock">{t("byStock")}</TabsTrigger>
