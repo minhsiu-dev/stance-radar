@@ -63,9 +63,12 @@ class PriceStore:
         self._market = market
         self._lock = asyncio.Lock()  # serialize syncs to avoid concurrent upserts colliding on the PK
 
-    async def get_daily(
-        self, tickers: list[str], start: date
-    ) -> dict[str, list[Candle]]:
+    async def ensure_daily(self, tickers: list[str], start: date) -> None:
+        """Plan -> fetch -> persist daily candles for `tickers` back to `start`,
+        WITHOUT loading the series into Python. Network only for cold/stale tickers
+        (a no-op when warm); the DB stays the source of truth. This is the lean half
+        of get_daily, used when callers only need price_bars populated (e.g. the
+        per-ticker SQL aggregation), not the candles themselves."""
         now = datetime.now(timezone.utc)
         today = now.date()
         async with self._lock:
@@ -121,11 +124,17 @@ class PriceStore:
                             covs[t].end_date = today
                             covs[t].last_synced_at = now
                 await session.commit()
-                rows = (await session.execute(
-                    select(PriceBar)
-                    .where(PriceBar.ticker.in_(tickers), PriceBar.date >= start)
-                    .order_by(PriceBar.ticker, PriceBar.date)
-                )).scalars().all()
+
+    async def get_daily(
+        self, tickers: list[str], start: date
+    ) -> dict[str, list[Candle]]:
+        await self.ensure_daily(tickers, start)
+        async with self._sessionmaker() as session:
+            rows = (await session.execute(
+                select(PriceBar)
+                .where(PriceBar.ticker.in_(tickers), PriceBar.date >= start)
+                .order_by(PriceBar.ticker, PriceBar.date)
+            )).scalars().all()
         out: dict[str, list[Candle]] = {t: [] for t in tickers}
         for r in rows:
             out[r.ticker].append(Candle(

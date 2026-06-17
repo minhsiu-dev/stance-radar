@@ -171,14 +171,17 @@
       "no_transcript": "無字幕",
       "pending": "排隊中"
     },
-    "topTickers": {
-      "title": "最常提及股票",
+    "trackRecord": {
+      "description": "各檔的歷史推薦戰績(至今 vs VOO,僅方向性推薦)",
       "empty": "尚無資料",
       "ticker": "股票",
       "mentions": "提及",
       "videoCount": "{count} 部影片",
       "distribution": "立場分佈",
-      "latest": "最新立場"
+      "latest": "最新立場",
+      "winRate": "勝率",
+      "avgAlpha": "平均超額",
+      "samples": "樣本"
     },
     "performance": {
       "title": "近 180 天推薦績效 (vs VOO)",
@@ -196,8 +199,12 @@
       "error": "無法載入績效"
     },
     "tabs": {
-      "videos": "影片",
-      "scorecard": "最新提及"
+      "tickers": "個股戰績",
+      "recent": "最新提及",
+      "videos": "影片"
+    },
+    "recent": {
+      "empty": "尚無提及"
     },
     "videos": {
       "title": "影片",

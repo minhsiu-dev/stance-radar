@@ -171,14 +171,17 @@
       "no_transcript": "No transcript",
       "pending": "Queued"
     },
-    "topTickers": {
-      "title": "Most mentioned",
+    "trackRecord": {
+      "description": "Per-ticker track record (to-date vs VOO, directional calls only)",
       "empty": "No data yet",
       "ticker": "Ticker",
       "mentions": "Mentions",
       "videoCount": "{count} videos",
       "distribution": "Stance mix",
-      "latest": "Latest"
+      "latest": "Latest",
+      "winRate": "Win rate",
+      "avgAlpha": "Avg excess",
+      "samples": "n"
     },
     "performance": {
       "title": "Last 180 days vs VOO",
@@ -196,8 +199,12 @@
       "error": "Couldn't load performance"
     },
     "tabs": {
-      "videos": "Videos",
-      "scorecard": "Latest mentions"
+      "tickers": "Track record",
+      "recent": "Latest mentions",
+      "videos": "Videos"
+    },
+    "recent": {
+      "empty": "No mentions yet"
     },
     "videos": {
       "title": "Videos",
