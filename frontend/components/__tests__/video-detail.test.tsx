@@ -8,6 +8,10 @@ vi.mock("@/components/youtube-player", () => ({
   YouTubePlayer: () => <div data-testid="yt-player-mock" />,
 }));
 
+vi.mock("@/components/video-scorecard", () => ({
+  VideoScorecard: () => <div data-testid="video-scorecard-mock" />,
+}));
+
 // No ?ticker by default
 vi.mock("next/navigation", async (orig) => ({
   ...(await orig<typeof import("next/navigation")>()),

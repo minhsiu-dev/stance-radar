@@ -286,7 +286,8 @@
     "noMentions": "No U.S. stock mentions detected in this video",
     "reanalyze": "Re-analyze",
     "reanalyzing": "Re-analyzing…",
-    "reanalyzeFailed": "Re-analysis failed"
+    "reanalyzeFailed": "Re-analysis failed",
+    "callPerformance": "Call performance"
   },
   "Mentions": {
     "title": "All mentions",
