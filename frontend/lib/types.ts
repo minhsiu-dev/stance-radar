@@ -446,6 +446,8 @@ export interface PerfCell {
   win_rate: number | null;
   avg: number | null;
   median: number | null;
+  avg_return: number | null;
+  median_return: number | null;
   n: number;
 }
 

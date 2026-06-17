@@ -134,7 +134,7 @@
       "pendingBadge": "{count} awaiting review",
       "autoBadge": "Auto-analyze",
       "analyzedCount": "{count} analyzed",
-      "perfLine": "180d vs VOO · Win {winRate} · Median {median}"
+      "perfLine": "180d vs VOO · Buy win {winRate} · Median {median} · n {n}"
     },
     "activity": {
       "legend": "published / analyzed",
@@ -186,8 +186,10 @@
       "columns": {
         "period": "Period",
         "winRate": "Win rate",
+        "avgReturn": "Avg return",
+        "medianReturn": "Median return",
         "avg": "Avg excess",
-        "median": "Median",
+        "median": "Median excess",
         "samples": "n"
       },
       "empty": "No directional calls in the last 180 days",

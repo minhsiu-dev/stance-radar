@@ -101,19 +101,19 @@ const zeroPerfDto: ChannelPerformanceDto = {
   horizons: ["now", "30", "90"],
   summary: {
     all: {
-      now: { win_rate: null, avg: null, median: null, n: 0 },
-      "30": { win_rate: null, avg: null, median: null, n: 0 },
-      "90": { win_rate: null, avg: null, median: null, n: 0 },
+      now: { win_rate: null, avg: null, median: null, avg_return: null, median_return: null, n: 0 },
+      "30": { win_rate: null, avg: null, median: null, avg_return: null, median_return: null, n: 0 },
+      "90": { win_rate: null, avg: null, median: null, avg_return: null, median_return: null, n: 0 },
     },
     buy: {
-      now: { win_rate: null, avg: null, median: null, n: 0 },
-      "30": { win_rate: null, avg: null, median: null, n: 0 },
-      "90": { win_rate: null, avg: null, median: null, n: 0 },
+      now: { win_rate: null, avg: null, median: null, avg_return: null, median_return: null, n: 0 },
+      "30": { win_rate: null, avg: null, median: null, avg_return: null, median_return: null, n: 0 },
+      "90": { win_rate: null, avg: null, median: null, avg_return: null, median_return: null, n: 0 },
     },
     sell: {
-      now: { win_rate: null, avg: null, median: null, n: 0 },
-      "30": { win_rate: null, avg: null, median: null, n: 0 },
-      "90": { win_rate: null, avg: null, median: null, n: 0 },
+      now: { win_rate: null, avg: null, median: null, avg_return: null, median_return: null, n: 0 },
+      "30": { win_rate: null, avg: null, median: null, avg_return: null, median_return: null, n: 0 },
+      "90": { win_rate: null, avg: null, median: null, avg_return: null, median_return: null, n: 0 },
     },
   },
   counts: { all: 0, buy: 0, sell: 0 },

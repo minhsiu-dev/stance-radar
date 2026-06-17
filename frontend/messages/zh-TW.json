@@ -134,7 +134,7 @@
       "pendingBadge": "{count} 部待挑選",
       "autoBadge": "自動分析",
       "analyzedCount": "{count} 部已分析",
-      "perfLine": "近180天 vs VOO · 勝率 {winRate} · 中位數 {median}"
+      "perfLine": "近180天 vs VOO · 買進勝率 {winRate} · 中位數 {median} · 樣本 {n}"
     },
     "activity": {
       "legend": "發佈 / 已分析",
@@ -186,8 +186,10 @@
       "columns": {
         "period": "期間",
         "winRate": "勝率",
+        "avgReturn": "平均報酬",
+        "medianReturn": "中位報酬",
         "avg": "平均超額",
-        "median": "中位數",
+        "median": "中位超額",
         "samples": "樣本"
       },
       "empty": "近 180 天無方向性推薦",
