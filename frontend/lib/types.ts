@@ -314,7 +314,7 @@ export interface Scorecard {
   total: number;
   page: number;
   page_size: number;
-  tickers: string[];
+  tickers?: string[];
 }
 
 export interface LeaderboardItem {

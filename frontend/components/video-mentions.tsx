@@ -24,10 +24,12 @@ export function VideoMentions({
   groups,
   onSeek,
   initialTicker,
+  channelId,
 }: {
   groups: VideoDetailGroup[];
   onSeek: (seconds: number) => void;
   initialTicker: string | null;
+  channelId: string;
 }) {
   const t = useTranslations("VideoDetail");
   const highlightRef = useRef<HTMLDivElement>(null);
@@ -69,7 +71,7 @@ export function VideoMentions({
                 <Card className={cn("border-l-4 p-3", STANCE_ACCENT[g.stance])}>
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
-                      href={`/stocks/${g.ticker}`}
+                      href={`/stocks/${g.ticker}?channel=${channelId}`}
                       className="font-mono font-semibold hover:underline"
                     >
                       {g.ticker}
@@ -108,7 +110,7 @@ export function VideoMentions({
                   {formatSeconds(m.start_seconds)}
                 </button>
                 <Link
-                  href={`/stocks/${m.ticker}`}
+                  href={`/stocks/${m.ticker}?channel=${channelId}`}
                   className="shrink-0 font-mono text-xs font-semibold hover:underline"
                 >
                   {m.ticker}

@@ -4,10 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_runner, get_session
+from app.api.deps import get_price_store, get_runner, get_session
 from app.envelope import fail, ok
-from app.models import JobKind, Mention, Video, VideoStance, VideoStatus
+from app.models import JobKind, Mention, Stance, Video, VideoStance, VideoStatus
 from app.pipeline.refresh import RefreshRunner
+from app.insights.scorecard import build_scorecard_page
+from app.market.store import PriceStore
 
 router = APIRouter(prefix="/api/videos")
 
@@ -175,3 +177,40 @@ async def video_detail(
         },
         "groups": ordered,
     })
+
+
+async def _video_calls(session: AsyncSession, video: Video) -> list[dict]:
+    rows = (await session.execute(
+        select(VideoStance)
+        .where(VideoStance.video_id == video.id)
+        .where(VideoStance.stance != Stance.neutral)
+        .order_by(VideoStance.ticker.asc())
+    )).scalars().all()
+    return [
+        {
+            "video_id": video.id,
+            "video_title": video.title,
+            "ticker": s.ticker,
+            "stance": s.stance.value,
+            "confidence": s.confidence,
+            "summary": s.summary,
+            "published_at": video.published_at,
+        }
+        for s in rows
+    ]
+
+
+@router.get("/{video_id}/scorecard")
+async def video_scorecard(
+    video_id: str,
+    session: AsyncSession = Depends(get_session),
+    store: PriceStore = Depends(get_price_store),
+):
+    video = await session.get(Video, video_id)
+    if video is None:
+        return fail(f"Video not found: {video_id}", status_code=404)
+    calls = await _video_calls(session, video)
+    scorecard = await build_scorecard_page(
+        store, calls, total=len(calls), page=1, page_size=max(len(calls), 1)
+    )
+    return ok(scorecard)

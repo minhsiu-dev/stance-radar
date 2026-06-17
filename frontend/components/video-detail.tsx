@@ -9,6 +9,7 @@ import { Link } from "@/i18n/navigation";
 import { YouTubePlayer, type YouTubePlayerHandle } from "@/components/youtube-player";
 import { VideoMentions } from "@/components/video-mentions";
 import { ReanalyzeButton } from "@/components/reanalyze-button";
+import { VideoScorecard } from "@/components/video-scorecard";
 import { ChannelAvatar } from "@/components/channel-avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/format";
@@ -55,7 +56,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <div>
+      <div className="space-y-6">
         <div className="space-y-3 lg:sticky lg:top-14">
           <YouTubePlayer ref={playerRef} videoId={data.video.id} />
           <div className="space-y-2">
@@ -111,6 +112,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
             )}
           </div>
         </div>
+        <VideoScorecard videoId={data.video.id} channelId={data.video.channel.id} />
       </div>
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -120,6 +122,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
         <VideoMentions
           groups={data.groups}
           initialTicker={initialTicker}
+          channelId={data.video.channel.id}
           onSeek={(s) => playerRef.current?.seekTo(s)}
         />
       </section>

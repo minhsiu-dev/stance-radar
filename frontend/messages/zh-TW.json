@@ -286,7 +286,8 @@
     "noMentions": "這部影片沒有偵測到美股提及",
     "reanalyze": "重新分析",
     "reanalyzing": "重新分析中…",
-    "reanalyzeFailed": "重新分析失敗"
+    "reanalyzeFailed": "重新分析失敗",
+    "callPerformance": "標的績效"
   },
   "Mentions": {
     "title": "逐筆提及",

@@ -1,4 +1,6 @@
-from app.models import Video, VideoStatus
+from datetime import datetime, timedelta, timezone
+
+from app.models import Channel, Stance, Video, VideoStance, VideoStatus
 from tests.conftest import wait_refresh
 
 
@@ -168,3 +170,49 @@ async def test_video_detail_unknown_id_404(api):
     resp = await client.get("/api/videos/does_not_exist")
     assert resp.status_code == 404
     assert resp.json()["success"] is False
+
+
+async def _seed_video_with_stances(sessionmaker, video_id: str, channel_id: str, stances):
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(
+            id=channel_id, title="Ch", thumbnail_url="", uploads_playlist_id="UU" + channel_id,
+        ))
+        s.add(Video(
+            id=video_id, channel_id=channel_id, title="t",
+            published_at=now - timedelta(days=200),
+            thumbnail_url="", duration_seconds=60, status=VideoStatus.analyzed,
+        ))
+        for ticker, stance in stances:
+            s.add(VideoStance(video_id=video_id, ticker=ticker, stance=stance, summary="s"))
+        await s.commit()
+
+
+async def test_video_scorecard_scores_non_neutral_calls(api, sessionmaker):
+    _, client = api
+    await _seed_video_with_stances(sessionmaker, "vid_sc", "ch_v", [
+        ("AAPL", Stance.buy), ("NVDA", Stance.sell), ("TSLA", Stance.neutral),
+    ])
+    data = (await client.get("/api/videos/vid_sc/scorecard")).json()["data"]
+    assert data["benchmark"] == "VOO"
+    assert data["horizons"] == [30, 90]
+    assert {c["ticker"] for c in data["calls"]} == {"AAPL", "NVDA"}
+    call = next(c for c in data["calls"] if c["ticker"] == "AAPL")
+    assert call["now_return"] is not None
+    assert call["returns"]["30"] is not None
+    assert call["alpha"]["30"] is not None
+
+
+async def test_video_scorecard_unknown_video_404(api):
+    _, client = api
+    resp = await client.get("/api/videos/nope/scorecard")
+    assert resp.status_code == 404
+
+
+async def test_video_scorecard_neutral_only_is_empty(api, sessionmaker):
+    _, client = api
+    await _seed_video_with_stances(sessionmaker, "vid_n", "ch_n", [
+        ("AAPL", Stance.neutral),
+    ])
+    data = (await client.get("/api/videos/vid_n/scorecard")).json()["data"]
+    assert data["calls"] == []

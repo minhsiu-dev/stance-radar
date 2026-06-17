@@ -3,18 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
-import { StanceBadge } from "@/components/stance-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -22,10 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { alphaColor } from "@/components/channel-leaderboard";
-import { formatDate, formatPercent } from "@/lib/format";
-import type { Scorecard, ScorecardCall } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { ScorecardTable } from "@/components/scorecard-table";
+import type { Scorecard } from "@/lib/types";
 
 const PAGE_SIZE = 20;
 
@@ -58,7 +46,7 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
   const calls = pages.flatMap((p) => p.calls);
   const last = pages[pages.length - 1];
   const reachedEnd = last ? last.calls.length < PAGE_SIZE : false;
-  const horizons = pages[0]?.horizons ?? [7, 30, 90];
+  const horizons = pages[0]?.horizons ?? [30, 90];
   const benchmark = pages[0]?.benchmark ?? "";
   const tickers = pages[0]?.tickers ?? [];
 
@@ -151,33 +139,7 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
           <p className="text-sm text-muted-foreground">{t("empty")}</p>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("columns.date")}</TableHead>
-                    <TableHead>{t("columns.ticker")}</TableHead>
-                    <TableHead>{t("columns.stance")}</TableHead>
-                    <TableHead className="text-right">{t("columns.now")}</TableHead>
-                    {horizons.map((h) => (
-                      <TableHead key={h} className="text-right">
-                        {t("columns.horizon", { days: h })}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {calls.map((call) => (
-                    <ScorecardRow
-                      key={`${call.video_id}-${call.ticker}`}
-                      call={call}
-                      horizons={horizons}
-                      channelId={channelId}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <ScorecardTable calls={calls} horizons={horizons} channelId={channelId} />
             {!reachedEnd && (
               <div ref={sentinelRef} data-testid="scorecard-sentinel" aria-hidden className="h-1" />
             )}
@@ -185,83 +147,5 @@ export function ChannelScorecard({ channelId }: { channelId: string }) {
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function ReturnAlphaCell({
-  value,
-  alpha,
-  hasData,
-}: {
-  value: number | null;
-  alpha: number | null;
-  hasData: boolean;
-}) {
-  const t = useTranslations("Scorecard");
-  return (
-    <TableCell className="text-right align-top">
-      {hasData ? (
-        <div className="space-y-0.5">
-          <p className={cn("font-mono tabular-nums", alphaColor(value))}>
-            {formatPercent(value)}
-          </p>
-          {alpha != null && (
-            <p className={cn("font-mono text-xs tabular-nums", alphaColor(alpha))}>
-              {t("vsBenchmark", { value: formatPercent(alpha) })}
-            </p>
-          )}
-        </div>
-      ) : (
-        <span className="text-muted-foreground">{t("noData")}</span>
-      )}
-    </TableCell>
-  );
-}
-
-function ScorecardRow({
-  call,
-  horizons,
-  channelId,
-}: {
-  call: ScorecardCall;
-  horizons: number[];
-  channelId: string;
-}) {
-  return (
-    <TableRow>
-      <TableCell className="whitespace-nowrap tabular-nums">
-        <Link
-          href={`/videos/${call.video_id}?ticker=${call.ticker}`}
-          title={call.video_title}
-          className="hover:underline"
-        >
-          {formatDate(call.published_at)}
-        </Link>
-      </TableCell>
-      <TableCell>
-        <Link
-          href={`/stocks/${call.ticker}?channel=${channelId}`}
-          className="font-mono font-semibold hover:underline"
-        >
-          {call.ticker}
-        </Link>
-      </TableCell>
-      <TableCell title={call.summary}>
-        <StanceBadge stance={call.stance} confidence={call.confidence} />
-      </TableCell>
-      <ReturnAlphaCell
-        value={call.now_return}
-        alpha={call.now_alpha}
-        hasData={call.has_data}
-      />
-      {horizons.map((h) => (
-        <ReturnAlphaCell
-          key={h}
-          value={call.returns[String(h)]}
-          alpha={call.alpha[String(h)]}
-          hasData={call.has_data}
-        />
-      ))}
-    </TableRow>
   );
 }
