@@ -1,7 +1,9 @@
 """Per-ticker reversal-aware 個股戰績 performance vs VOO for one channel. Each directional
-call is scored over [d, te] where te = the next opposing/changed stance date on the same
-(channel,ticker) incl. →neutral (tc), else today. Open calls <90d old are 'pending'
-(excluded from n/avg/win, counted). Exit = COALESCE(first close >= te, latest close).
+call is scored over [d, te] where te depends on the mode:
+  - 'matured' (default): te = COALESCE(tc, today). Open calls <90d old are 'pending'
+    (excluded from n/avg/win, counted). Exit = COALESCE(first close >= te, latest close).
+  - 'incl': te = LEAST(d+90, COALESCE(tc, today)). All calls included (pending=0).
+tc = next differing/neutral stance date on the same (channel, ticker), or NULL if open.
 """
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,8 +32,14 @@ with_tc AS (
 ),
 with_te AS (
     SELECT ticker, stance, d, tc,
-        COALESCE(tc, (now() AT TIME ZONE 'UTC')::date) AS te,
-        (tc IS NOT NULL OR d + INTERVAL '90 day' <= (now() AT TIME ZONE 'UTC')::date) AS matured
+        CASE WHEN :mode = 'incl'
+             THEN LEAST(d + 90, COALESCE(tc, (now() AT TIME ZONE 'UTC')::date))
+             ELSE COALESCE(tc, (now() AT TIME ZONE 'UTC')::date)
+        END AS te,
+        CASE WHEN :mode = 'incl'
+             THEN true
+             ELSE (tc IS NOT NULL OR d + INTERVAL '90 day' <= (now() AT TIME ZONE 'UTC')::date)
+        END AS matured
     FROM with_tc
 ),
 scored AS (
@@ -120,13 +128,15 @@ def _slice(row, s: str) -> dict:
 
 
 async def channel_ticker_performance(
-    session: AsyncSession, channel_id: str
+    session: AsyncSession, channel_id: str, mode: str = "matured"
 ) -> dict[str, dict]:
     """{ticker: {"all"|"buy"|"sell": {n, avg_alpha, avg_return, win_rate, pending}}}.
-    Each directional call is scored over [call date, te] where te is the next opposing/changed
-    stance date (incl. neutral) or today if still open; open calls <90d old are 'pending'
-    (excluded from n/avg/win, counted in pending). win = adjusted alpha > 0 strict, vs VOO."""
-    rows = (await session.execute(_TICKER_PERF_SQL, {"cid": channel_id})).all()
+    mode='matured' (default): te = COALESCE(tc, today); open calls <90d old are pending
+    (excluded from n/avg/win, counted in pending). win = adjusted alpha > 0 strict, vs VOO.
+    mode='incl': te = LEAST(d+90, COALESCE(tc, today)) for every call (no pending, all counted)."""
+    rows = (await session.execute(
+        _TICKER_PERF_SQL, {"cid": channel_id, "mode": mode}
+    )).all()
     return {
         r.ticker: {s: _slice(r, s) for s in ("all", "buy", "sell")}
         for r in rows

@@ -263,6 +263,12 @@ async def test_channel_tickers_shape_and_perf(api, sessionmaker):
     # ZZZZ neutral-only -> no directional calls -> empty (n=0, pending=0)
     assert by["ZZZZ"]["perf"]["all"]["n"] == 0
     assert by["ZZZZ"]["perf"]["all"]["pending"] == 0
+    # both perf objects present with the slice key set
+    assert set(by["AAPL"]["perf_incl"]["all"]) == {"win_rate", "avg_alpha", "avg_return", "n", "pending"}
+    # NVDA's two open buys are <90d -> pending under matured, but counted (scored to-date) under incl
+    assert by["NVDA"]["perf"]["buy"]["pending"] == 2
+    assert by["NVDA"]["perf_incl"]["buy"]["n"] == 2
+    assert by["NVDA"]["perf_incl"]["buy"]["pending"] == 0
 
 
 async def test_channel_tickers_unknown_channel_404(api):

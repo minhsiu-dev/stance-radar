@@ -245,13 +245,19 @@ async def channel_tickers(
         .where(Video.channel_id == channel_id, VideoStance.stance != Stance.neutral)
     )).scalar_one_or_none()
     perf: dict[str, dict] = {}
+    perf_incl: dict[str, dict] = {}
     if earliest is not None:
         call_tickers = await _channel_call_tickers(session, channel_id)
         await store.ensure_daily(sorted(set(call_tickers) | {"VOO"}), earliest.date())
         perf = await channel_ticker_performance(session, channel_id)
+        perf_incl = await channel_ticker_performance(session, channel_id, mode="incl")
 
     rows = [
-        {**row, "perf": perf.get(row["ticker"], _EMPTY_PERF)}
+        {
+            **row,
+            "perf": perf.get(row["ticker"], _EMPTY_PERF),
+            "perf_incl": perf_incl.get(row["ticker"], _EMPTY_PERF),
+        }
         for row in mix
     ]
     return ok(rows)
