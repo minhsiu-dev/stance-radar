@@ -10,7 +10,7 @@ import { StanceBadge } from "@/components/stance-badge";
 import { formatDate } from "@/lib/format";
 import type { ChannelRecentResponse } from "@/lib/types";
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 20;
 
 export function ChannelRecentFeed({ channelId }: { channelId: string }) {
   const t = useTranslations("ChannelDetail.recent");
@@ -21,9 +21,7 @@ export function ChannelRecentFeed({ channelId }: { channelId: string }) {
     return `/api/channels/${channelId}/recent?page=${pageIndex + 1}&page_size=${PAGE_SIZE}`;
   };
   const { data, error, setSize, isValidating } =
-    useSWRInfinite<ChannelRecentResponse>(getKey, {
-      revalidateFirstPage: false,
-    });
+    useSWRInfinite<ChannelRecentResponse>(getKey, { revalidateFirstPage: false });
 
   const pages = data ?? [];
   const items = pages.flatMap((p) => p.items);
@@ -65,39 +63,34 @@ export function ChannelRecentFeed({ channelId }: { channelId: string }) {
   return (
     <Card>
       <CardContent className="divide-y p-0">
-        {items.map((it) => (
+        {items.map((video) => (
           <div
-            key={`${it.video_id}-${it.ticker}`}
-            className="flex flex-col gap-1.5 px-4 py-3 sm:flex-row sm:items-start sm:gap-3"
+            key={video.video_id}
+            data-testid={`recent-video-${video.video_id}`}
+            className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:gap-3"
           >
             <span className="shrink-0 text-xs tabular-nums text-muted-foreground sm:w-20 sm:pt-0.5">
-              {formatDate(it.published_at)}
+              {formatDate(video.published_at)}
             </span>
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  href={`/stocks/${it.ticker}?channel=${channelId}`}
-                  className="shrink-0"
-                >
-                  <StanceBadge
-                    stance={it.stance}
-                    ticker={it.ticker}
-                    confidence={it.confidence}
-                  />
-                </Link>
-                <Link
-                  href={`/videos/${it.video_id}`}
-                  className="line-clamp-1 text-sm font-medium hover:underline"
-                  title={it.video_title}
-                >
-                  {it.video_title}
-                </Link>
+            <div className="min-w-0 flex-1 space-y-2">
+              <Link
+                href={`/videos/${video.video_id}`}
+                className="line-clamp-1 text-sm font-medium hover:underline"
+                title={video.video_title}
+              >
+                {video.video_title}
+              </Link>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {video.stances.map((s) => (
+                  <Link
+                    key={s.ticker}
+                    href={`/stocks/${s.ticker}?channel=${channelId}`}
+                    title={s.summary}
+                  >
+                    <StanceBadge stance={s.stance} ticker={s.ticker} confidence={s.confidence} />
+                  </Link>
+                ))}
               </div>
-              {it.summary && (
-                <p className="line-clamp-2 text-xs text-muted-foreground">
-                  {it.summary}
-                </p>
-              )}
             </div>
           </div>
         ))}
