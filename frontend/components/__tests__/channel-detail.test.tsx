@@ -42,6 +42,17 @@ vi.mock("@/i18n/navigation", () => ({
   ),
 }));
 
+// The detail test focuses on layout/tabs/videos, so the tab children are stubbed.
+vi.mock("@/components/channel-ticker-table", () => ({
+  ChannelTickerTable: () => <div data-testid="ticker-table" />,
+}));
+vi.mock("@/components/channel-recent-feed", () => ({
+  ChannelRecentFeed: () => <div data-testid="recent-feed" />,
+}));
+vi.mock("@/components/channel-performance-summary", () => ({
+  ChannelPerformanceSummary: () => <div data-testid="perf-summary" />,
+}));
+
 const messages = {
   ChannelDetail: {
     loadError: "Failed: {message}",
@@ -59,14 +70,20 @@ const messages = {
       no_transcript: "No transcript",
       pending: "Queued",
     },
-    topTickers: {
-      title: "Most mentioned",
+    trackRecord: {
+      description: "Per-ticker track record",
       empty: "No data yet",
       ticker: "Ticker",
       mentions: "Mentions",
       videoCount: "{count} videos",
       distribution: "Stance mix",
       latest: "Latest",
+      winRate: "Win rate",
+      avgAlpha: "Avg excess",
+      samples: "n",
+    },
+    recent: {
+      empty: "No mentions yet",
     },
     performance: {
       title: "Last 180 days vs VOO",
@@ -82,8 +99,9 @@ const messages = {
       error: "Couldn't load performance",
     },
     tabs: {
+      tickers: "Track record",
+      recent: "Latest mentions",
       videos: "Videos tab",
-      scorecard: "Latest mentions",
     },
     videos: {
       title: "Videos",
@@ -256,20 +274,25 @@ describe("ChannelDetail", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders stats and the most-mentioned table", async () => {
+  it("renders the header and the full-width performance card", async () => {
     renderDetail();
     expect(await screen.findByText("Alpha")).toBeInTheDocument();
-    expect(screen.getByText("Most mentioned")).toBeInTheDocument();
-    // The ticker in the top-tickers table links to the stock page
-    const link = screen.getByRole("link", { name: "AAPL" });
-    expect(link.getAttribute("href")).toContain("/stocks/AAPL");
-    expect(screen.getByTestId("stance-bar-AAPL")).toBeInTheDocument();
+    // The performance summary sits full-width above the tabs.
+    expect(screen.getByTestId("perf-summary")).toBeInTheDocument();
   });
 
-  it("defaults to the scorecard (Latest mentions) tab", async () => {
+  it("defaults to the track-record (個股戰績) tab", async () => {
     renderDetail();
-    // scorecard panel should be visible without clicking a tab:
-    expect(await screen.findByTestId("channel-scorecard")).toBeInTheDocument();
+    // ticker table panel should be visible without clicking a tab:
+    expect(await screen.findByTestId("ticker-table")).toBeInTheDocument();
+  });
+
+  it("shows the recent feed after switching to the recent tab", async () => {
+    renderDetail();
+    expect(await screen.findByTestId("ticker-table")).toBeInTheDocument();
+    expect(screen.queryByTestId("recent-feed")).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("tab", { name: "Latest mentions" }));
+    expect(screen.getByTestId("recent-feed")).toBeInTheDocument();
   });
 
   it("lists videos with status labels and recovery action for skipped", async () => {
@@ -467,8 +490,8 @@ describe("ChannelDetail", () => {
 
   it("shows video list only after switching to the videos tab", async () => {
     renderDetail();
-    // scorecard is the default — videos content not yet visible
-    expect(await screen.findByTestId("channel-scorecard")).toBeInTheDocument();
+    // 個股戰績 is the default — videos content not yet visible
+    expect(await screen.findByTestId("ticker-table")).toBeInTheDocument();
     expect(screen.queryByText("Analyzed video")).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("tab", { name: "Videos tab" }));
     expect(await screen.findByText("Analyzed video")).toBeInTheDocument();

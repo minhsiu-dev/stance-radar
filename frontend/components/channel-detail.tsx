@@ -7,8 +7,8 @@ import { useTranslations } from "next-intl";
 import { ExternalLink, Play, Zap, ZapOff } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { ChannelPerformanceSummary } from "@/components/channel-performance-summary";
-import { ChannelScorecard } from "@/components/channel-scorecard";
-import { ChannelTopTickers } from "@/components/channel-top-tickers";
+import { ChannelTickerTable } from "@/components/channel-ticker-table";
+import { ChannelRecentFeed } from "@/components/channel-recent-feed";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -351,16 +351,22 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_3fr]">
-        <ChannelPerformanceSummary channelId={channelId} />
-        <ChannelTopTickers rows={detail.top_tickers} />
-      </div>
+      <ChannelPerformanceSummary channelId={channelId} />
 
-      <Tabs defaultValue="scorecard">
+      <Tabs defaultValue="tickers">
         <TabsList>
-          <TabsTrigger value="scorecard">{t("tabs.scorecard")}</TabsTrigger>
+          <TabsTrigger value="tickers">{t("tabs.tickers")}</TabsTrigger>
+          <TabsTrigger value="recent">{t("tabs.recent")}</TabsTrigger>
           <TabsTrigger value="videos">{t("tabs.videos")}</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="tickers">
+          <ChannelTickerTable channelId={channelId} />
+        </TabsContent>
+
+        <TabsContent value="recent">
+          <ChannelRecentFeed channelId={channelId} />
+        </TabsContent>
 
         <TabsContent value="videos" className="space-y-6">
           <div className="grid grid-cols-3 gap-2 sm:gap-3 md:grid-cols-6">
@@ -499,10 +505,6 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="scorecard">
-          <ChannelScorecard channelId={channelId} />
         </TabsContent>
       </Tabs>
     </div>
