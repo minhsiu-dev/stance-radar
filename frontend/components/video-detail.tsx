@@ -120,6 +120,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
         <VideoMentions
           groups={data.groups}
           initialTicker={initialTicker}
+          channelId={data.video.channel.id}
           onSeek={(s) => playerRef.current?.seekTo(s)}
         />
       </section>
