@@ -236,24 +236,26 @@ export interface ChannelTickerStat {
   latest_date: string | null;
 }
 
-export interface ChannelTickerRow extends ChannelTickerStat {
+export interface TickerPerfSlice {
   win_rate: number | null;
   avg_alpha: number | null;
+  avg_return: number | null;
   n: number;
 }
 
-export interface ChannelRecentItem {
-  published_at: string;
+export interface ChannelTickerRow extends ChannelTickerStat {
+  perf: Record<PerfFilter, TickerPerfSlice>;
+}
+
+export interface ChannelRecentVideoItem {
   video_id: string;
   video_title: string;
-  ticker: string;
-  stance: StanceValue;
-  confidence: ConfidenceValue | null;
-  summary: string;
+  published_at: string;
+  stances: FeedStance[];
 }
 
 export interface ChannelRecentResponse {
-  items: ChannelRecentItem[];
+  items: ChannelRecentVideoItem[];
   total: number;
   page: number;
   page_size: number;

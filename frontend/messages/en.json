@@ -181,6 +181,7 @@
       "latest": "Latest",
       "winRate": "Win rate",
       "avgAlpha": "Avg excess",
+      "avgReturn": "Avg return",
       "samples": "n"
     },
     "performance": {
