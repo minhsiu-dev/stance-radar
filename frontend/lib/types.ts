@@ -246,6 +246,7 @@ export interface TickerPerfSlice {
 
 export interface ChannelTickerRow extends ChannelTickerStat {
   perf: Record<PerfFilter, TickerPerfSlice>;
+  perf_incl: Record<PerfFilter, TickerPerfSlice>;
 }
 
 export interface ChannelRecentVideoItem {

@@ -3,9 +3,15 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
+import { Info } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StanceBadge } from "@/components/stance-badge";
 import { alphaColor } from "@/components/channel-leaderboard";
@@ -20,8 +26,8 @@ const SEGMENTS = [
 
 type PerfKey = "win_rate" | "avg_return" | "avg_alpha" | "n";
 type SortKey = "ticker" | "videos" | PerfKey;
+type WindowMode = "matured" | "incl";
 
-// nulls always sort last, regardless of direction.
 function numCmp(a: number | null, b: number | null, dir: "asc" | "desc"): number {
   if (a == null && b == null) return 0;
   if (a == null) return 1;
@@ -29,25 +35,29 @@ function numCmp(a: number | null, b: number | null, dir: "asc" | "desc"): number
   return dir === "asc" ? a - b : b - a;
 }
 
-function signed(v: number | null, suffix = ""): string {
+function signed(v: number | null): string {
   if (v == null) return "—";
-  return `${v > 0 ? "+" : ""}${v}${suffix}`;
+  return `${v > 0 ? "+" : ""}${v}`;
 }
 
 export function ChannelTickerTable({ channelId }: { channelId: string }) {
   const t = useTranslations("ChannelDetail.trackRecord");
+  const tDetail = useTranslations("ChannelDetail");
   const tPerf = useTranslations("ChannelDetail.performance");
   const tStance = useTranslations("Stock.stance");
   const { data, error } = useSWR<ChannelTickerRow[]>(
     `/api/channels/${channelId}/tickers`,
   );
   const [filter, setFilter] = useState<PerfFilter>("all");
+  const [windowMode, setWindowMode] = useState<WindowMode>("matured");
   const [sortKey, setSortKey] = useState<SortKey>("videos");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
 
+  const sliceOf = (r: ChannelTickerRow): TickerPerfSlice =>
+    (windowMode === "incl" ? r.perf_incl : r.perf)[filter];
+
   const sorted = useMemo(() => {
     const list = [...(data ?? [])];
-    const sliceVal = (r: ChannelTickerRow, k: PerfKey) => r.perf[filter][k];
     list.sort((a, b) => {
       let primary: number;
       if (sortKey === "ticker") {
@@ -55,12 +65,13 @@ export function ChannelTickerTable({ channelId }: { channelId: string }) {
       } else if (sortKey === "videos") {
         primary = numCmp(a.videos, b.videos, dir);
       } else {
-        primary = numCmp(sliceVal(a, sortKey), sliceVal(b, sortKey), dir);
+        primary = numCmp(sliceOf(a)[sortKey], sliceOf(b)[sortKey], dir);
       }
       return primary !== 0 ? primary : a.ticker.localeCompare(b.ticker);
     });
     return list;
-  }, [data, sortKey, dir, filter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, sortKey, dir, filter, windowMode]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -72,7 +83,11 @@ export function ChannelTickerTable({ channelId }: { channelId: string }) {
   }
 
   if (error) {
-    return <p className="text-sm text-red-500">{error.message}</p>;
+    return (
+      <p className="text-sm text-red-500">
+        {tDetail("loadError", { message: error.message })}
+      </p>
+    );
   }
   if (!data) {
     return <Skeleton className="h-48 w-full" />;
@@ -96,18 +111,49 @@ export function ChannelTickerTable({ channelId }: { channelId: string }) {
     <Card>
       <CardHeader className="space-y-2">
         <div className="flex flex-row flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">{t("description")}</CardTitle>
-          <div className="flex gap-1">
-            {filters.map((f) => (
-              <Button
-                key={f.key}
-                size="sm"
-                variant={filter === f.key ? "default" : "outline"}
-                onClick={() => setFilter(f.key)}
-              >
-                {f.label}
-              </Button>
-            ))}
+          <CardTitle className="flex items-center gap-1.5 text-base">
+            {t("title")}
+            <HoverCard>
+              <HoverCardTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={t("title")}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                  </button>
+                }
+              />
+              <HoverCardContent className="w-[min(420px,90vw)] text-xs leading-relaxed">
+                {t("methodology")}
+              </HoverCardContent>
+            </HoverCard>
+          </CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={windowMode === "incl" ? "default" : "outline"}
+              onClick={() =>
+                setWindowMode((m) => (m === "incl" ? "matured" : "incl"))
+              }
+            >
+              {t("windowIncl")}
+            </Button>
+            <div className="flex gap-1">
+              {filters.map((f) => (
+                <Button
+                  key={f.key}
+                  type="button"
+                  size="sm"
+                  variant={filter === f.key ? "default" : "outline"}
+                  onClick={() => setFilter(f.key)}
+                >
+                  {f.label}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
         <div className="flex gap-3 text-[11px] text-muted-foreground">
@@ -153,7 +199,7 @@ export function ChannelTickerTable({ channelId }: { channelId: string }) {
               <tbody>
                 {sorted.map((row) => {
                   const total = row.buy + row.neutral + row.sell;
-                  const p: TickerPerfSlice = row.perf[filter];
+                  const p: TickerPerfSlice = sliceOf(row);
                   return (
                     <tr
                       key={row.ticker}
@@ -182,19 +228,19 @@ export function ChannelTickerTable({ channelId }: { channelId: string }) {
                         {signed(p.avg_alpha)}
                       </td>
                       <td className="py-2 pl-3 text-right tabular-nums text-muted-foreground">
-                        {p.n === 0 && p.pending === 0
-                          ? "—"
-                          : (
-                            <>
-                              {p.n > 0 ? p.n : null}
-                              {p.pending > 0 && (
-                                <span className="text-[11px] text-muted-foreground/70">
-                                  {p.n > 0 ? " " : ""}
-                                  {`+${p.pending} ${t("pending")}`}
-                                </span>
-                              )}
-                            </>
-                          )}
+                        {p.n === 0 && p.pending === 0 ? (
+                          "—"
+                        ) : (
+                          <>
+                            {p.n > 0 ? p.n : null}
+                            {p.pending > 0 && (
+                              <span className="text-[11px] text-muted-foreground/70">
+                                {p.n > 0 ? " " : ""}
+                                {`+${p.pending} ${t("pending")}`}
+                              </span>
+                            )}
+                          </>
+                        )}
                       </td>
                       <td className="hidden py-2 pl-3 sm:table-cell">
                         {total > 0 && (
