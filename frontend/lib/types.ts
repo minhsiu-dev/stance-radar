@@ -236,6 +236,29 @@ export interface ChannelTickerStat {
   latest_date: string | null;
 }
 
+export interface ChannelTickerRow extends ChannelTickerStat {
+  win_rate: number | null;
+  avg_alpha: number | null;
+  n: number;
+}
+
+export interface ChannelRecentItem {
+  published_at: string;
+  video_id: string;
+  video_title: string;
+  ticker: string;
+  stance: StanceValue;
+  confidence: ConfidenceValue | null;
+  summary: string;
+}
+
+export interface ChannelRecentResponse {
+  items: ChannelRecentItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface ChannelDetailDto extends ChannelItem {
   status_counts: Partial<Record<VideoStatus, number>>;
   top_tickers: ChannelTickerStat[];
