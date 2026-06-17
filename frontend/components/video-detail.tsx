@@ -15,19 +15,10 @@ import { ChannelAvatar } from "@/components/channel-avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import type { VideoDetailResponse } from "@/lib/types";
-
-const STANCE_ORDER = ["buy", "neutral", "sell"] as const;
-const STANCE_PILL: Record<string, string> = {
-  buy: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
-  neutral: "bg-zinc-400/20 text-zinc-600 dark:text-zinc-300",
-  sell: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
-};
 
 export function VideoDetail({ videoId }: { videoId: string }) {
   const t = useTranslations("VideoDetail");
-  const ts = useTranslations("Stock.stance");
   const playerRef = useRef<YouTubePlayerHandle>(null);
   const searchParams = useSearchParams();
   const initialTicker = searchParams.get("ticker");
@@ -51,10 +42,6 @@ export function VideoDetail({ videoId }: { videoId: string }) {
       </div>
     );
   }
-
-  const mentionTotal = data.groups.reduce((n, g) => n + g.mentions.length, 0);
-  const stanceCounts: Record<string, number> = { buy: 0, neutral: 0, sell: 0 };
-  for (const g of data.groups) stanceCounts[g.stance] = (stanceCounts[g.stance] ?? 0) + 1;
 
   return (
     <div className="lg:grid lg:grid-cols-[2fr_3fr] lg:gap-6">
@@ -91,27 +78,6 @@ export function VideoDetail({ videoId }: { videoId: string }) {
               </span>
             </div>
           </div>
-          {data.groups.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2 text-xs">
-              <span className="text-muted-foreground">
-                {t("stockCount", { count: data.groups.length })} ·{" "}
-                {t("mentionCount", { count: mentionTotal })}
-              </span>
-              {STANCE_ORDER.map((s) =>
-                stanceCounts[s] ? (
-                  <span
-                    key={s}
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2 py-0.5 font-medium",
-                      STANCE_PILL[s],
-                    )}
-                  >
-                    {stanceCounts[s]} {ts(s)}
-                  </span>
-                ) : null,
-              )}
-            </div>
-          )}
         </div>
       </div>
 
