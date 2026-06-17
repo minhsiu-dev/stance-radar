@@ -237,7 +237,6 @@ async def test_channel_performance_unknown_channel_404(api):
 async def test_channel_tickers_shape_and_perf(api, sessionmaker):
     _, client = api
     await seed_stances(sessionmaker)  # ch1: AAPL buy(40d)+sell(2d), NVDA buy(30d)+buy(3d)
-    # A neutral-only ticker on an unknown symbol: shows in the stance mix, no perf.
     now = datetime.now(timezone.utc)
     async with sessionmaker() as s:
         s.add(Video(
@@ -252,20 +251,22 @@ async def test_channel_tickers_shape_and_perf(api, sessionmaker):
     assert resp.status_code == 200
     rows = resp.json()["data"]
     by = {r["ticker"]: r for r in rows}
-
-    # Every covered ticker appears (uncapped), with stance-mix + perf keys.
     assert set(by) == {"AAPL", "NVDA", "ZZZZ"}
     assert set(by["AAPL"]) >= {
-        "ticker", "videos", "buy", "neutral", "sell", "latest_stance",
-        "latest_date", "win_rate", "avg_alpha", "n",
+        "ticker", "videos", "buy", "neutral", "sell", "latest_stance", "latest_date", "perf",
     }
-    # AAPL has 2 directional calls (buy + sell), both with fake price data -> realized.
-    assert by["AAPL"]["n"] == 2
-    assert by["AAPL"]["win_rate"] is not None
-    # ZZZZ is neutral-only -> realized perf is empty.
-    assert by["ZZZZ"]["n"] == 0
-    assert by["ZZZZ"]["win_rate"] is None
-    assert by["ZZZZ"]["avg_alpha"] is None
+    # AAPL has 2 directional calls (1 buy + 1 sell), both realized in the fake market.
+    assert by["AAPL"]["perf"]["all"]["n"] == 2
+    assert by["AAPL"]["perf"]["all"]["win_rate"] is not None
+    assert by["AAPL"]["perf"]["all"]["avg_return"] is not None
+    assert by["AAPL"]["perf"]["buy"]["n"] == 1
+    assert by["AAPL"]["perf"]["sell"]["n"] == 1
+    # ZZZZ is neutral-only -> all slices empty.
+    for sl in ("all", "buy", "sell"):
+        assert by["ZZZZ"]["perf"][sl]["n"] == 0
+        assert by["ZZZZ"]["perf"][sl]["win_rate"] is None
+        assert by["ZZZZ"]["perf"][sl]["avg_alpha"] is None
+        assert by["ZZZZ"]["perf"][sl]["avg_return"] is None
     assert by["ZZZZ"]["neutral"] == 1
 
 

@@ -17,6 +17,11 @@ router = APIRouter(prefix="/api")
 
 _PERFORMANCE_WINDOW_DAYS = 180
 
+_EMPTY_PERF = {
+    s: {"win_rate": None, "avg_alpha": None, "avg_return": None, "n": 0}
+    for s in ("all", "buy", "sell")
+}
+
 
 async def _load_stance_points(
     session: AsyncSession, channel_id: str | None = None
@@ -245,7 +250,7 @@ async def channel_tickers(
         perf = await channel_ticker_performance(session, channel_id)
 
     rows = [
-        {**row, **perf.get(row["ticker"], {"win_rate": None, "avg_alpha": None, "n": 0})}
+        {**row, "perf": perf.get(row["ticker"], _EMPTY_PERF)}
         for row in mix
     ]
     return ok(rows)

@@ -2,27 +2,25 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from app.insights.scorecard import CallScore, PriceSeries, _adjusted_alpha, score_call
+from app.insights.scorecard import CallScore, PriceSeries, _adjusted_alpha, _adjusted_return, score_call
 from app.insights.ticker_perf import channel_ticker_performance
 from app.models import Channel, PriceBar, Stance, Video, VideoStance, VideoStatus
 
 pytestmark = pytest.mark.asyncio
 
-# (date, close) per ticker. VOO is flat at 100 -> benchmark "now" return is 0,
-# so the stance-adjusted alpha equals the (sign-flipped) raw return -> easy to hand-check.
+# VOO is NON-flat (100 -> 110 over the window) so avg_return (raw) differs from avg_alpha (excess vs VOO).
 CANDLES: dict[str, list[tuple[date, float]]] = {
-    "VOO": [(date(2026, 1, 10), 100.0), (date(2026, 3, 10), 100.0), (date(2026, 6, 1), 100.0)],
-    "AAA": [(date(2026, 1, 10), 100.0), (date(2026, 6, 1), 110.0)],   # buy: +10% -> +10 alpha (win)
-    "BBB": [(date(2026, 1, 10), 100.0), (date(2026, 6, 1), 80.0)],    # sell: -20% -> +20 adj alpha (win)
-    "CCC": [(date(2026, 1, 10), 100.0), (date(2026, 3, 10), 200.0), (date(2026, 6, 1), 110.0)],
+    "VOO": [(date(2026, 1, 10), 100.0), (date(2026, 3, 10), 105.0), (date(2026, 6, 1), 110.0)],
+    "AAA": [(date(2026, 1, 10), 100.0), (date(2026, 6, 1), 130.0)],   # buy: raw +30, alpha +20
+    "BBB": [(date(2026, 1, 10), 100.0), (date(2026, 6, 1), 80.0)],    # sell: raw -20 -> adj +20, alpha -30 -> adj +30
+    "CCC": [(date(2026, 1, 10), 100.0), (date(2026, 3, 10), 200.0), (date(2026, 6, 1), 120.0)],
 }
-# (video_id, published_date, ticker, stance)
 CALLS = [
     ("v_aaa", date(2026, 1, 10), "AAA", Stance.buy),
     ("v_bbb", date(2026, 1, 10), "BBB", Stance.sell),
-    ("v_ccc1", date(2026, 1, 10), "CCC", Stance.buy),   # entry 100 -> 110 = +10 (win)
-    ("v_ccc2", date(2026, 3, 10), "CCC", Stance.buy),   # entry 200 -> 110 = -45 (loss)
-    ("v_ddd", date(2026, 1, 10), "DDD", Stance.neutral),  # neutral -> excluded entirely
+    ("v_ccc1", date(2026, 1, 10), "CCC", Stance.buy),   # entry 100 -> 120 raw +20, bench +10 -> alpha +10 (win)
+    ("v_ccc2", date(2026, 3, 10), "CCC", Stance.buy),   # entry 200 -> 120 raw -40, bench 4.76 -> alpha -44.76 (loss)
+    ("v_ddd", date(2026, 1, 10), "DDD", Stance.neutral),  # neutral -> excluded
 ]
 
 
@@ -44,29 +42,41 @@ async def _seed(session) -> None:
     await session.commit()
 
 
-async def test_channel_ticker_performance_exact(session):
+async def test_channel_ticker_performance_slices(session):
     await _seed(session)
     perf = await channel_ticker_performance(session, "ch1")
 
-    assert perf["AAA"] == {"n": 1, "avg_alpha": 10.0, "win_rate": 100.0}
-    assert perf["BBB"] == {"n": 1, "avg_alpha": 20.0, "win_rate": 100.0}
-    assert perf["CCC"] == {"n": 2, "avg_alpha": -17.5, "win_rate": 50.0}
-    assert "DDD" not in perf  # neutral-only ticker never appears in the perf result
+    assert perf["AAA"] == {
+        "all":  {"n": 1, "avg_alpha": 20.0, "avg_return": 30.0, "win_rate": 100.0},
+        "buy":  {"n": 1, "avg_alpha": 20.0, "avg_return": 30.0, "win_rate": 100.0},
+        "sell": {"n": 0, "avg_alpha": None, "avg_return": None, "win_rate": None},
+    }
+    assert perf["BBB"] == {
+        "all":  {"n": 1, "avg_alpha": 30.0, "avg_return": 20.0, "win_rate": 100.0},
+        "buy":  {"n": 0, "avg_alpha": None, "avg_return": None, "win_rate": None},
+        "sell": {"n": 1, "avg_alpha": 30.0, "avg_return": 20.0, "win_rate": 100.0},
+    }
+    assert perf["CCC"] == {
+        "all":  {"n": 2, "avg_alpha": -17.38, "avg_return": -10.0, "win_rate": 50.0},
+        "buy":  {"n": 2, "avg_alpha": -17.38, "avg_return": -10.0, "win_rate": 50.0},
+        "sell": {"n": 0, "avg_alpha": None, "avg_return": None, "win_rate": None},
+    }
+    # avg_return is the RAW stock move, distinct from avg_alpha (excess vs the non-flat VOO)
+    assert perf["AAA"]["all"]["avg_return"] != perf["AAA"]["all"]["avg_alpha"]
+    assert "DDD" not in perf
 
 
 async def test_channel_ticker_performance_matches_score_call(session):
-    """The lean SQL must agree, per ticker, with score_call's 至今 numbers."""
+    """The lean SQL must agree, per ticker, with score_call's 至今 alpha AND raw return."""
     await _seed(session)
     perf = await channel_ticker_performance(session, "ch1")
 
     series = {
-        t: PriceSeries(
-            dates=tuple(d for d, _ in bars),
-            closes=tuple(c for _, c in bars),
-        )
+        t: PriceSeries(dates=tuple(d for d, _ in bars), closes=tuple(c for _, c in bars))
         for t, bars in CANDLES.items()
     }
-    by_ticker: dict[str, list[float]] = {}
+    alpha_by: dict[str, list[float]] = {}
+    ret_by: dict[str, list[float]] = {}
     for vid, d, ticker, stance in CALLS:
         if stance == Stance.neutral:
             continue
@@ -76,15 +86,20 @@ async def test_channel_ticker_performance_matches_score_call(session):
             confidence=None, summary="", published_at=pub.isoformat(),
         )
         score_call(cs, series.get(ticker), series["VOO"], pub.date())
-        adj = _adjusted_alpha(cs, "now")
-        if adj is not None:
-            by_ticker.setdefault(ticker, []).append(adj)
+        a = _adjusted_alpha(cs, "now")
+        r = _adjusted_return(cs, "now")
+        if a is not None:
+            alpha_by.setdefault(ticker, []).append(a)
+        if r is not None:
+            ret_by.setdefault(ticker, []).append(r)
 
-    assert set(perf) == set(by_ticker)
-    for ticker, adjs in by_ticker.items():
-        n = len(adjs)
-        expected_avg = round(sum(adjs) / n, 2)
-        expected_win = round(100.0 * sum(1 for a in adjs if a > 0) / n, 1)
-        assert perf[ticker]["n"] == n
-        assert perf[ticker]["avg_alpha"] == pytest.approx(expected_avg)
-        assert perf[ticker]["win_rate"] == pytest.approx(expected_win)
+    assert set(perf) == set(alpha_by)
+    for ticker, alphas in alpha_by.items():
+        n = len(alphas)
+        rets = ret_by[ticker]
+        assert perf[ticker]["all"]["n"] == n
+        assert perf[ticker]["all"]["avg_alpha"] == pytest.approx(round(sum(alphas) / n, 2))
+        assert perf[ticker]["all"]["avg_return"] == pytest.approx(round(sum(rets) / len(rets), 2))
+        assert perf[ticker]["all"]["win_rate"] == pytest.approx(
+            round(100.0 * sum(1 for a in alphas if a > 0) / n, 1)
+        )
