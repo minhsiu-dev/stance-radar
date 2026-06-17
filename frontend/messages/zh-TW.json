@@ -179,6 +179,19 @@
       "distribution": "立場分佈",
       "latest": "最新立場"
     },
+    "performance": {
+      "title": "近 180 天推薦績效 (vs VOO)",
+      "filter": { "all": "全部" },
+      "columns": {
+        "period": "期間",
+        "winRate": "勝率",
+        "avg": "平均超額",
+        "median": "中位數",
+        "samples": "樣本"
+      },
+      "empty": "近 180 天無方向性推薦",
+      "error": "無法載入績效"
+    },
     "tabs": {
       "videos": "影片",
       "scorecard": "最新提及"
