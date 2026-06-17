@@ -229,9 +229,10 @@ async def channel_tickers(
     store: PriceStore = Depends(get_price_store),
 ):
     """個股戰績: every ticker the channel covers (uncapped), stance mix left-joined
-    to all-time 至今 stance-adjusted performance vs VOO. Ensures price coverage with
-    a lean ensure_daily (network only for cold tickers), then runs the indexed
-    per-ticker SQL aggregation."""
+    to reversal-aware stance-adjusted performance vs VOO (each call scored to its
+    reversal date, or to today if still open; calls <90d old are pending). Ensures
+    price coverage with a lean ensure_daily (network only for cold tickers), then
+    runs the indexed per-ticker SQL aggregation."""
     channel = await session.get(Channel, channel_id)
     if channel is None:
         return fail(f"Channel {channel_id} not found", status_code=404)
