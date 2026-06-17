@@ -65,6 +65,48 @@ the image and restart:
 docker compose build frontend && docker compose up -d frontend
 ```
 
+## Visual verification of the frontend (Playwright screenshots / measurements)
+
+To actually *see* a UI change on the running app (`:3000`) — and to iterate on CSS/layout —
+drive it with Playwright. This container can't launch Chromium directly (it's the `node` user,
+no root to `apt-get` the libs), **but** the browsers are already downloaded
+(`~/.cache/ms-playwright`) and the workspace can reach `http://localhost:3000`. So run
+Playwright inside the official image with `--network host`, moving files in/out with
+`docker cp` — **dind volume mounts do NOT work** (`-v` paths resolve on the docker *daemon*
+host, not this container), and the workspace itself can't `apt` the libs.
+
+```bash
+# version that matches the downloaded browsers (e.g. 1.60.0):
+VER=$(node -e "console.log(require('./e2e/node_modules/playwright/package.json').version)")
+
+# one host-network "shooter" container (the image ships matching browsers at /ms-playwright,
+# with PLAYWRIGHT_BROWSERS_PATH preset; it does NOT ship the playwright npm package, so cp ours in):
+docker rm -f shooter 2>/dev/null
+docker create --network host --name shooter mcr.microsoft.com/playwright:v${VER}-noble sleep 1800 >/dev/null
+docker start shooter >/dev/null
+docker exec shooter mkdir -p /app/node_modules /shots
+docker cp e2e/node_modules/playwright      shooter:/app/node_modules/playwright
+docker cp e2e/node_modules/playwright-core  shooter:/app/node_modules/playwright-core
+
+# per iteration: a script that require('playwright'), goto a http://localhost:3000/zh-TW/... URL,
+# waitForTimeout(~4000) (pages are client-rendered via SWR — the SSR HTML is just a skeleton),
+# then screenshot to /shots/*.png:
+docker cp /tmp/shot.js shooter:/app/shot.js
+docker exec -w /app shooter node shot.js
+docker cp shooter:/shots/. /tmp/shots/      # then Read /tmp/shots/*.png
+```
+
+- **Rebuild the `frontend` image first** (the snippet above) so `:3000` reflects your change
+  before shooting.
+- For pixel-precise CSS debugging, `page.evaluate(() => el.getBoundingClientRect())` +
+  `getComputedStyle(el).boxShadow` beats eyeballing faint 1px lines (this is how a `ring-1`
+  outset overflowing a sticky element was confirmed). Mobile: `deviceScaleFactor: 3` + a `clip`
+  makes thin borders legible; tabs/data load after the ~4s wait.
+- Disk: the playwright image is ~1.5 GB and this env is disk-constrained — `docker rm -f shooter`
+  when done, and `docker rmi mcr.microsoft.com/playwright:v${VER}-noble` if space is tight.
+  Frequent `frontend` rebuilds also pile up dangling images; `docker image prune -f` reclaims
+  them (it freed ~22 GB once here).
+
 ## E2E
 
 Default flow (run Playwright on the host):
