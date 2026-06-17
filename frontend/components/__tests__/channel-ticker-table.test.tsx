@@ -5,13 +5,11 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string, vars?: Record<string, unknown>) =>
     vars ? `${key}:${JSON.stringify(vars)}` : key,
 }));
-
 vi.mock("@/i18n/navigation", () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
 }));
-
 const swrResponses: Record<string, unknown> = {};
 vi.mock("swr", () => ({
   default: (key: string) => ({ data: swrResponses[key], error: undefined }),
@@ -19,38 +17,49 @@ vi.mock("swr", () => ({
 
 import { ChannelTickerTable } from "@/components/channel-ticker-table";
 
+function slice(n: number, win: number | null, alpha: number | null, ret: number | null) {
+  return { n, win_rate: win, avg_alpha: alpha, avg_return: ret };
+}
 const rows = [
-  { ticker: "AAA", videos: 3, buy: 2, neutral: 1, sell: 0, latest_stance: "buy",
-    latest_date: "2026-06-01", win_rate: 66.7, avg_alpha: 4.2, n: 3 },
-  { ticker: "BBB", videos: 9, buy: 1, neutral: 0, sell: 8, latest_stance: "sell",
-    latest_date: "2026-06-10", win_rate: 25.0, avg_alpha: -3.1, n: 8 },
-  { ticker: "CCC", videos: 1, buy: 0, neutral: 1, sell: 0, latest_stance: "neutral",
-    latest_date: "2026-05-01", win_rate: null, avg_alpha: null, n: 0 },
+  { ticker: "AAA", videos: 3, buy: 2, neutral: 1, sell: 0, latest_stance: "buy", latest_date: "2026-06-01",
+    perf: { all: slice(2, 50, 4.2, 9.1), buy: slice(2, 50, 4.2, 9.1), sell: slice(0, null, null, null) } },
+  { ticker: "BBB", videos: 9, buy: 1, neutral: 0, sell: 8, latest_stance: "sell", latest_date: "2026-06-10",
+    perf: { all: slice(9, 25, -3.1, -5.0), buy: slice(1, 100, 8.0, 8.0), sell: slice(8, 12.5, -4.0, -6.0) } },
+  { ticker: "CCC", videos: 1, buy: 0, neutral: 1, sell: 0, latest_stance: "neutral", latest_date: "2026-05-01",
+    perf: { all: slice(0, null, null, null), buy: slice(0, null, null, null), sell: slice(0, null, null, null) } },
 ];
-
 function tickerOrder(): string[] {
   return screen.getAllByTestId(/^ticker-row-/).map((el) => el.getAttribute("data-ticker")!);
 }
 
 describe("ChannelTickerTable", () => {
-  it("renders one row per ticker, default sorted by video count desc", () => {
+  it("renders rows default-sorted by videos desc and shows avg_return", () => {
     swrResponses["/api/channels/ch1/tickers"] = rows;
     render(<ChannelTickerTable channelId="ch1" />);
     expect(tickerOrder()).toEqual(["BBB", "AAA", "CCC"]);
+    // AAA all-slice avg_return 9.1 rendered
+    expect(within(screen.getByTestId("ticker-row-AAA")).getByText("+9.1")).toBeInTheDocument();
   });
 
-  it("renders an em dash for tickers with no realized perf", () => {
+  it("re-slices perf columns when the buy/sell toggle changes", () => {
     swrResponses["/api/channels/ch1/tickers"] = rows;
     render(<ChannelTickerTable channelId="ch1" />);
-    const ccc = screen.getByTestId("ticker-row-CCC");
-    expect(within(ccc).getAllByText("—").length).toBeGreaterThan(0);
+    // default = all: BBB win_rate 25%
+    expect(within(screen.getByTestId("ticker-row-BBB")).getByText("25%")).toBeInTheDocument();
+    // switch to buy: BBB buy-slice win_rate 100%
+    fireEvent.click(screen.getByRole("button", { name: "buy" }));
+    expect(within(screen.getByTestId("ticker-row-BBB")).getByText("100%")).toBeInTheDocument();
+    // switch to sell: AAA has no sell calls -> em dash
+    fireEvent.click(screen.getByRole("button", { name: "sell" }));
+    const aaa = screen.getByTestId("ticker-row-AAA");
+    expect(within(aaa).getAllByText("—").length).toBeGreaterThan(0);
   });
 
-  it("re-sorts by win rate when the win-rate header is clicked", () => {
+  it("sorts by avg_return on the active slice, nulls last", () => {
     swrResponses["/api/channels/ch1/tickers"] = rows;
     render(<ChannelTickerTable channelId="ch1" />);
-    fireEvent.click(screen.getByRole("button", { name: "winRate" }));
-    // desc: AAA (66.7), BBB (25.0), then null last (CCC)
+    fireEvent.click(screen.getByRole("button", { name: "avgReturn" }));
+    // all-slice avg_return desc: AAA(9.1), BBB(-5.0), CCC(null last)
     expect(tickerOrder()).toEqual(["AAA", "BBB", "CCC"]);
   });
 });

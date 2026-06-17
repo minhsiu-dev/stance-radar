@@ -181,6 +181,7 @@
       "latest": "最新立場",
       "winRate": "勝率",
       "avgAlpha": "平均超額",
+      "avgReturn": "平均報酬",
       "samples": "樣本"
     },
     "performance": {
