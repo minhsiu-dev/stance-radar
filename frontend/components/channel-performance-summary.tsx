@@ -15,7 +15,7 @@ export function ChannelPerformanceSummary({ channelId }: { channelId: string }) 
   const t = useTranslations("ChannelDetail.performance");
   const tCol = useTranslations("Scorecard.columns");
   const tStance = useTranslations("Stock.stance");
-  const [filter, setFilter] = useState<PerfFilter>("all");
+  const [filter, setFilter] = useState<PerfFilter>("buy");
 
   const { data, error } = useSWR<ChannelPerformanceDto>(
     `/api/channels/${channelId}/performance`,
@@ -64,6 +64,8 @@ export function ChannelPerformanceSummary({ channelId }: { channelId: string }) 
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="py-1.5 pr-3">{t("columns.period")}</th>
                   <th className="py-1.5 pr-3 text-right">{t("columns.winRate")}</th>
+                  <th className="py-1.5 pr-3 text-right">{t("columns.avgReturn")}</th>
+                  <th className="py-1.5 pr-3 text-right">{t("columns.medianReturn")}</th>
                   <th className="py-1.5 pr-3 text-right">{t("columns.avg")}</th>
                   <th className="py-1.5 pr-3 text-right">{t("columns.median")}</th>
                   <th className="py-1.5 text-right">{t("columns.samples")}</th>
@@ -77,6 +79,12 @@ export function ChannelPerformanceSummary({ channelId }: { channelId: string }) 
                       <td className="py-2 pr-3 font-medium">{r.label}</td>
                       <td className="py-2 pr-3 text-right tabular-nums">
                         {formatWinRate(cell.win_rate)}
+                      </td>
+                      <td className={cn("py-2 pr-3 text-right tabular-nums", alphaColor(cell.avg_return))}>
+                        {formatSignedPct(cell.avg_return)}
+                      </td>
+                      <td className={cn("py-2 pr-3 text-right tabular-nums", alphaColor(cell.median_return))}>
+                        {formatSignedPct(cell.median_return)}
                       </td>
                       <td className={cn("py-2 pr-3 text-right tabular-nums", alphaColor(cell.avg))}>
                         {formatSignedPct(cell.avg)}

@@ -10,8 +10,8 @@ export function ChannelPerfLine({ channelId }: { channelId: string }) {
   const { data } = useSWR<ChannelPerformanceDto>(
     `/api/channels/${channelId}/performance`,
   );
-  if (!data || data.counts.all === 0) return null;
-  const now = data.summary.all.now;
+  if (!data || data.counts.buy === 0) return null;
+  const now = data.summary.buy.now;
   if (now.n === 0) return null;
   if (now.win_rate == null || now.median == null) return null;
   return (
@@ -22,6 +22,7 @@ export function ChannelPerfLine({ channelId }: { channelId: string }) {
       {t("perfLine", {
         winRate: formatWinRate(now.win_rate),
         median: formatSignedPct(now.median),
+        n: now.n,
       })}
     </p>
   );
