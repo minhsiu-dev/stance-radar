@@ -236,7 +236,7 @@ async def test_channel_performance_unknown_channel_404(api):
 
 async def test_channel_tickers_shape_and_perf(api, sessionmaker):
     _, client = api
-    await seed_stances(sessionmaker)  # ch1: AAPL buy(40d)+sell(2d), NVDA buy(30d)+buy(3d)
+    await seed_stances(sessionmaker)  # AAPL buy(40d)+sell(2d); NVDA buy(30d)+buy(3d)
     now = datetime.now(timezone.utc)
     async with sessionmaker() as s:
         s.add(Video(
@@ -249,25 +249,20 @@ async def test_channel_tickers_shape_and_perf(api, sessionmaker):
 
     resp = await client.get("/api/channels/ch1/tickers")
     assert resp.status_code == 200
-    rows = resp.json()["data"]
-    by = {r["ticker"]: r for r in rows}
+    by = {r["ticker"]: r for r in resp.json()["data"]}
     assert set(by) == {"AAPL", "NVDA", "ZZZZ"}
-    assert set(by["AAPL"]) >= {
-        "ticker", "videos", "buy", "neutral", "sell", "latest_stance", "latest_date", "perf",
-    }
-    # AAPL has 2 directional calls (1 buy + 1 sell), both realized in the fake market.
-    assert by["AAPL"]["perf"]["all"]["n"] == 2
-    assert by["AAPL"]["perf"]["all"]["win_rate"] is not None
-    assert by["AAPL"]["perf"]["all"]["avg_return"] is not None
+    assert set(by["AAPL"]["perf"]["all"]) == {"win_rate", "avg_alpha", "avg_return", "n", "pending"}
+    # AAPL buy(40d) was reversed by the sell(2d) -> CLOSED -> scored; the sell(2d) is open & <90d -> pending
     assert by["AAPL"]["perf"]["buy"]["n"] == 1
-    assert by["AAPL"]["perf"]["sell"]["n"] == 1
-    # ZZZZ is neutral-only -> all slices empty.
-    for sl in ("all", "buy", "sell"):
-        assert by["ZZZZ"]["perf"][sl]["n"] == 0
-        assert by["ZZZZ"]["perf"][sl]["win_rate"] is None
-        assert by["ZZZZ"]["perf"][sl]["avg_alpha"] is None
-        assert by["ZZZZ"]["perf"][sl]["avg_return"] is None
-    assert by["ZZZZ"]["neutral"] == 1
+    assert by["AAPL"]["perf"]["buy"]["win_rate"] is not None
+    assert by["AAPL"]["perf"]["sell"]["n"] == 0
+    assert by["AAPL"]["perf"]["sell"]["pending"] == 1
+    # NVDA: two open buys, both <90d old -> all pending, nothing scored
+    assert by["NVDA"]["perf"]["all"]["n"] == 0
+    assert by["NVDA"]["perf"]["buy"]["pending"] == 2
+    # ZZZZ neutral-only -> no directional calls -> empty (n=0, pending=0)
+    assert by["ZZZZ"]["perf"]["all"]["n"] == 0
+    assert by["ZZZZ"]["perf"]["all"]["pending"] == 0
 
 
 async def test_channel_tickers_unknown_channel_404(api):

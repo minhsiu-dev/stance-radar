@@ -182,7 +182,19 @@ export function ChannelTickerTable({ channelId }: { channelId: string }) {
                         {signed(p.avg_alpha)}
                       </td>
                       <td className="py-2 pl-3 text-right tabular-nums text-muted-foreground">
-                        {p.n === 0 ? "—" : p.n}
+                        {p.n === 0 && p.pending === 0
+                          ? "—"
+                          : (
+                            <>
+                              {p.n > 0 ? p.n : null}
+                              {p.pending > 0 && (
+                                <span className="text-[11px] text-muted-foreground/70">
+                                  {p.n > 0 ? " " : ""}
+                                  {`+${p.pending} ${t("pending")}`}
+                                </span>
+                              )}
+                            </>
+                          )}
                       </td>
                       <td className="hidden py-2 pl-3 sm:table-cell">
                         {total > 0 && (
