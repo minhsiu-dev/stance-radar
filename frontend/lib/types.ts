@@ -441,3 +441,26 @@ export interface VideoDetailResponse {
   };
   groups: VideoDetailGroup[];
 }
+
+export interface PerfCell {
+  win_rate: number | null;
+  avg: number | null;
+  median: number | null;
+  n: number;
+}
+
+export interface PerfGroup {
+  now: PerfCell;
+  "30": PerfCell;
+  "90": PerfCell;
+}
+
+export type PerfFilter = "all" | "buy" | "sell";
+
+export interface ChannelPerformanceDto {
+  benchmark: string;
+  window_days: number;
+  horizons: (string | number)[];
+  summary: Record<PerfFilter, PerfGroup>;
+  counts: Record<PerfFilter, number>;
+}

@@ -7,11 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_price_store, get_session
 from app.envelope import fail, ok
 from app.insights.flips import StancePoint, detect_flips
-from app.insights.scorecard import build_scorecard, build_scorecard_page
+from app.insights.scorecard import build_channel_performance, build_scorecard, build_scorecard_page
 from app.market.store import PriceStore
 from app.models import Channel, Stance, Video, VideoStance
 
 router = APIRouter(prefix="/api")
+
+_PERFORMANCE_WINDOW_DAYS = 180
 
 
 async def _load_stance_points(
@@ -88,12 +90,19 @@ async def stance_flips(
     })
 
 
-async def _channel_calls(session: AsyncSession, channel_id: str) -> list[dict]:
+async def _channel_calls(
+    session: AsyncSession, channel_id: str, cutoff: datetime | None = None
+) -> list[dict]:
+    conds = [
+        Video.channel_id == channel_id,
+        VideoStance.stance != Stance.neutral,
+    ]
+    if cutoff is not None:
+        conds.append(Video.published_at >= cutoff)
     rows = (await session.execute(
         select(VideoStance, Video)
         .join(Video, VideoStance.video_id == Video.id)
-        .where(Video.channel_id == channel_id)
-        .where(VideoStance.stance != Stance.neutral)
+        .where(*conds)
         .order_by(Video.published_at.desc())
     )).all()
     return [
@@ -188,6 +197,22 @@ async def channel_scorecard(
     # Full ticker list, independent of the active filters, so the dropdown stays populated.
     scorecard["tickers"] = await _channel_call_tickers(session, channel_id)
     return ok(scorecard)
+
+
+@router.get("/channels/{channel_id}/performance")
+async def channel_performance(
+    channel_id: str,
+    session: AsyncSession = Depends(get_session),
+    store: PriceStore = Depends(get_price_store),
+):
+    channel = await session.get(Channel, channel_id)
+    if channel is None:
+        return fail(f"Channel {channel_id} not found", status_code=404)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=_PERFORMANCE_WINDOW_DAYS)
+    raw_calls = await _channel_calls(session, channel_id, cutoff=cutoff)
+    return ok(await build_channel_performance(
+        store, raw_calls, window_days=_PERFORMANCE_WINDOW_DAYS,
+    ))
 
 
 @router.get("/insights/leaderboard")

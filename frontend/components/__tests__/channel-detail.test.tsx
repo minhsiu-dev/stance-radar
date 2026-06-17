@@ -68,6 +68,19 @@ const messages = {
       distribution: "Stance mix",
       latest: "Latest",
     },
+    performance: {
+      title: "Last 180 days vs VOO",
+      filter: { all: "All" },
+      columns: {
+        period: "Period",
+        winRate: "Win rate",
+        avg: "Avg excess",
+        median: "Median",
+        samples: "n",
+      },
+      empty: "No directional calls in the last 180 days",
+      error: "Couldn't load performance",
+    },
     tabs: {
       videos: "Videos tab",
       scorecard: "Latest mentions",
@@ -120,6 +133,7 @@ const messages = {
       ticker: "Ticker",
       stance: "Stance",
       horizon: "{days}d",
+      now: "Now",
     },
   },
 };
@@ -183,6 +197,15 @@ function renderDetail(videosForKey?: (key: string) => unknown) {
       return Promise.resolve(videosForKey ? videosForKey(key) : videos);
     }
     if (key.includes("/scorecard")) return Promise.resolve(scorecard);
+    if (key.includes("/performance")) return Promise.resolve({
+      benchmark: "VOO", window_days: 180, horizons: ["now", 30, 90],
+      summary: {
+        all: { now: { win_rate: null, avg: null, median: null, n: 0 }, "30": { win_rate: null, avg: null, median: null, n: 0 }, "90": { win_rate: null, avg: null, median: null, n: 0 } },
+        buy: { now: { win_rate: null, avg: null, median: null, n: 0 }, "30": { win_rate: null, avg: null, median: null, n: 0 }, "90": { win_rate: null, avg: null, median: null, n: 0 } },
+        sell: { now: { win_rate: null, avg: null, median: null, n: 0 }, "30": { win_rate: null, avg: null, median: null, n: 0 }, "90": { win_rate: null, avg: null, median: null, n: 0 } },
+      },
+      counts: { all: 0, buy: 0, sell: 0 },
+    });
     return Promise.resolve(detail);
   });
   render(

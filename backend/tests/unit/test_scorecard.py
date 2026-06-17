@@ -191,3 +191,89 @@ async def test_now_return_uses_latest_close():
     # (219/109 - 1) * 100 = 100.92
     assert call["now_return"] == pytest.approx(100.92, abs=0.01)
     assert call["now_alpha"] == call["now_return"]  # flat SPY benchmark
+
+
+from app.insights.scorecard import CallScore, summarize_channel_calls
+
+
+def _mk_call(stance, *, now_alpha=None, alpha30=None, alpha90=None):
+    call = CallScore(
+        video_id="v", video_title="t", ticker="X", stance=stance,
+        confidence=None, summary="s", published_at="2026-01-01T00:00:00",
+    )
+    call.now_alpha = now_alpha
+    call.alpha = {30: alpha30, 90: alpha90}
+    return call
+
+
+def test_summarize_stance_adjusted_win_avg_median_and_realized():
+    calls = [
+        _mk_call("buy", now_alpha=5.0, alpha30=3.0, alpha90=None),
+        _mk_call("buy", now_alpha=-2.0, alpha30=-1.0, alpha90=4.0),
+        _mk_call("sell", now_alpha=-10.0, alpha30=2.0, alpha90=None),
+    ]
+    out = summarize_channel_calls(calls)
+
+    assert out["counts"] == {"all": 3, "buy": 2, "sell": 1}
+
+    # all/now: adjusted alphas = [+5, -2, +10 (sell flips -10)] -> 2 wins / 3
+    assert out["summary"]["all"]["now"] == {
+        "win_rate": 66.7, "avg": 4.33, "median": 5.0, "n": 3,
+    }
+    # all/30: adjusted = [+3, -1, -2 (sell flips +2)] -> 1 win / 3
+    assert out["summary"]["all"]["30"] == {
+        "win_rate": 33.3, "avg": 0.0, "median": -1.0, "n": 3,
+    }
+    # all/90: only the second buy is realized (alpha90=4)
+    assert out["summary"]["all"]["90"] == {
+        "win_rate": 100.0, "avg": 4.0, "median": 4.0, "n": 1,
+    }
+    # sell/90: nothing realized
+    assert out["summary"]["sell"]["90"] == {
+        "win_rate": None, "avg": None, "median": None, "n": 0,
+    }
+    # sell/now: stock fell 10 below VOO -> adjusted +10 -> a win for the short
+    assert out["summary"]["sell"]["now"]["win_rate"] == 100.0
+    assert out["summary"]["sell"]["now"]["avg"] == 10.0
+
+
+def test_summarize_flat_alpha_is_not_a_win():
+    out = summarize_channel_calls([_mk_call("buy", now_alpha=0.0)])
+    assert out["summary"]["buy"]["now"] == {
+        "win_rate": 0.0, "avg": 0.0, "median": 0.0, "n": 1,
+    }
+
+
+from app.insights.scorecard import build_channel_performance
+
+
+async def test_build_channel_performance_vs_voo_sign_flip():
+    # VOO flat (alpha == raw return); AAPL & ZZZ both rise +1/day.
+    store = StubStore({
+        "VOO": _linear_candles("SPY"),   # "SPY" branch returns the flat series
+        "AAPL": _linear_candles("AAPL"),
+        "ZZZ": _linear_candles("ZZZ"),
+    })
+    published = datetime(2026, 1, 10, 12, 0, tzinfo=timezone.utc)
+    out = await build_channel_performance(store, [
+        {"video_id": "v1", "video_title": "t", "ticker": "AAPL",
+         "stance": "buy", "confidence": None, "summary": "s",
+         "published_at": published},
+        {"video_id": "v2", "video_title": "t", "ticker": "ZZZ",
+         "stance": "sell", "confidence": None, "summary": "s",
+         "published_at": published},
+    ])
+
+    assert out["benchmark"] == "VOO"
+    assert out["window_days"] == 180
+    assert out["horizons"] == ["now", "30", "90"]
+    assert out["counts"] == {"all": 2, "buy": 1, "sell": 1}
+
+    # Rising stock vs flat VOO -> positive alpha.
+    buy_now = out["summary"]["buy"]["now"]
+    assert buy_now["win_rate"] == 100.0 and buy_now["n"] == 1 and buy_now["avg"] > 0
+    # Same rising stock, but it's a SELL -> adjusted alpha negative -> a loss.
+    sell_now = out["summary"]["sell"]["now"]
+    assert sell_now["win_rate"] == 0.0 and sell_now["n"] == 1 and sell_now["avg"] < 0
+    # Mixed bag -> 1 of 2 wins.
+    assert out["summary"]["all"]["now"]["win_rate"] == 50.0

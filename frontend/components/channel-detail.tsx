@@ -6,6 +6,7 @@ import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
 import { ExternalLink, Play, Zap, ZapOff } from "lucide-react";
 import { Link } from "@/i18n/navigation";
+import { ChannelPerformanceSummary } from "@/components/channel-performance-summary";
 import { ChannelScorecard } from "@/components/channel-scorecard";
 import { ChannelTopTickers } from "@/components/channel-top-tickers";
 import { Badge } from "@/components/ui/badge";
@@ -350,7 +351,10 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         </div>
       </div>
 
-      <ChannelTopTickers rows={detail.top_tickers} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_3fr]">
+        <ChannelPerformanceSummary channelId={channelId} />
+        <ChannelTopTickers rows={detail.top_tickers} />
+      </div>
 
       <Tabs defaultValue="scorecard">
         <TabsList>

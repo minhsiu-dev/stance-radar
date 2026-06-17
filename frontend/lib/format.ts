@@ -36,3 +36,13 @@ export function formatVolume(value: number | null): string {
   if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
   return String(value);
 }
+
+export function formatSignedPct(v: number | null): string {
+  if (v == null) return "—";
+  return `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+
+export function formatWinRate(v: number | null): string {
+  if (v == null) return "—";
+  return `${v.toFixed(0)}%`;
+}

@@ -133,7 +133,8 @@
       "removePrompt": "移除「{name}」?其影片與分析資料將一併刪除。",
       "pendingBadge": "{count} 部待挑選",
       "autoBadge": "自動分析",
-      "analyzedCount": "{count} 部已分析"
+      "analyzedCount": "{count} 部已分析",
+      "perfLine": "近180天 vs VOO · 勝率 {winRate} · 中位數 {median}"
     },
     "activity": {
       "legend": "發佈 / 已分析",
@@ -178,6 +179,19 @@
       "videoCount": "{count} 部影片",
       "distribution": "立場分佈",
       "latest": "最新立場"
+    },
+    "performance": {
+      "title": "近 180 天推薦績效 (vs VOO)",
+      "filter": { "all": "全部" },
+      "columns": {
+        "period": "期間",
+        "winRate": "勝率",
+        "avg": "平均超額",
+        "median": "中位數",
+        "samples": "樣本"
+      },
+      "empty": "近 180 天無方向性推薦",
+      "error": "無法載入績效"
     },
     "tabs": {
       "videos": "影片",

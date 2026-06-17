@@ -9,6 +9,7 @@ Return definitions:
 A neutral stance has no direction and is not scored.
 """
 import logging
+import statistics
 from bisect import bisect_left
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -169,6 +170,52 @@ def aggregate(calls: list[CallScore]) -> dict:
     return out
 
 
+_SUMMARY_HORIZONS = ("now", "30", "90")
+
+
+def _adjusted_alpha(call: CallScore, horizon: str) -> float | None:
+    """Alpha vs VOO, sign-flipped for sells so a short 'wins' when the stock
+    underperforms the benchmark."""
+    alpha = call.now_alpha if horizon == "now" else call.alpha.get(int(horizon))
+    if alpha is None:
+        return None
+    return alpha if call.stance == "buy" else -alpha
+
+
+def _summary_cell(calls: list[CallScore], horizon: str) -> dict:
+    vals = [a for a in (_adjusted_alpha(c, horizon) for c in calls) if a is not None]
+    n = len(vals)
+    if n == 0:
+        return {"win_rate": None, "avg": None, "median": None, "n": 0}
+    wins = sum(1 for v in vals if v > 0)
+    return {
+        "win_rate": round(wins / n * 100, 1),
+        "avg": round(sum(vals) / n, 2),
+        "median": round(statistics.median(vals), 2),
+        "n": n,
+    }
+
+
+def summarize_channel_calls(calls: list[CallScore]) -> dict:
+    """all/buy/sell x now/30/90 of stance-adjusted alpha vs VOO.
+
+    `calls` are already-scored directional (buy/sell) CallScores. Win = adjusted
+    alpha > 0 (strict); avg/median over realized calls; n = realized count.
+    """
+    groups = {
+        "all": calls,
+        "buy": [c for c in calls if c.stance == "buy"],
+        "sell": [c for c in calls if c.stance == "sell"],
+    }
+    return {
+        "summary": {
+            g: {h: _summary_cell(gc, h) for h in _SUMMARY_HORIZONS}
+            for g, gc in groups.items()
+        },
+        "counts": {g: len(gc) for g, gc in groups.items()},
+    }
+
+
 def _serialize_call(c: CallScore) -> dict:
     return {
         "video_id": c.video_id,
@@ -254,4 +301,28 @@ async def build_scorecard_page(
         "page": page,
         "page_size": page_size,
         "calls": [_serialize_call(c) for c in calls],
+    }
+
+
+async def build_channel_performance(
+    store: PriceStore,
+    raw_calls: list[dict],
+    window_days: int = 180,
+    benchmark: str = SCORECARD_BENCHMARK,
+) -> dict:
+    """Score every directional call in the window and summarize all/buy/sell x
+    now/30/90 vs VOO. `raw_calls` is every non-neutral stance in the window.
+
+    Caller must pre-filter `raw_calls` to the window; `window_days` is only echoed
+    into the response, not applied here.
+    Benchmark defaults to VOO (`SCORECARD_BENCHMARK`), unlike `build_scorecard` which uses SPY.
+    """
+    tickers = {c["ticker"] for c in raw_calls}
+    series_map = await fetch_price_series(store, tickers | {benchmark})
+    calls = _score_calls(raw_calls, series_map, series_map.get(benchmark))
+    return {
+        "benchmark": benchmark,
+        "window_days": window_days,
+        "horizons": list(_SUMMARY_HORIZONS),  # ["now", "30", "90"] — same keys as `summary`
+        **summarize_channel_calls(calls),
     }
