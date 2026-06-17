@@ -172,7 +172,7 @@
       "pending": "Queued"
     },
     "trackRecord": {
-      "description": "Per-ticker track record (to-date vs VOO, directional calls only)",
+      "description": "Track record: held until they reversed; calls <90d are pending (vs VOO)",
       "empty": "No data yet",
       "ticker": "Ticker",
       "mentions": "Mentions",
@@ -182,7 +182,8 @@
       "winRate": "Win rate",
       "avgAlpha": "Avg excess",
       "avgReturn": "Avg return",
-      "samples": "n"
+      "samples": "n",
+      "pending": "pending"
     },
     "performance": {
       "title": "Last 180 days vs VOO",

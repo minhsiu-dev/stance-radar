@@ -241,6 +241,7 @@ export interface TickerPerfSlice {
   avg_alpha: number | null;
   avg_return: number | null;
   n: number;
+  pending: number;
 }
 
 export interface ChannelTickerRow extends ChannelTickerStat {

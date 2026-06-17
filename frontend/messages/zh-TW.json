@@ -172,7 +172,7 @@
       "pending": "排隊中"
     },
     "trackRecord": {
-      "description": "各檔的歷史推薦戰績(至今 vs VOO,僅方向性推薦)",
+      "description": "各檔推薦戰績:持有至反轉、未滿90天為待定 (vs VOO)",
       "empty": "尚無資料",
       "ticker": "股票",
       "mentions": "提及",
@@ -182,7 +182,8 @@
       "winRate": "勝率",
       "avgAlpha": "平均超額",
       "avgReturn": "平均報酬",
-      "samples": "樣本"
+      "samples": "樣本",
+      "pending": "待定"
     },
     "performance": {
       "title": "近 180 天推薦績效 (vs VOO)",
