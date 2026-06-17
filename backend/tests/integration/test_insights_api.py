@@ -203,6 +203,36 @@ async def test_scorecard_invalid_stance_ignored(api, sessionmaker):
     assert data["total"] == 4
 
 
+async def test_channel_performance_shape_and_window(api, sessionmaker):
+    _, client = api
+    await seed_stances(sessionmaker)  # ch1: AAPL buy(40d)+sell(2d), NVDA buy(30d)+buy(3d)
+    resp = await client.get("/api/channels/ch1/performance")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+
+    assert data["benchmark"] == "VOO"
+    assert data["window_days"] == 180
+    assert data["horizons"] == ["now", "30", "90"]
+    # 4 directional calls in window: 3 buy + 1 sell
+    assert data["counts"] == {"all": 4, "buy": 3, "sell": 1}
+
+    # All calls have price data (AAPL/NVDA/VOO are in the fake market) -> realized "now".
+    assert data["summary"]["all"]["now"]["n"] == 4
+    assert data["summary"]["all"]["now"]["win_rate"] is not None
+    # No call is 90+ days old (max 40d) -> 90 horizon empty.
+    assert data["summary"]["all"]["90"] == {
+        "win_rate": None, "avg": None, "median": None, "n": 0,
+    }
+    # At least the 40-day-old AAPL buy has matured to 30d.
+    assert data["summary"]["all"]["30"]["n"] >= 1
+
+
+async def test_channel_performance_unknown_channel_404(api):
+    _, client = api
+    resp = await client.get("/api/channels/does_not_exist/performance")
+    assert resp.status_code == 404
+
+
 async def test_auto_analyze_channel_ingests_new_videos_as_pending(api, sessionmaker):
     """auto_analyze channel: initial backfill stays discovered, subsequent new videos go straight to pending."""
     app, client = api
