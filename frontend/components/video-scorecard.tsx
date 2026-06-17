@@ -29,7 +29,7 @@ export function VideoScorecard({
         <CardTitle className="text-base">{tv("callPerformance")}</CardTitle>
       </CardHeader>
       <CardContent>
-        {error && (
+        {error && !data && (
           <p className="text-sm text-red-500">
             {t("loadError", { message: (error as Error).message })}
           </p>
