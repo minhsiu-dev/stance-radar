@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { masked, usePrivacy } from "@/components/privacy-provider";
+import { usePrivacy } from "@/components/privacy-provider";
 import { Sparkline } from "@/components/sparkline";
 import type { PerfChanges, PerformanceSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -37,13 +37,11 @@ function PerfCard({
   title,
   headline,
   changes,
-  hide,
   ticker,
 }: {
   title: string;
   headline: string;
   changes: PerfChanges;
-  hide: boolean;
   ticker?: string;
 }) {
   return (
@@ -56,7 +54,7 @@ function PerfCard({
         {ticker && <Sparkline ticker={ticker} />}
         <div className="flex items-baseline gap-2">
           <span className={cn("text-2xl font-semibold", pctClass(changes["1d"]))}>
-            {masked(hide, pctText(changes["1d"]))}
+            {pctText(changes["1d"])}
           </span>
           <span className="text-xs text-muted-foreground">1D</span>
         </div>
@@ -65,7 +63,7 @@ function PerfCard({
             <span key={r} className="inline-flex items-baseline gap-1">
               <span className="text-muted-foreground">{RANGE_LABEL[r]}</span>
               <span className={cn("font-mono tabular-nums", pctClass(changes[r]))}>
-                {masked(hide, pctText(changes[r]))}
+                {pctText(changes[r])}
               </span>
             </span>
           ))}
@@ -77,7 +75,7 @@ function PerfCard({
 
 export function PerformanceCards() {
   const t = useTranslations("Dashboard.performance");
-  const { hideAmounts } = usePrivacy();
+  const { hideHoldings, ready } = usePrivacy();
   const { data, error } = useSWR<PerformanceSummary>(
     "/api/portfolio/performance/summary",
   );
@@ -98,12 +96,13 @@ export function PerformanceCards() {
   }
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      {data.portfolio ? (
+      {!ready ? (
+        <Skeleton className="h-28 w-full" />
+      ) : hideHoldings ? null : data.portfolio ? (
         <PerfCard
           title={t("portfolio")}
-          headline={masked(hideAmounts, money(data.portfolio.total_value))}
+          headline={money(data.portfolio.total_value)}
           changes={data.portfolio.changes}
-          hide={hideAmounts}
         />
       ) : (
         <Card>
@@ -115,8 +114,8 @@ export function PerformanceCards() {
           </CardContent>
         </Card>
       )}
-      <PerfCard title="VOO" headline={money(data.voo.price)} changes={data.voo.changes} hide={false} ticker="VOO" />
-      <PerfCard title="QQQ" headline={money(data.qqq.price)} changes={data.qqq.changes} hide={false} ticker="QQQ" />
+      <PerfCard title="VOO" headline={money(data.voo.price)} changes={data.voo.changes} ticker="VOO" />
+      <PerfCard title="QQQ" headline={money(data.qqq.price)} changes={data.qqq.changes} ticker="QQQ" />
     </div>
   );
 }

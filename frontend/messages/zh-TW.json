@@ -39,7 +39,7 @@
   },
   "Settings": {
     "open": "設定",
-    "hideAmounts": "隱藏金額",
+    "hideHoldings": "隱藏持股",
     "theme": "深色模式",
     "language": "語言"
   },
@@ -361,6 +361,8 @@
   },
   "Portfolio": {
     "title": "持股",
+    "hiddenTitle": "持股已隱藏",
+    "showHoldings": "顯示持股",
     "totals": {
       "marketValue": "總市值",
       "costBasis": "總成本",

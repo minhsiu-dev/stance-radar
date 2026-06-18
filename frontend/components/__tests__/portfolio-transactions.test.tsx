@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
-import { PrivacyProvider } from "@/components/privacy-provider";
 import { PortfolioTransactions } from "@/components/portfolio-transactions";
 
 const messages = {
@@ -18,6 +17,11 @@ const messages = {
   },
 };
 
+// usePrivacy mock with new shape (component no longer calls it, but kept for safety)
+vi.mock("@/components/privacy-provider", () => ({
+  usePrivacy: () => ({ hideHoldings: false, ready: true, toggle: vi.fn() }),
+}));
+
 const tx = {
   id: "t1", ticker: "AAPL", side: "buy", shares: 10, price: 100,
   executed_on: "2026-01-15", note: null, created_at: "2026-01-15T00:00:00Z",
@@ -27,9 +31,7 @@ function wrap(fetcher: (url: string) => Promise<unknown>) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <SWRConfig value={{ fetcher, provider: () => new Map() }}>
-        <PrivacyProvider>
-          <PortfolioTransactions />
-        </PrivacyProvider>
+        <PortfolioTransactions />
       </SWRConfig>
     </NextIntlClientProvider>,
   );
@@ -72,15 +74,14 @@ describe("PortfolioTransactions", () => {
     });
   });
 
-  it("masks shares but not price in privacy mode", async () => {
-    localStorage.setItem("stance-radar-hide-amounts", "true");
+  it("always shows real shares and price (no masking)", async () => {
     wrap(vi.fn().mockImplementation((url: string) =>
       url.startsWith("/api/portfolio/transactions")
         ? Promise.resolve([tx])
         : Promise.resolve([]),
     ));
     expect(await screen.findByText("AAPL")).toBeInTheDocument();
-    expect(screen.getByText(/•••• × \$100/)).toBeInTheDocument();
-    expect(screen.queryByText(/10 × \$100/)).toBeNull();
+    expect(screen.getByText(/10 × \$100/)).toBeInTheDocument();
+    expect(screen.queryByText(/•••• × \$100/)).toBeNull();
   });
 });

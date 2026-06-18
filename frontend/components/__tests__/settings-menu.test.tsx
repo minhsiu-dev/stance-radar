@@ -14,15 +14,15 @@ vi.mock("@/i18n/navigation", () => ({
 const messages = {
   Settings: {
     open: "Settings",
-    hideAmounts: "Hide amounts",
+    hideHoldings: "Hide Holdings",
     theme: "Dark mode",
     language: "Language",
   },
 };
 
 function Probe() {
-  const { hideAmounts } = usePrivacy();
-  return <span data-testid="probe">{hideAmounts ? "hidden" : "shown"}</span>;
+  const { hideHoldings } = usePrivacy();
+  return <span data-testid="probe">{hideHoldings ? "hidden" : "shown"}</span>;
 }
 
 function wrap() {
@@ -46,10 +46,10 @@ describe("SettingsMenu", () => {
     expect(screen.getByTestId("probe")).toHaveTextContent("shown");
     await userEvent.click(screen.getByRole("button", { name: "Settings" }));
     await userEvent.click(
-      await screen.findByRole("menuitemcheckbox", { name: /hide amounts/i }),
+      await screen.findByRole("menuitemcheckbox", { name: /hide holdings/i }),
     );
     expect(screen.getByTestId("probe")).toHaveTextContent("hidden");
-    expect(localStorage.getItem("stance-radar-hide-amounts")).toBe("true");
+    expect(localStorage.getItem("stance-radar-hide-holdings")).toBe("true");
   });
 
   it("offers theme and language items", async () => {

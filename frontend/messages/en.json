@@ -39,7 +39,7 @@
   },
   "Settings": {
     "open": "Settings",
-    "hideAmounts": "Hide amounts",
+    "hideHoldings": "Hide Holdings",
     "theme": "Dark mode",
     "language": "Language"
   },
@@ -361,6 +361,8 @@
   },
   "Portfolio": {
     "title": "Portfolio",
+    "hiddenTitle": "Holdings are hidden",
+    "showHoldings": "Show holdings",
     "totals": {
       "marketValue": "Market value",
       "costBasis": "Cost basis",

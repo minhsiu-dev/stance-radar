@@ -15,7 +15,6 @@ import {
   ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip,
   ChartTooltipContent, type ChartConfig,
 } from "@/components/ui/chart";
-import { masked, usePrivacy } from "@/components/privacy-provider";
 import { useHoldingCategories } from "@/lib/use-holding-categories";
 import { categoryBreakdown } from "@/lib/portfolio";
 import type { HoldingsResponse } from "@/lib/types";
@@ -128,7 +127,6 @@ function Lane({
 
 export function PortfolioCategories() {
   const t = useTranslations("Portfolio.categories");
-  const { hideAmounts } = usePrivacy();
   const { data } = useSWR<HoldingsResponse>("/api/portfolio/holdings");
   const { categories, assignments, addCategory, renameCategory, deleteCategory, assign } =
     useHoldingCategories();
@@ -213,7 +211,7 @@ export function PortfolioCategories() {
                     content={
                       <ChartTooltipContent
                         formatter={(value, name) =>
-                          `${name}: ${masked(hideAmounts, money(Number(value)))} (${
+                          `${name}: ${money(Number(value))} (${
                             total ? ((Number(value) / total) * 100).toFixed(1) : "0"
                           }%)`
                         }

@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { VideoCard } from "@/components/video-card";
+import { usePrivacy } from "@/components/privacy-provider";
 import type {
   ChannelItem,
   FeedResponse,
@@ -186,24 +187,32 @@ export function FeedList({
   onFiltersChange: (filters: FeedFilters) => void;
 }) {
   const t = useTranslations("Dashboard");
-  const { data: holdings } = useSWR<HoldingsResponse>("/api/portfolio/holdings");
+  const { hideHoldings, ready } = usePrivacy();
+  const { data: holdings } = useSWR<HoldingsResponse>(
+    ready && !hideHoldings ? "/api/portfolio/holdings" : null,
+  );
   const heldSet = useMemo(
     () => new Set((holdings?.holdings ?? []).map((h) => h.ticker)),
     [holdings],
   );
+  // When holdings are hidden, force holdingsOnly off so no holdings data drives the feed
+  const effectiveFilters: FeedFilters = useMemo(
+    () => (hideHoldings ? { ...filters, holdingsOnly: false } : filters),
+    [hideHoldings, filters],
+  );
   // Highlight set: a selected ticker → highlight only that ticker; holdingsOnly only → highlight holdings; otherwise nothing is dimmed
   const highlightSet: Set<string> | null =
-    filters.tickers.length > 0
-      ? new Set(filters.tickers)
-      : filters.holdingsOnly
+    effectiveFilters.tickers.length > 0
+      ? new Set(effectiveFilters.tickers)
+      : effectiveFilters.holdingsOnly
         ? heldSet
         : null;
   const getKey = useMemo(
     () => (pageIndex: number, previous: FeedResponse | null) => {
       if (previous && previous.items.length < PAGE_SIZE) return null;
-      return feedQuery(pageIndex + 1, filters);
+      return feedQuery(pageIndex + 1, effectiveFilters);
     },
-    [filters],
+    [effectiveFilters],
   );
   const { data, error, isLoading, setSize, isValidating } =
     useSWRInfinite<FeedResponse>(getKey);
@@ -214,10 +223,10 @@ export function FeedList({
   const last = pages[pages.length - 1];
   const reachedEnd = last ? last.items.length < PAGE_SIZE : false;
   const filtersActive =
-    filters.channelId !== "all" ||
-    filters.tickers.length > 0 ||
-    filters.stance !== "all" ||
-    filters.holdingsOnly;
+    effectiveFilters.channelId !== "all" ||
+    effectiveFilters.tickers.length > 0 ||
+    effectiveFilters.stance !== "all" ||
+    effectiveFilters.holdingsOnly;
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -261,7 +270,7 @@ export function FeedList({
 
   return (
     <div className="space-y-3">
-      <FeedFilterBar filters={filters} onChange={onFiltersChange} holdings={holdings} />
+      <FeedFilterBar filters={effectiveFilters} onChange={onFiltersChange} holdings={holdings} />
       {items.length === 0 && !isValidating && (
         <p className="py-6 text-center text-sm text-muted-foreground">
           {t("feed.noMatch")}
