@@ -14,7 +14,7 @@ vi.mock("swr", () => ({
   default: (key: string | null) => ({
     data: key && key.includes("trending")
       ? [{ ticker: "MSFT", channel_count: 4, mention_count: 9, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z",
-            stances: { buy: { count: 3, avatars: [] }, neutral: { count: 0, avatars: [] }, sell: { count: 1, avatars: [] } } }]
+            stances: { buy: { count: 3, avatars: [] }, neutral: { count: 0, avatars: [] }, sell: { count: 1, avatars: [] } }, buckets: [] }]
       : undefined,
     error: undefined,
   }),

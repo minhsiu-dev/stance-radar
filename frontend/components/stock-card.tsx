@@ -5,6 +5,7 @@ import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { ChannelAvatar } from "@/components/channel-avatar";
 import { StanceMiniBar, ZONES } from "@/components/stance-mini-bar";
+import { StanceTrendChart } from "@/components/stance-trend-chart";
 import type { TrendingStock, StanceZone } from "@/lib/types";
 
 function AvatarGroup({ zone, color }: { zone: StanceZone; color: string }) {
@@ -46,6 +47,7 @@ export function StockCard({ s }: { s: TrendingStock }) {
           <AvatarGroup key={key} zone={s.stances[key]} color={color} />
         ))}
       </div>
+      <StanceTrendChart buckets={s.buckets} />
     </Link>
   );
 }

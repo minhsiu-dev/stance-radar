@@ -20,7 +20,7 @@ function zone(n: number) {
 }
 const STOCK = {
   ticker: "NVDA", channel_count: 3, mention_count: 5, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z",
-  stances: { buy: zone(3), neutral: zone(0), sell: zone(0) },
+  stances: { buy: zone(3), neutral: zone(0), sell: zone(0) }, buckets: [],
 };
 
 function wrap(fetcher: (url: string) => Promise<unknown>) {
