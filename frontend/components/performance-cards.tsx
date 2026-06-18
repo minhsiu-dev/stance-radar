@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
+import { Lock } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -75,6 +76,7 @@ function PerfCard({
 
 export function PerformanceCards() {
   const t = useTranslations("Dashboard.performance");
+  const tHidden = useTranslations("Portfolio");
   const { hideHoldings, ready } = usePrivacy();
   const { data, error } = useSWR<PerformanceSummary>(
     "/api/portfolio/performance/summary",
@@ -98,7 +100,14 @@ export function PerformanceCards() {
     <div className="grid gap-3 sm:grid-cols-3">
       {!ready ? (
         <Skeleton className="h-28 w-full" />
-      ) : hideHoldings ? null : data.portfolio ? (
+      ) : hideHoldings ? (
+        <Card data-testid="holdings-hidden-card">
+          <CardContent className="flex h-full min-h-[7rem] flex-col items-center justify-center gap-1.5 p-4 text-center">
+            <Lock className="h-5 w-5 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">{tHidden("hiddenTitle")}</p>
+          </CardContent>
+        </Card>
+      ) : data.portfolio ? (
         <PerfCard
           title={t("portfolio")}
           headline={money(data.portfolio.total_value)}
