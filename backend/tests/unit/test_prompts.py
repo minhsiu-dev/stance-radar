@@ -2,6 +2,16 @@ from app.analysis.prompts import ANALYSIS_TOOL, SYSTEM_PROMPT, build_user_prompt
 from app.transcripts.client import TranscriptSegment
 
 
+def test_system_prompt_classifies_conditional_waiting_as_neutral():
+    """A directional view the speaker is only waiting to act on (e.g. 'buy at lower
+    levels') must be documented as neutral, so the rule isn't silently dropped."""
+    text = SYSTEM_PROMPT.lower()
+    assert "currently actionable" in text
+    assert "lower levels" in text
+    # the 'acting now + conditional add stays buy/sell' carve-out must be present too
+    assert "add" in text and "is_conditional" in SYSTEM_PROMPT
+
+
 def test_system_prompt_contains_core_rules():
     assert "US-listed stock" in SYSTEM_PROMPT
     assert "AAPL" in SYSTEM_PROMPT  # normalization example
