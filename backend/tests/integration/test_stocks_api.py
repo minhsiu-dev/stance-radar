@@ -178,12 +178,13 @@ async def test_stance_summary_shape(api):
     res = await client.get("/api/stocks/AAPL/stance-summary")
     assert res.status_code == 200
     body = res.json()["data"]
-    assert set(body.keys()) == {"buy", "neutral", "sell", "window_days", "channels"}
+    assert set(body.keys()) == {"buy", "neutral", "sell", "window_days", "channels", "buckets"}
     assert body["window_days"] == 90
     assert isinstance(body["buy"], int)
     assert isinstance(body["neutral"], int)
     assert isinstance(body["sell"], int)
     assert isinstance(body["channels"], list)
+    assert isinstance(body["buckets"], list)
 
 
 @pytest.mark.asyncio
@@ -193,7 +194,7 @@ async def test_stance_summary_unknown_ticker_returns_zero_counts(api):
     assert res.status_code == 200
     body = res.json()["data"]
     assert body == {
-        "buy": 0, "neutral": 0, "sell": 0, "window_days": 90, "channels": [],
+        "buy": 0, "neutral": 0, "sell": 0, "window_days": 90, "channels": [], "buckets": [],
     }
 
 
@@ -555,3 +556,25 @@ async def test_trending_includes_weekly_buckets(api, sessionmaker):
     # newest bucket has the BUY, an earlier bucket has the SELL
     assert abnb["buckets"][-1]["buy"] == 1
     assert sum(b["sell"] for b in abnb["buckets"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_stance_summary_includes_buckets_from_mentions(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(id="csb", title="sb", thumbnail_url="", uploads_playlist_id="UUsb"))
+        s.add(Video(id="vsb", channel_id="csb", title="t",
+                    published_at=now - timedelta(days=2), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="vsb", ticker="SHOP", start_seconds=1.0,
+                      quote="q", stance=Stance.buy, reasoning="r"))
+        await s.commit()
+
+    body = (await client.get("/api/stocks/SHOP/stance-summary?days=90")).json()["data"]
+    assert len(body["buckets"]) == 12  # 90d -> 12 weekly buckets
+    assert all(b["granularity"] == "week" for b in body["buckets"])
+    assert sum(b["buy"] for b in body["buckets"]) == 1

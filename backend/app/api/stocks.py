@@ -259,7 +259,26 @@ async def stance_summary(
         {"id": cid, "title": title, "thumbnail_url": thumb}
         for cid, title, thumb in chan_rows
     ]
-    return ok({**counts, "window_days": days, "channels": channels})
+
+    # Per-bucket stance trend: distinct channels per bucket, by most-recent Mention stance.
+    bucket_rows = (await session.execute(
+        select(Video.channel_id, Mention.stance, Video.published_at)
+        .join(Video, Mention.video_id == Video.id)
+        .where(Mention.ticker == ticker.upper())
+        .where(Video.published_at >= cutoff)
+    )).all()
+    rows_for_buckets = [(cid, st.value, pub) for cid, st, pub in bucket_rows]
+    now = datetime.now(timezone.utc)
+    if not rows_for_buckets:
+        buckets = []
+    elif days >= 3650:  # "All" -> span from the earliest matching mention
+        earliest = min(pub for _, _, pub in rows_for_buckets)
+        span = max(1, (now - earliest).days + 1)
+        buckets = bucket_channel_stances(rows_for_buckets, now, span)
+    else:
+        buckets = bucket_channel_stances(rows_for_buckets, now, days)
+
+    return ok({**counts, "window_days": days, "channels": channels, "buckets": buckets})
 
 
 @router.get("/{ticker}/stances")
