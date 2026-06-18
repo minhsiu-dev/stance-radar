@@ -2,30 +2,34 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 
-const STORAGE_KEY = "stance-radar-hide-amounts";
+const STORAGE_KEY = "stance-radar-hide-holdings";
 
 const PrivacyContext = createContext<{
-  hideAmounts: boolean;
+  hideHoldings: boolean;
+  ready: boolean;
   toggle: () => void;
-}>({ hideAmounts: false, toggle: () => {} });
+}>({ hideHoldings: false, ready: false, toggle: () => {} });
 
 export function PrivacyProvider({ children }: { children: React.ReactNode }) {
-  const [hideAmounts, setHideAmounts] = useState(false);
+  const [hideHoldings, setHideHoldings] = useState(false);
+  // `ready` is false during SSR + the first client render, so holdings data never
+  // renders before we've read the setting (no flash); true after the mount read.
+  const [ready, setReady] = useState(false);
 
-  // SSR has no localStorage → read only after mount; always show on the first render
   useEffect(() => {
-    setHideAmounts(localStorage.getItem(STORAGE_KEY) === "true");
+    setHideHoldings(localStorage.getItem(STORAGE_KEY) === "true");
+    setReady(true);
   }, []);
 
   function toggle() {
-    setHideAmounts((prev) => {
+    setHideHoldings((prev) => {
       localStorage.setItem(STORAGE_KEY, String(!prev));
       return !prev;
     });
   }
 
   return (
-    <PrivacyContext.Provider value={{ hideAmounts, toggle }}>
+    <PrivacyContext.Provider value={{ hideHoldings, ready, toggle }}>
       {children}
     </PrivacyContext.Provider>
   );
@@ -33,9 +37,4 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
 
 export function usePrivacy() {
   return useContext(PrivacyContext);
-}
-
-/** In privacy mode, replaces amounts/share counts with a masked string. */
-export function masked(hide: boolean, text: string): string {
-  return hide ? "••••" : text;
 }

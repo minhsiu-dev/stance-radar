@@ -2,7 +2,6 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
-import { PrivacyProvider } from "@/components/privacy-provider";
 import { PerformanceCards } from "@/components/performance-cards";
 
 const messages = {
@@ -16,6 +15,12 @@ const messages = {
   },
 };
 
+// Control hideHoldings per test
+const privacy = { hideHoldings: false, ready: true, toggle: vi.fn() };
+vi.mock("@/components/privacy-provider", () => ({
+  usePrivacy: () => privacy,
+}));
+
 // VOO/QQQ cards render a <Sparkline> that fetches /api/stocks/{ticker}/candles
 // through the same global SWR fetcher, so the fetcher must be key-aware: candle
 // URLs resolve to [] (the sparkline then renders its harmless empty stub).
@@ -27,15 +32,16 @@ function wrap(summary: () => Promise<unknown>) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <SWRConfig value={{ fetcher: keyAware(summary), provider: () => new Map() }}>
-        <PrivacyProvider>
-          <PerformanceCards />
-        </PrivacyProvider>
+        <PerformanceCards />
       </SWRConfig>
     </NextIntlClientProvider>,
   );
 }
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  privacy.hideHoldings = false;
+  privacy.ready = true;
+});
 
 const changes = { "1d": 0.8, "5d": 2.1, "1m": 4.3, "3m": -1.2, "6m": 9.8, ytd: 6.4, "1y": 18.2 };
 
@@ -71,8 +77,27 @@ describe("PerformanceCards", () => {
     expect(screen.getByText("VOO")).toBeInTheDocument();
   });
 
-  it("masks the portfolio headline when privacy mode is on", async () => {
-    localStorage.setItem("stance-radar-hide-amounts", "true");
+  it("omits the portfolio card when hideHoldings is true; VOO and QQQ still render", async () => {
+    privacy.hideHoldings = true;
+    wrap(vi.fn().mockResolvedValue({
+      ranges: ["1d", "5d", "1m", "3m", "6m", "ytd", "1y"],
+      portfolio: { total_value: 128430.5, changes },
+      voo: { price: 512.3, changes },
+      qqq: { price: 478.91, changes },
+    }));
+    expect(await screen.findByText("VOO")).toBeInTheDocument();
+    expect(screen.getByText("QQQ")).toBeInTheDocument();
+    // Portfolio card must be absent
+    expect(screen.queryByText("My portfolio")).toBeNull();
+    // Only 2 perf-cards (VOO + QQQ)
+    expect(screen.getAllByTestId("perf-card").length).toBe(2);
+    // Real percentage values for VOO/QQQ still visible
+    expect(screen.getAllByText("+4.3%").length).toBe(2);
+    expect(screen.getAllByText("-1.2%").length).toBe(2);
+  });
+
+  it("shows all three cards when hideHoldings is false", async () => {
+    privacy.hideHoldings = false;
     wrap(vi.fn().mockResolvedValue({
       ranges: ["1d", "5d", "1m", "3m", "6m", "ytd", "1y"],
       portfolio: { total_value: 128430.5, changes },
@@ -80,31 +105,10 @@ describe("PerformanceCards", () => {
       qqq: { price: 478.91, changes },
     }));
     expect(await screen.findByText("My portfolio")).toBeInTheDocument();
-    // The portfolio headline is masked (percentages are masked too → there may be multiple ••••)
-    expect(screen.getAllByText("••••").length).toBeGreaterThan(0);
-    expect(screen.queryByText(/128,430/)).toBeNull();
-    // VOO/QQQ are public market prices, not masked
-    expect(screen.getByText("$512.3")).toBeInTheDocument();
-    expect(screen.getByText("$478.91")).toBeInTheDocument();  // QQQ price visible
-  });
-
-  it("masks the portfolio card only — VOO/QQQ percentages stay visible when privacy is on", async () => {
-    localStorage.setItem("stance-radar-hide-amounts", "true");
-    wrap(vi.fn().mockResolvedValue({
-      ranges: ["1d", "5d", "1m", "3m", "6m", "ytd", "1y"],
-      portfolio: { total_value: 128430.5, changes },
-      voo: { price: 512.3, changes },
-      qqq: { price: 478.91, changes },
-    }));
-    await screen.findByText("My portfolio");
-    // Privacy masks only the portfolio: the portfolio headline + its 1D/per-range percentages → multiple ••••
-    expect(screen.getAllByText("••••").length).toBeGreaterThan(0);
-    expect(screen.queryByText(/128,430/)).toBeNull();
-    // But VOO/QQQ are public market figures, so both cards' 1m percentages still show real values (not masked)
-    expect(screen.getAllByText("+4.3%").length).toBe(2);
-    expect(screen.getAllByText("-1.2%").length).toBe(2);
-    for (const el of screen.getAllByText("+4.3%")) {
-      expect(el).toHaveClass("text-emerald-600");
-    }
+    expect(screen.getByText("VOO")).toBeInTheDocument();
+    expect(screen.getByText("QQQ")).toBeInTheDocument();
+    expect(screen.getAllByTestId("perf-card").length).toBe(3);
+    // Real portfolio value visible
+    expect(screen.getByText("$128,430.5")).toBeInTheDocument();
   });
 });

@@ -2,7 +2,6 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
-import { PrivacyProvider } from "@/components/privacy-provider";
 import { PortfolioHoldingsTable } from "@/components/portfolio-holdings-table";
 
 const messages = {
@@ -15,13 +14,16 @@ const messages = {
   },
 };
 
+// usePrivacy mock with new shape (component no longer calls it, but kept for safety)
+vi.mock("@/components/privacy-provider", () => ({
+  usePrivacy: () => ({ hideHoldings: false, ready: true, toggle: vi.fn() }),
+}));
+
 function wrap(fetcher: () => Promise<unknown>) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <SWRConfig value={{ fetcher, provider: () => new Map() }}>
-        <PrivacyProvider>
-          <PortfolioHoldingsTable />
-        </PrivacyProvider>
+        <PortfolioHoldingsTable />
       </SWRConfig>
     </NextIntlClientProvider>,
   );
@@ -91,8 +93,7 @@ describe("PortfolioHoldingsTable", () => {
     expect(screen.queryByText("Cash (USD)")).toBeNull();
   });
 
-  it("masks shares, cost and value but keeps price/percentages in privacy mode", async () => {
-    localStorage.setItem("stance-radar-hide-amounts", "true");
+  it("always shows real shares, cost, and value amounts (no masking)", async () => {
     wrap(vi.fn().mockResolvedValue({
       holdings: [{
         ticker: "AAPL", shares: 10, avg_cost: 100, price: 150,
@@ -105,11 +106,12 @@ describe("PortfolioHoldingsTable", () => {
       },
     }));
     expect(await screen.findByText("AAPL")).toBeInTheDocument();
-    expect(screen.getAllByText("••••").length).toBeGreaterThanOrEqual(3); // shares/avg_cost/value(+PL$)
-    expect(screen.getByText("150.00")).toBeInTheDocument();   // price not masked
-    expect(screen.getByText("100.0%")).toBeInTheDocument();   // weight not masked
-    // Verify masked values are not present
-    expect(screen.queryByText("1,500.00")).toBeNull();  // market_value must not leak
-    expect(screen.queryByText("100.00")).toBeNull();    // avg_cost must not leak
+    expect(screen.getByText("10")).toBeInTheDocument();       // shares
+    expect(screen.getByText("100.00")).toBeInTheDocument();   // avg_cost
+    expect(screen.getByText("1,500.00")).toBeInTheDocument(); // market_value
+    expect(screen.getByText("150.00")).toBeInTheDocument();   // price
+    expect(screen.getByText("100.0%")).toBeInTheDocument();   // weight
+    // Bullets must not appear (amounts are always shown)
+    expect(screen.queryByText("••••")).toBeNull();
   });
 });

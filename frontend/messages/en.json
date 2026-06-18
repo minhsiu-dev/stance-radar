@@ -39,7 +39,7 @@
   },
   "Settings": {
     "open": "Settings",
-    "hideAmounts": "Hide amounts",
+    "hideHoldings": "Hide Holdings",
     "theme": "Dark mode",
     "language": "Language"
   },

@@ -10,7 +10,6 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { masked, usePrivacy } from "@/components/privacy-provider";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type { PortfolioTransaction, TransactionSide } from "@/lib/types";
@@ -22,7 +21,6 @@ const EMPTY_FORM = {
 
 export function PortfolioTransactions() {
   const t = useTranslations("Portfolio.transactions");
-  const { hideAmounts } = usePrivacy();
   const { mutate } = useSWRConfig();
   const { data: txs, error } = useSWR<PortfolioTransaction[]>(
     "/api/portfolio/transactions",
@@ -167,7 +165,7 @@ export function PortfolioTransactions() {
                   {tx.side === "buy" ? t("buy") : t("sell")}
                 </span>
                 <span className="font-mono tabular-nums">
-                  {masked(hideAmounts, String(tx.shares))} × ${tx.price}
+                  {String(tx.shares)} × ${tx.price}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {formatDate(tx.executed_on)}

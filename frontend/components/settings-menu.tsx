@@ -27,7 +27,7 @@ export function SettingsMenu() {
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
-  const { hideAmounts, toggle } = usePrivacy();
+  const { hideHoldings, toggle } = usePrivacy();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -42,10 +42,10 @@ export function SettingsMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuCheckboxItem
-          checked={hideAmounts}
+          checked={hideHoldings}
           onCheckedChange={toggle}
         >
-          {t("hideAmounts")}
+          {t("hideHoldings")}
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={mounted && resolvedTheme === "dark"}

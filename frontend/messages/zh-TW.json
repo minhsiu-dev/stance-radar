@@ -39,7 +39,7 @@
   },
   "Settings": {
     "open": "設定",
-    "hideAmounts": "隱藏金額",
+    "hideHoldings": "隱藏持股",
     "theme": "深色模式",
     "language": "語言"
   },
