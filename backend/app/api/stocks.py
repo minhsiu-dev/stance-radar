@@ -11,6 +11,7 @@ from app.envelope import fail, ok
 from app.market.client import RANGE_TO_FETCH, MarketClient, StockNotFound
 from app.market.store import PriceStore
 from app.models import Channel, Mention, Video, VideoStance
+from app.api.stance_buckets import bucket_channel_stances
 
 logger = logging.getLogger(__name__)
 
@@ -57,15 +58,15 @@ async def stock_search(
 _TRENDING_HALF_LIFE_DAYS = 7.0
 
 
-def _trending_item(ticker: str, entry: dict) -> dict:
+def _trending_item(ticker: str, entry: dict, now: datetime, span_days: int) -> dict:
     """Build a trending payload row. Channels are bucketed into their most-recent
     stance (within the count window). `last` is the newest mention in the count
     window, falling back to the freshness window when the count window is empty."""
-    buckets: dict[str, list[dict]] = {"buy": [], "neutral": [], "sell": []}
+    buckets_meta: dict[str, list[dict]] = {"buy": [], "neutral": [], "sell": []}
     for ch in entry["channels"].values():
-        buckets[ch["stance"]].append(ch)
+        buckets_meta[ch["stance"]].append(ch)
     stances = {}
-    for key, chans in buckets.items():
+    for key, chans in buckets_meta.items():
         chans.sort(key=lambda c: c["last"], reverse=True)
         stances[key] = {
             "count": len(chans),
@@ -82,6 +83,7 @@ def _trending_item(ticker: str, entry: dict) -> dict:
         "score": round(entry["score"], 4),
         "last_mentioned_at": last.isoformat(),
         "stances": stances,
+        "buckets": bucket_channel_stances(entry["bucket_rows"], now, span_days),
     }
 
 
@@ -117,7 +119,8 @@ async def stocks_trending(
     for ticker, stance, channel_id, ch_title, ch_thumb, published_at in rows:
         entry = stats.setdefault(
             ticker,
-            {"count": 0, "score": 0.0, "last": None, "fresh_last": None, "channels": {}},
+            {"count": 0, "score": 0.0, "last": None, "fresh_last": None,
+             "channels": {}, "bucket_rows": []},
         )
         if published_at >= fresh_cutoff:
             entry["fresh_last"] = (
@@ -127,6 +130,7 @@ async def stocks_trending(
         if published_at >= count_cutoff:
             age_days = max((now - published_at).total_seconds() / 86400, 0.0)
             entry["count"] += 1
+            entry["bucket_rows"].append((channel_id, stance.value, published_at))
             entry["score"] += 0.5 ** (age_days / _TRENDING_HALF_LIFE_DAYS)
             entry["last"] = (
                 published_at if entry["last"] is None
@@ -149,7 +153,8 @@ async def stocks_trending(
             te[0],
         ),
     )
-    return ok([_trending_item(t, e) for t, e in fresh[:limit]])
+    span = count_days or days
+    return ok([_trending_item(t, e, now, span) for t, e in fresh[:limit]])
 
 
 @router.get("/{ticker}")

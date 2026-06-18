@@ -522,3 +522,36 @@ async def test_trending_fresh_but_outside_count_window(api, sessionmaker):
     assert shop["mention_count"] == 0
     assert shop["stances"]["buy"]["count"] == 0
     assert shop["last_mentioned_at"].startswith("20")  # from fresh_last, not None
+
+
+@pytest.mark.asyncio
+async def test_trending_includes_weekly_buckets(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(id="cbk", title="bk", thumbnail_url="", uploads_playlist_id="UUbk"))
+        # one BUY this week, one SELL ~3 weeks ago, same channel
+        s.add(Video(id="vbk_new", channel_id="cbk", title="t",
+                    published_at=now - timedelta(days=1), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="vbk_new", ticker="ABNB", start_seconds=1.0,
+                      quote="q", stance=Stance.buy, reasoning="r"))
+        s.add(Video(id="vbk_old", channel_id="cbk", title="t",
+                    published_at=now - timedelta(days=21), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(Mention(video_id="vbk_old", ticker="ABNB", start_seconds=1.0,
+                      quote="q", stance=Stance.sell, reasoning="r"))
+        await s.commit()
+
+    rows = (await client.get("/api/stocks/trending?limit=50&days=90&count_days=90")).json()["data"]
+    abnb = next(r for r in rows if r["ticker"] == "ABNB")
+    assert len(abnb["buckets"]) == 12  # 90d -> 12 weekly buckets
+    b0 = abnb["buckets"][0]
+    assert set(b0.keys()) == {"start", "end", "granularity", "buy", "neutral", "sell"}
+    assert all(b["granularity"] == "week" for b in abnb["buckets"])
+    # newest bucket has the BUY, an earlier bucket has the SELL
+    assert abnb["buckets"][-1]["buy"] == 1
+    assert sum(b["sell"] for b in abnb["buckets"]) == 1
