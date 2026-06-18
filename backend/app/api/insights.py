@@ -8,7 +8,14 @@ from app.api.channels import channel_ticker_stance_mix
 from app.api.deps import get_price_store, get_session
 from app.envelope import fail, ok
 from app.insights.flips import StancePoint, detect_flips
-from app.insights.scorecard import build_channel_performance, build_scorecard, build_scorecard_page
+from app.insights.channel_perf_sql import score_channel_calls_lean
+from app.insights.scorecard import (
+    SCORECARD_BENCHMARK,
+    _SUMMARY_HORIZONS,
+    build_scorecard,
+    build_scorecard_page,
+    summarize_channel_calls,
+)
 from app.insights.ticker_perf import channel_ticker_performance
 from app.market.store import PriceStore
 from app.models import Channel, Stance, Video, VideoStance
@@ -210,16 +217,18 @@ async def channel_scorecard(
 async def channel_performance(
     channel_id: str,
     session: AsyncSession = Depends(get_session),
-    store: PriceStore = Depends(get_price_store),
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
         return fail(f"Channel {channel_id} not found", status_code=404)
     cutoff = datetime.now(timezone.utc) - timedelta(days=_PERFORMANCE_WINDOW_DAYS)
-    raw_calls = await _channel_calls(session, channel_id, cutoff=cutoff)
-    return ok(await build_channel_performance(
-        store, raw_calls, window_days=_PERFORMANCE_WINDOW_DAYS,
-    ))
+    calls = await score_channel_calls_lean(session, channel_id, cutoff)
+    return ok({
+        "benchmark": SCORECARD_BENCHMARK,
+        "window_days": _PERFORMANCE_WINDOW_DAYS,
+        "horizons": list(_SUMMARY_HORIZONS),
+        **summarize_channel_calls(calls),
+    })
 
 
 @router.get("/channels/{channel_id}/tickers")

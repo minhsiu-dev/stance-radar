@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
@@ -7,6 +8,11 @@ from app.insights.ticker_perf import channel_ticker_performance
 from app.models import Channel, PriceBar, Stance, Video, VideoStance, VideoStatus
 
 pytestmark = pytest.mark.asyncio
+
+
+def _rhu(x: float, ndigits: int = 2) -> float:
+    """Round half-away-from-zero (matches Postgres round(numeric), unlike Python's banker's round)."""
+    return float(Decimal(str(x)).quantize(Decimal(1).scaleb(-ndigits), rounding=ROUND_HALF_UP))
 
 _NOW = datetime.now(timezone.utc)
 _TODAY = _NOW.date()
@@ -104,9 +110,9 @@ def _oracle(mode: str = "matured") -> dict:
         if voo_e is None or voo_e[1] <= 0:
             continue
         voo_l = _close_on_or_after(voo, te)
-        stock = round((exit_px / entry[1] - 1) * 100, 2)
-        bench = round((voo_l / voo_e[1] - 1) * 100, 2)
-        alpha = round(stock - bench, 2)
+        stock = _rhu((exit_px / entry[1] - 1) * 100, 2)
+        bench = _rhu((voo_l / voo_e[1] - 1) * 100, 2)
+        alpha = _rhu(stock - bench, 2)
         adj_a = alpha if stance == Stance.buy else -alpha
         adj_r = stock if stance == Stance.buy else -stock
         slot["alphas"][sl].append(adj_a)
@@ -124,9 +130,9 @@ def _expected_slice(slot, which: str) -> dict:
     n = len(alphas)
     return {
         "n": n,
-        "avg_alpha": round(sum(alphas) / n, 2) if n else None,
-        "avg_return": round(sum(rets) / n, 2) if n else None,
-        "win_rate": round(100.0 * sum(1 for a in alphas if a > 0) / n, 1) if n else None,
+        "avg_alpha": _rhu(sum(alphas) / n, 2) if n else None,
+        "avg_return": _rhu(sum(rets) / n, 2) if n else None,
+        "win_rate": _rhu(100.0 * sum(1 for a in alphas if a > 0) / n, 1) if n else None,
         "pending": pending,
     }
 

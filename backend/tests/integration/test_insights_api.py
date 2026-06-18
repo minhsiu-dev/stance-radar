@@ -206,6 +206,8 @@ async def test_scorecard_invalid_stance_ignored(api, sessionmaker):
 async def test_channel_performance_shape_and_window(api, sessionmaker):
     _, client = api
     await seed_stances(sessionmaker)  # ch1: AAPL buy(40d)+sell(2d), NVDA buy(30d)+buy(3d)
+    # lean /performance reads price_bars; /tickers' ensure_daily populates it via the fake market
+    await client.get("/api/channels/ch1/tickers")
     resp = await client.get("/api/channels/ch1/performance")
     assert resp.status_code == 200
     data = resp.json()["data"]
