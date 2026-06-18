@@ -361,6 +361,8 @@
   },
   "Portfolio": {
     "title": "Portfolio",
+    "hiddenTitle": "Holdings are hidden",
+    "showHoldings": "Show holdings",
     "totals": {
       "marketValue": "Market value",
       "costBasis": "Cost basis",

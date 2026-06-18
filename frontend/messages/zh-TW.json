@@ -361,6 +361,8 @@
   },
   "Portfolio": {
     "title": "持股",
+    "hiddenTitle": "持股已隱藏",
+    "showHoldings": "顯示持股",
     "totals": {
       "marketValue": "總市值",
       "costBasis": "總成本",
