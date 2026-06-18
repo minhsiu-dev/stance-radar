@@ -55,6 +55,24 @@ def normalize_segments(raw: Iterable[dict]) -> tuple[TranscriptSegment, ...]:
     return tuple(segments)
 
 
+def transcript_to_json(transcript: Transcript) -> dict:
+    """Serialize a Transcript to a JSON-safe dict (segments keep start_seconds + text)."""
+    return {
+        "language": transcript.language,
+        "segments": [
+            {"start": s.start_seconds, "text": s.text} for s in transcript.segments
+        ],
+    }
+
+
+def transcript_from_json(data: dict) -> Transcript:
+    """Inverse of transcript_to_json; reuses normalize_segments for the {start,text} shape."""
+    return Transcript(
+        language=str(data.get("language") or ""),
+        segments=normalize_segments(data.get("segments") or []),
+    )
+
+
 def _is_transcript_blocked(exc: BaseException) -> bool:
     from youtube_transcript_api import IpBlocked, RequestBlocked
     return isinstance(exc, (IpBlocked, RequestBlocked))

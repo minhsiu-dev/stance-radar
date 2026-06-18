@@ -15,7 +15,12 @@ from app.models import (
     Channel, JobKind, Mention, Stance, Video, VideoStance, VideoStatus, utcnow,
 )
 from app.pipeline import jobs
-from app.transcripts.client import TranscriptClient, TranscriptNotAvailable
+from app.transcripts.client import (
+    TranscriptClient,
+    TranscriptNotAvailable,
+    transcript_from_json,
+    transcript_to_json,
+)
 from app.youtube.client import QuotaExceededError, YouTubeClient
 
 logger = logging.getLogger(__name__)
@@ -265,13 +270,18 @@ class RefreshRunner:
         deps = self._deps
         async with deps.sessionmaker() as session:
             video = await session.get(Video, video_id)
-            try:
-                transcript = await deps.transcripts.fetch(video_id)
-            except TranscriptNotAvailable:
-                video.status = VideoStatus.no_transcript
-                video.error_message = None
-                await session.commit()
-                return
+            if video.transcript:
+                # Re-analysis runs offline from the stored transcript — no YouTube fetch.
+                transcript = transcript_from_json(video.transcript)
+            else:
+                try:
+                    transcript = await deps.transcripts.fetch(video_id)
+                except TranscriptNotAvailable:
+                    video.status = VideoStatus.no_transcript
+                    video.error_message = None
+                    await session.commit()
+                    return
+                video.transcript = transcript_to_json(transcript)
             try:
                 result = await deps.llm.analyze(
                     video_id=video_id, video_title=video.title, transcript=transcript
