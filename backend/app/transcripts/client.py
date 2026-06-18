@@ -103,7 +103,11 @@ class YouTubeTranscriptApiClient:
         return YouTubeTranscriptApi()
 
     def _fetch_sync(self, video_id: str) -> Transcript:
-        from youtube_transcript_api import CouldNotRetrieveTranscript
+        from youtube_transcript_api import (
+            CouldNotRetrieveTranscript,
+            IpBlocked,
+            RequestBlocked,
+        )
 
         try:
             transcript_list = self._build_api().list(video_id)
@@ -111,6 +115,12 @@ class YouTubeTranscriptApiClient:
             if best is None:
                 raise TranscriptNotAvailable(video_id)
             fetched = best.fetch()
+        except (IpBlocked, RequestBlocked):
+            # Transient: a YouTube rate-limit / IP block. Propagate it (these are subclasses
+            # of CouldNotRetrieveTranscript, so the order matters) so with_rotation can rotate
+            # the proxy, and so callers (the analyze job / reanalyze_stale) treat it as
+            # retryable instead of permanently marking the video no_transcript.
+            raise
         except CouldNotRetrieveTranscript as exc:
             # Captions disabled/absent/video unavailable -> permanent, mark no_transcript
             raise TranscriptNotAvailable(video_id) from exc

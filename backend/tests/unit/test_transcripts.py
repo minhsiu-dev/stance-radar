@@ -116,3 +116,57 @@ async def test_transcript_no_proxy_does_not_rotate(monkeypatch):
     with pytest.raises(IpBlocked):
         await client.fetch("vid")
     assert rot.rotations == 0
+
+
+async def test_fetch_propagates_ip_block_instead_of_converting(monkeypatch):
+    """A YouTube IP block must PROPAGATE (so with_rotation can rotate and callers can
+    retry it), NOT be swallowed into TranscriptNotAvailable (which marks it permanently
+    no_transcript). Exercises the real _fetch_sync, not a monkeypatched one."""
+    from youtube_transcript_api import RequestBlocked
+
+    client = YouTubeTranscriptApiClient(proxy_url="")  # no proxy -> no rotation; block escapes
+
+    class _BlockingApi:
+        def list(self, video_id):
+            raise RequestBlocked(video_id)
+
+    monkeypatch.setattr(client, "_build_api", lambda: _BlockingApi())
+    with pytest.raises(RequestBlocked):
+        await client.fetch("vid")
+
+
+async def test_fetch_converts_disabled_captions_to_not_available(monkeypatch):
+    """A genuine permanent failure (captions disabled — a non-block
+    CouldNotRetrieveTranscript) is still converted to TranscriptNotAvailable so the
+    pipeline marks the video no_transcript."""
+    from youtube_transcript_api import TranscriptsDisabled
+
+    client = YouTubeTranscriptApiClient(proxy_url="")
+
+    class _DisabledApi:
+        def list(self, video_id):
+            raise TranscriptsDisabled(video_id)
+
+    monkeypatch.setattr(client, "_build_api", lambda: _DisabledApi())
+    with pytest.raises(TranscriptNotAvailable):
+        await client.fetch("vid")
+
+
+async def test_real_fetch_sync_block_drives_proxy_rotation(monkeypatch):
+    """End-to-end: a block from the REAL _fetch_sync now drives with_rotation (it was
+    dead before — the block used to be swallowed into TranscriptNotAvailable before
+    with_rotation could detect it). With a proxy + an always-blocking api, it rotates
+    max_rotations times then re-raises the block."""
+    from youtube_transcript_api import RequestBlocked
+
+    rot = _CountingRotator()
+    client = YouTubeTranscriptApiClient(proxy_url="http://proxy:8888", rotator=rot)
+
+    class _BlockingApi:
+        def list(self, video_id):
+            raise RequestBlocked(video_id)
+
+    monkeypatch.setattr(client, "_build_api", lambda: _BlockingApi())
+    with pytest.raises(RequestBlocked):
+        await client.fetch("vid")
+    assert rot.rotations == 3  # with_rotation's default max_rotations, then re-raise
