@@ -41,3 +41,4 @@ def test_defaults():
     assert settings.use_fake_adapters is False
     assert settings.fetch_proxy_url == ""
     assert settings.gluetun_control_url == ""
+    assert settings.claude_timeout_seconds == 180.0

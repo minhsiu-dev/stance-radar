@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     claude_model: str = "claude-haiku-4-5"
     backfill_limit: int = 30
     analysis_concurrency: int = 4
+    # Max seconds to wait for a single Claude CLI analysis call before killing it and retrying
+    claude_timeout_seconds: float = 180.0
     # Skip imported videos this many seconds or shorter (YouTube Shorts / too-short
     # clips have no analyzable content); 0 disables the filter
     shorts_max_seconds: int = 240

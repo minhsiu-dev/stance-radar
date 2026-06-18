@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import json
 import logging
 from collections import Counter
@@ -158,14 +159,24 @@ def _schema_hint() -> str:
     )
 
 
-async def _default_runner(args: list[str], stdin_data: bytes) -> tuple[int, bytes, bytes]:
+async def _default_runner(
+    args: list[str], stdin_data: bytes, *, timeout: float | None = None
+) -> tuple[int, bytes, bytes]:
     proc = await asyncio.create_subprocess_exec(
         *args,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate(stdin_data)
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(stdin_data), timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        try:
+            await proc.wait()  # reap the killed child
+        except ProcessLookupError:
+            pass
+        raise AnalysisError(f"claude timed out after {timeout}s")
     return proc.returncode, stdout, stderr
 
 
@@ -181,6 +192,7 @@ class ClaudeCLIClient:
         binary: str = "claude",
         model: str,
         max_retries: int = 3,
+        timeout_seconds: float | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         runner: SubprocessRunner | None = None,
     ) -> None:
@@ -188,7 +200,7 @@ class ClaudeCLIClient:
         self._model = model
         self._max_retries = max_retries
         self._sleep = sleep
-        self._run = runner or _default_runner
+        self._run = runner or functools.partial(_default_runner, timeout=timeout_seconds)
 
     def _args(self) -> list[str]:
         return [

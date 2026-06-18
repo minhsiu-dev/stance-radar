@@ -6,6 +6,7 @@ from app.analysis.llm import (
     AnalysisError,
     ClaudeCLIClient,
     FakeLLMClient,
+    _default_runner,
     parse_analysis_payload,
     parse_cli_stdout,
 )
@@ -164,6 +165,22 @@ async def test_cli_client_sends_full_prompt_to_stdin():
     assert "[12.5] 蘋果很強" in decoded                   # transcript line
     assert "record_analysis" in decoded                   # system prompt fragment
     assert "JSON" in decoded.upper()                      # JSON-only instruction
+
+
+# ---- _default_runner (timeout behavior) ----
+
+
+async def test_default_runner_times_out_and_kills_process():
+    # a real child that would run far longer than the timeout
+    with pytest.raises(AnalysisError):
+        await _default_runner(["sleep", "5"], b"", timeout=0.2)
+
+
+async def test_default_runner_no_timeout_runs_to_completion():
+    # cat echoes stdin back; timeout=None must behave like before (no timeout)
+    code, out, err = await _default_runner(["cat"], b"hello", timeout=None)
+    assert code == 0
+    assert out == b"hello"
 
 
 # ---- FakeLLMClient (seeded results) ----

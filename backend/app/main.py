@@ -32,7 +32,11 @@ def build_adapters(settings: Settings) -> dict:
         "transcripts": YouTubeTranscriptApiClient(
             proxy_url=settings.fetch_proxy_url, rotator=rotator
         ),
-        "llm": ClaudeCLIClient(binary=settings.claude_bin, model=settings.claude_model),
+        "llm": ClaudeCLIClient(
+            binary=settings.claude_bin,
+            model=settings.claude_model,
+            timeout_seconds=settings.claude_timeout_seconds,
+        ),
         "market": YFinanceMarketClient(
             proxy_url=settings.fetch_proxy_url, rotator=rotator
         ),
