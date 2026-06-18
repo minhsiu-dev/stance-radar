@@ -85,17 +85,17 @@ describe("StanceFlips", () => {
     expect(screen.getByRole("button", { name: "1W" })).toBeInTheDocument();
   });
 
-  it("refetches with days=7 when the 1W window pill is clicked", async () => {
+  it("defaults to the 1W window and refetches when another pill is clicked", async () => {
     const { fetcher } = renderFlips([flip]);
     await screen.findByText("Alpha");
-    // default window is 30d
+    // default window is now 7d (1W)
     expect(
-      fetcher.mock.calls.some(([u]: string[]) => u.includes("days=30")),
+      fetcher.mock.calls.some(([u]: string[]) => u.includes("days=7")),
     ).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "1W" }));
+    fireEvent.click(screen.getByRole("button", { name: "1M" }));
     await waitFor(() =>
       expect(
-        fetcher.mock.calls.some(([u]: string[]) => u.includes("days=7")),
+        fetcher.mock.calls.some(([u]: string[]) => u.includes("days=30")),
       ).toBe(true),
     );
   });
