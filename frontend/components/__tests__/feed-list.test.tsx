@@ -5,6 +5,12 @@ import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { FeedList, NO_FILTERS, type FeedFilters } from "@/components/feed-list";
 
+// Privacy mock — mutate `privacy` object per-test to control hideHoldings/ready
+const privacy = { hideHoldings: false, ready: true, toggle: vi.fn() };
+vi.mock("@/components/privacy-provider", () => ({
+  usePrivacy: () => privacy,
+}));
+
 const messages = {
   Dashboard: {
     feed: {
@@ -179,5 +185,54 @@ describe("FeedList holdings-only chip", () => {
     });
 
     expect(screen.queryByRole("button", { name: "Holdings only" })).toBeNull();
+  });
+});
+
+describe("FeedList holdings privacy", () => {
+  it("does NOT fetch holdings when Hide Holdings is on", async () => {
+    privacy.hideHoldings = true;
+    privacy.ready = true;
+    const fetcher = vi.fn().mockImplementation((key: string) => {
+      if (key.startsWith("/api/channels")) return Promise.resolve([]);
+      if (key.startsWith("/api/stocks")) return Promise.resolve([]);
+      if (key.startsWith("/api/portfolio/holdings"))
+        return Promise.resolve({ holdings: [{ ticker: "AAA" }], totals: HOLDINGS_TOTALS });
+      return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
+    });
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
+          <ControlledFeedList />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
+    // Wait for the feed to render
+    await screen.findByText("Video 0");
+    // Holdings must not have been fetched and the filter button must be absent
+    expect(fetcher).not.toHaveBeenCalledWith("/api/portfolio/holdings");
+    expect(screen.queryByTestId("feed-filter-holdings")).not.toBeInTheDocument();
+  });
+
+  it("fetches holdings and shows the filter when not hidden", async () => {
+    privacy.hideHoldings = false;
+    privacy.ready = true;
+    const fetcher = vi.fn().mockImplementation((key: string) => {
+      if (key.startsWith("/api/channels")) return Promise.resolve([]);
+      if (key.startsWith("/api/stocks")) return Promise.resolve([]);
+      if (key.startsWith("/api/portfolio/holdings"))
+        return Promise.resolve({ holdings: [{ ticker: "AAA" }], totals: HOLDINGS_TOTALS });
+      return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
+    });
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
+          <ControlledFeedList />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
+    await screen.findByText("Video 0");
+    await waitFor(() => {
+      expect(fetcher).toHaveBeenCalledWith("/api/portfolio/holdings");
+    });
   });
 });
