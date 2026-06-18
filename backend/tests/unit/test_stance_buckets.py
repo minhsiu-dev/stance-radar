@@ -5,10 +5,6 @@ from app.api.stance_buckets import bucket_channel_stances
 NOW = datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc)
 
 
-def _counts(buckets):
-    return [(b["buy"], b["neutral"], b["sell"]) for b in buckets]
-
-
 def test_bucket_counts_match_window_granularity():
     # span -> (expected number of buckets, expected granularity)
     cases = {7: (7, "day"), 30: (4, "week"), 90: (12, "week"),
@@ -17,6 +13,13 @@ def test_bucket_counts_match_window_granularity():
         out = bucket_channel_stances([], NOW, span)
         assert len(out) == n, f"span={span}"
         assert all(b["granularity"] == gran for b in out), f"span={span}"
+
+
+def test_quarter_granularity_for_multi_year_span():
+    # >730d effective span -> quarterly buckets (the All-time path can reach this)
+    out = bucket_channel_stances([], NOW, 800)
+    assert len(out) == 800 // 91  # rolling 91-day buckets
+    assert all(b["granularity"] == "quarter" for b in out)
 
 
 def test_buckets_are_oldest_to_newest_and_contiguous():

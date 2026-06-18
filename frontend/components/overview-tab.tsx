@@ -89,7 +89,7 @@ export function OverviewTab({ ticker }: { ticker: string }) {
             </div>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col gap-4">
-            {summary.buckets.reduce((n, b) => n + b.buy + b.neutral + b.sell, 0) > 0 ? (
+            {(summary.buckets ?? []).reduce((n, b) => n + b.buy + b.neutral + b.sell, 0) > 0 ? (
               <StanceTrendChart buckets={summary.buckets} />
             ) : (
               <p className="text-sm text-muted-foreground">{t("stanceTrendEmpty")}</p>
