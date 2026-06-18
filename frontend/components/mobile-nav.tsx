@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl"
 import { useState } from "react"
 
 import { Link } from "@/i18n/navigation"
+import { usePrivacy } from "@/components/privacy-provider"
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
@@ -25,6 +26,8 @@ const LINKS = [
 export function MobileNav() {
   const t = useTranslations("Nav")
   const [open, setOpen] = useState(false)
+  const { hideHoldings } = usePrivacy()
+  const links = LINKS.filter((l) => l.href !== "/portfolio" || !hideHoldings)
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -38,7 +41,7 @@ export function MobileNav() {
       <SheetContent side="left" className="gap-2">
         <SheetTitle className="px-1 py-2">{t("brand")}</SheetTitle>
         <nav className="flex flex-col">
-          {LINKS.map(({ href, key }) => (
+          {links.map(({ href, key }) => (
             <Link
               key={href}
               href={href}
