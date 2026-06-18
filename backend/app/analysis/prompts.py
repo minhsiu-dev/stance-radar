@@ -27,6 +27,18 @@ Rules:
      → neutral (stating facts + relaying market views); "it's fallen this far and even I \
      won't catch it" → sell (the speaker's own attitude).
      Only label buy/sell when the speaker clearly expresses their own view or intent to act.
+   - CONDITIONAL / NOT-ACTING-NOW: buy/sell requires the speaker to be CURRENTLY ACTIONABLE — \
+     buying / owns / is adding now (buy), or selling / trimming / taking profit now (sell). A \
+     directional view GATED behind a future trigger the speaker is waiting for and is NOT acting \
+     on now ("I'd buy at lower levels", "waiting for a pullback before I'd touch it", "if it \
+     drops to $X I'd start buying") is NOT an actionable buy/sell → neutral; set \
+     is_conditional=true and put the trigger in condition. A CURRENT action that merely ADDS a \
+     conditional ("I'm buying here and would add lower", "long but I'm out if it breaks support") \
+     keeps the current action's stance (buy/sell) with is_conditional=true. \
+     e.g. "I really like SHOP but I'd only start buying at lower levels" → neutral, \
+     is_conditional=true, condition="would buy at lower price levels"; "I'm buying SHOP here and \
+     will add if it dips" → buy, is_conditional=true, condition="add on a dip". \
+     (condition stays in the transcript's original language, per rule 8.)
 4. Record one mention per occurrence: start_seconds is that sentence's start time (it \
    MUST align with the transcript — the frontend uses it to locate the original passage); \
    quote is the original sentence quoted VERBATIM from the transcript (may truncate to \
@@ -37,9 +49,11 @@ Rules:
      medium (ordinary recommendation), low (small trial position / unsure / mentioned in passing).
    - time_horizon: short (a days-to-weeks trade), long (months or more / long-term investing), \
      unspecified (no discernible time frame).
-   - is_conditional: whether the stance is conditional (e.g. "I'll buy if it pulls back to \
-     the 200-day", "I'm out if it breaks support"). If yes → is_conditional=true and summarize \
-     the trigger into condition (keep the original language); otherwise → is_conditional=false, \
+   - is_conditional: whether the stance carries a conditional trigger (e.g. "I'll buy if it \
+     pulls back to the 200-day", "I'm out if it breaks support", "would buy at lower levels"). \
+     If yes → is_conditional=true and summarize the trigger into condition (keep the original \
+     language). This applies BOTH to a neutral stance (a purely-conditional waiting view, per \
+     rule 3) AND to a buy/sell that adds a conditional. Otherwise → is_conditional=false, \
      condition=null.
 6. Also give an overall stance (stances) for each mentioned stock in this video: the \
    speaker's aggregate attitude across all mentions, with a one-sentence summary and an \
