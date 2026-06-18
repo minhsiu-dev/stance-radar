@@ -22,7 +22,7 @@ import { AnalystCard } from "@/components/analyst-card";
 import { ChannelAvatar } from "@/components/channel-avatar";
 import { FinancialsChart } from "@/components/financials-chart";
 import { GrowthTable, MarginsChart } from "@/components/growth-margins";
-import { cn } from "@/lib/utils";
+import { StanceTrendChart } from "@/components/stance-trend-chart";
 
 const WINDOW_OPTIONS = [30, 90, 180, 365] as const;
 const ALL_WINDOW = 3650;
@@ -31,7 +31,6 @@ const MAX_AVATARS = 10;
 export function OverviewTab({ ticker }: { ticker: string }) {
   const t = useTranslations("Stock.overview");
   const tErr = useTranslations("Errors");
-  const tStance = useTranslations("Stock.stance");
   const [windowDays, setWindowDays] = useState(90);
 
   const { data: financials, error: financialsError } = useSWR<FinancialReport[]>(
@@ -63,7 +62,6 @@ export function OverviewTab({ ticker }: { ticker: string }) {
   if (!financials || !summary || !stock)
     return <Skeleton className="h-48 w-full" />;
 
-  const maxStance = Math.max(summary.buy, summary.neutral, summary.sell, 1);
   const channels = summary.channels ?? [];
   const shownAvatars = channels.slice(0, MAX_AVATARS);
   const extraAvatars = channels.length - shownAvatars.length;
@@ -91,11 +89,11 @@ export function OverviewTab({ ticker }: { ticker: string }) {
             </div>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col gap-4">
-            <div className="space-y-2">
-              <Bar label={tStance("buy")} count={summary.buy} max={maxStance} color="bg-sky-500" />
-              <Bar label={tStance("neutral")} count={summary.neutral} max={maxStance} color="bg-zinc-400" />
-              <Bar label={tStance("sell")} count={summary.sell} max={maxStance} color="bg-orange-500" />
-            </div>
+            {summary.buckets.reduce((n, b) => n + b.buy + b.neutral + b.sell, 0) > 0 ? (
+              <StanceTrendChart buckets={summary.buckets} />
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("stanceTrendEmpty")}</p>
+            )}
             {shownAvatars.length > 0 && (
               <div className="mt-auto flex items-center gap-2 border-t pt-3">
                 <span className="text-xs text-muted-foreground">
@@ -133,25 +131,3 @@ export function OverviewTab({ ticker }: { ticker: string }) {
   );
 }
 
-function Bar({
-  label,
-  count,
-  max,
-  color,
-}: {
-  label: string;
-  count: number;
-  max: number;
-  color: string;
-}) {
-  const pct = (count / max) * 100;
-  return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="w-16 text-muted-foreground">{label}</span>
-      <div className="flex-1 h-2 rounded bg-muted overflow-hidden">
-        <div className={cn("h-full", color)} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="w-8 text-right font-mono">{count}</span>
-    </div>
-  );
-}

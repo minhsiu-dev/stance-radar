@@ -2,9 +2,22 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+const overviewMessages: Record<string, string> = {
+  financialsTitle: "Financials",
+  ytStance: "YouTube stance · channels (last {days}d)",
+  ytStanceAll: "YouTube stance · channels (all time)",
+  windowAll: "All",
+  channelsLabel: "{count} channels",
+  stanceTrendEmpty: "No discussion yet",
+};
+
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string, vars?: Record<string, unknown>) =>
-    vars ? `${key}:${JSON.stringify(vars)}` : key,
+  useTranslations: (ns: string) => (key: string, vars?: Record<string, unknown>) => {
+    if (ns === "Stock.overview" && key in overviewMessages) {
+      return overviewMessages[key];
+    }
+    return vars ? `${key}:${JSON.stringify(vars)}` : key;
+  },
 }));
 
 const swrResponses: Record<string, unknown> = {};
@@ -14,6 +27,10 @@ vi.mock("swr", () => ({
 
 vi.mock("@/components/financials-chart", () => ({
   FinancialsChart: () => <div data-testid="financials-chart" />,
+}));
+
+vi.mock("@/components/stance-trend-chart", () => ({
+  StanceTrendChart: () => <div data-slot="chart" data-testid="stance-trend-chart" />,
 }));
 
 import { OverviewTab } from "@/components/overview-tab";
@@ -36,6 +53,9 @@ function seedBase(windowDays = 90) {
   swrResponses["/api/stocks/AAPL/financials?period=quarterly"] = baseFinancials;
   swrResponses[`/api/stocks/AAPL/stance-summary?days=${windowDays}`] = {
     buy: 3, neutral: 1, sell: 0, window_days: windowDays,
+    buckets: [
+      { start: "2026-06-01T00:00:00+00:00", end: "2026-06-08T00:00:00+00:00", granularity: "week", buy: 2, neutral: 0, sell: 1 },
+    ],
   };
   swrResponses["/api/stocks/AAPL"] = baseStock;
   swrResponses["/api/stocks/AAPL/analyst"] = {
@@ -53,11 +73,18 @@ describe("OverviewTab", () => {
     expect(container.querySelector(".text-emerald-600")).toBeTruthy();
   });
 
+  it("renders the stance trend chart when buckets have data", () => {
+    seedBase();
+    const { container } = render(<OverviewTab ticker="AAPL" />);
+    expect(container.querySelector('[data-slot="chart"]')).toBeInTheDocument();
+  });
+
   it("clicking window button 180 fetches stance-summary with days=180", async () => {
     seedBase(90);
     // Seed 180-day response too so component can render after click
     swrResponses["/api/stocks/AAPL/stance-summary?days=180"] = {
       buy: 5, neutral: 2, sell: 1, window_days: 180,
+      buckets: [],
     };
 
     render(<OverviewTab ticker="AAPL" />);
@@ -75,12 +102,13 @@ describe("OverviewTab", () => {
     seedBase(90);
     swrResponses["/api/stocks/AAPL/stance-summary?days=3650"] = {
       buy: 10, neutral: 3, sell: 2, window_days: 3650,
+      buckets: [],
     };
 
     render(<OverviewTab ticker="AAPL" />);
 
-    // Click the "All" window button — the button text is "windowAll" per i18n mock
-    const btnAll = screen.getByRole("button", { name: "windowAll" });
+    // Click the "All" window button — the button text is "All" per i18n mock
+    const btnAll = screen.getByRole("button", { name: "All" });
     await userEvent.click(btnAll);
 
     expect(swrResponses["/api/stocks/AAPL/stance-summary?days=3650"]).toBeDefined();

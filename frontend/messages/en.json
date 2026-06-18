@@ -261,7 +261,8 @@
       "ytStance": "YouTube stance · channels (last {days}d)",
       "ytStanceAll": "YouTube stance · channels (all time)",
       "windowAll": "All",
-      "channelsLabel": "{count} channels"
+      "channelsLabel": "{count} channels",
+      "stanceTrendEmpty": "No discussion yet"
     },
     "analyst": {
       "title": "Analyst targets",

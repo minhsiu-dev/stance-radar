@@ -261,7 +261,8 @@
       "ytStance": "YouTube 立場 · 頻道數 (近 {days} 天)",
       "ytStanceAll": "YouTube 立場 · 頻道數 (全部)",
       "windowAll": "全部",
-      "channelsLabel": "頻道 {count}"
+      "channelsLabel": "頻道 {count}",
+      "stanceTrendEmpty": "尚無討論"
     },
     "analyst": {
       "title": "分析師目標價",
