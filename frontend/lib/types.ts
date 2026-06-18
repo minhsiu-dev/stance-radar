@@ -169,6 +169,15 @@ export interface StanceZone {
   avatars: { title: string; thumbnail_url: string }[];
 }
 
+export interface StanceBucket {
+  start: string;
+  end: string;
+  granularity: "day" | "week" | "month" | "quarter";
+  buy: number;
+  neutral: number;
+  sell: number;
+}
+
 export interface TrendingStock {
   ticker: string;
   channel_count: number;
@@ -180,6 +189,7 @@ export interface TrendingStock {
     neutral: StanceZone;
     sell: StanceZone;
   };
+  buckets: StanceBucket[];
 }
 
 export interface SearchHit {
@@ -203,6 +213,7 @@ export interface StanceSummary {
   sell: number;
   window_days: number;
   channels: { id: string; title: string; thumbnail_url: string | null }[];
+  buckets: StanceBucket[];
 }
 
 export type FinancialsPeriod = "quarterly" | "annual";
