@@ -23,6 +23,7 @@ import { ChannelAvatar } from "@/components/channel-avatar";
 import { FinancialsChart } from "@/components/financials-chart";
 import { GrowthTable, MarginsChart } from "@/components/growth-margins";
 import { StanceTrendChart } from "@/components/stance-trend-chart";
+import { StanceMiniBar } from "@/components/stance-mini-bar";
 
 const WINDOW_OPTIONS = [30, 90, 180, 365] as const;
 const ALL_WINDOW = 3650;
@@ -66,6 +67,18 @@ export function OverviewTab({ ticker }: { ticker: string }) {
   const shownAvatars = channels.slice(0, MAX_AVATARS);
   const extraAvatars = channels.length - shownAvatars.length;
 
+  // Aggregate proportional bar (the "summary over this interval") + the time-resolved
+  // trend chart, mirroring how the Trending cards present a stock.
+  const buckets = summary.buckets ?? [];
+  const aggTotal = summary.buy + summary.neutral + summary.sell;
+  const bucketTotal = buckets.reduce((n, b) => n + b.buy + b.neutral + b.sell, 0);
+  const hasStance = aggTotal + bucketTotal > 0;
+  const aggStances = {
+    buy: { count: summary.buy, avatars: [] },
+    neutral: { count: summary.neutral, avatars: [] },
+    sell: { count: summary.sell, avatars: [] },
+  };
+
   const stanceTitleKey = windowDays === ALL_WINDOW ? "ytStanceAll" : "ytStance";
   const stanceTitleArgs = windowDays === ALL_WINDOW ? undefined : { days: windowDays };
 
@@ -89,8 +102,11 @@ export function OverviewTab({ ticker }: { ticker: string }) {
             </div>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col gap-4">
-            {(summary.buckets ?? []).reduce((n, b) => n + b.buy + b.neutral + b.sell, 0) > 0 ? (
-              <StanceTrendChart buckets={summary.buckets} />
+            {hasStance ? (
+              <div className="space-y-3">
+                <StanceMiniBar stances={aggStances} />
+                <StanceTrendChart buckets={buckets} />
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground">{t("stanceTrendEmpty")}</p>
             )}
