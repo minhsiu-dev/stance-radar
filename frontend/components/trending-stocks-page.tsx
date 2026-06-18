@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import useSWR from "swr";
+import { useCallback, useEffect, useRef, useState } from "react";
+import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
 import {
   Select,
@@ -20,12 +20,50 @@ const WINDOWS = [
   { days: 90, key: "quarter" },
 ] as const;
 
+const PAGE_SIZE = 20;
+
 export function TrendingStocksPage() {
   const t = useTranslations("Trending");
   const [fresh, setFresh] = useState(30);
   const [count, setCount] = useState(90);
-  const { data, isLoading } = useSWR<TrendingStock[]>(
-    `/api/stocks/trending?limit=100&days=${fresh}&count_days=${count}`,
+
+  // Infinite scroll: fetch the ranked list PAGE_SIZE at a time via offset pagination.
+  // A short page (< PAGE_SIZE) means we've reached the end, so getKey returns null.
+  const getKey = useCallback(
+    (pageIndex: number, previous: TrendingStock[] | null) => {
+      if (previous && previous.length < PAGE_SIZE) return null;
+      return `/api/stocks/trending?limit=${PAGE_SIZE}&offset=${pageIndex * PAGE_SIZE}&days=${fresh}&count_days=${count}`;
+    },
+    [fresh, count],
+  );
+  const { data: pages, isLoading, setSize } = useSWRInfinite<TrendingStock[]>(getKey);
+
+  // Reset to the first page when the filters change.
+  useEffect(() => {
+    setSize(1);
+  }, [fresh, count, setSize]);
+
+  const items = (pages ?? []).flat();
+  const lastPage = pages?.[pages.length - 1];
+  const hasMore = !!lastPage && lastPage.length === PAGE_SIZE;
+
+  // Load the next page when the sentinel scrolls into view.
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      if (!node) return;
+      const obs = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) setSize((s) => s + 1);
+        },
+        { rootMargin: "300px" },
+      );
+      obs.observe(node);
+      observerRef.current = obs;
+    },
+    [setSize],
   );
 
   return (
@@ -41,10 +79,13 @@ export function TrendingStocksPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(9)].map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-lg" />)}
         </div>
-      ) : data && data.length > 0 ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {data.map((s) => <StockCard key={s.ticker} s={s} />)}
-        </div>
+      ) : items.length > 0 ? (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((s) => <StockCard key={s.ticker} s={s} />)}
+          </div>
+          {hasMore && <div ref={sentinelRef} data-testid="trending-load-more" className="h-4" />}
+        </>
       ) : (
         <p className="text-sm text-muted-foreground">{t("empty")}</p>
       )}

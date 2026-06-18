@@ -90,13 +90,15 @@ def _trending_item(ticker: str, entry: dict, now: datetime, span_days: int) -> d
 @router.get("/trending")
 async def stocks_trending(
     limit: int = Query(12, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     days: int = Query(90, ge=1, le=365),
     count_days: int | None = Query(None, ge=1, le=365),
     session: AsyncSession = Depends(get_session),
 ):
     """`days` = freshness: only include stocks mentioned within this window.
     `count_days` (defaults to days) = the window for counting channels and stances.
-    Sort key = distinct channel count -> most recent mention -> ticker."""
+    Sort key = distinct channel count -> most recent mention -> ticker.
+    `offset`/`limit` paginate the ranked list for infinite scroll."""
     now = datetime.now(timezone.utc)
     fresh_cutoff = now - timedelta(days=days)
     count_cutoff = now - timedelta(days=(count_days or days))
@@ -154,7 +156,7 @@ async def stocks_trending(
         ),
     )
     span = count_days or days
-    return ok([_trending_item(t, e, now, span) for t, e in fresh[:limit]])
+    return ok([_trending_item(t, e, now, span) for t, e in fresh[offset:offset + limit]])
 
 
 @router.get("/{ticker}")

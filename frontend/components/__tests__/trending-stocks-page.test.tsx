@@ -33,6 +33,16 @@ function wrap(fetcher: (url: string) => Promise<unknown>) {
   );
 }
 
+// Offset-aware fetcher that mimics the paginated /trending endpoint.
+function pagedFetcher(all: typeof STOCK[]) {
+  return (url: string) => {
+    const params = new URL(url, "http://x").searchParams;
+    const offset = Number(params.get("offset") ?? 0);
+    const limit = Number(params.get("limit") ?? 20);
+    return Promise.resolve(all.slice(offset, offset + limit));
+  };
+}
+
 describe("TrendingStocksPage", () => {
   it("fetches with default freshness + count_days and renders cards", async () => {
     const fetcher = vi.fn().mockResolvedValue([STOCK]);
@@ -49,5 +59,21 @@ describe("TrendingStocksPage", () => {
   it("shows the empty state when no stocks come back", async () => {
     wrap(vi.fn().mockResolvedValue([]));
     expect(await screen.findByText("No stocks")).toBeInTheDocument();
+  });
+
+  it("fetches only the first page (20) initially and shows a load-more sentinel", async () => {
+    const stocks = Array.from({ length: 25 }, (_, i) => ({ ...STOCK, ticker: `T${i}` }));
+    wrap(pagedFetcher(stocks));
+    await screen.findAllByTestId("recent-stock-card");
+    expect(screen.getAllByTestId("recent-stock-card")).toHaveLength(20); // first page only
+    expect(screen.getByTestId("trending-load-more")).toBeInTheDocument(); // full page -> maybe more
+  });
+
+  it("renders all cards without a sentinel when the first page is short", async () => {
+    const stocks = Array.from({ length: 8 }, (_, i) => ({ ...STOCK, ticker: `T${i}` }));
+    wrap(pagedFetcher(stocks));
+    await screen.findAllByTestId("recent-stock-card");
+    expect(screen.getAllByTestId("recent-stock-card")).toHaveLength(8);
+    expect(screen.queryByTestId("trending-load-more")).toBeNull(); // short page -> end
   });
 });

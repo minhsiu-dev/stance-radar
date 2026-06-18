@@ -578,3 +578,30 @@ async def test_stance_summary_includes_buckets_from_mentions(api, sessionmaker):
     assert len(body["buckets"]) == 12  # 90d -> 12 weekly buckets
     assert all(b["granularity"] == "week" for b in body["buckets"])
     assert sum(b["buy"] for b in body["buckets"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_trending_offset_paginates(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        # 5 distinct single-channel tickers; distinct recency -> deterministic order PG0..PG4
+        for i in range(5):
+            s.add(Channel(id=f"cp{i}", title=f"cp{i}", thumbnail_url="",
+                          uploads_playlist_id=f"UUp{i}"))
+            s.add(Video(id=f"vp{i}", channel_id=f"cp{i}", title="t",
+                        published_at=now - timedelta(hours=i + 1), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(Mention(video_id=f"vp{i}", ticker=f"PG{i}", start_seconds=1.0,
+                          quote="q", stance=Stance.buy, reasoning="r"))
+        await s.commit()
+
+    p1 = (await client.get("/api/stocks/trending?limit=2&offset=0")).json()["data"]
+    p2 = (await client.get("/api/stocks/trending?limit=2&offset=2")).json()["data"]
+    assert len(p1) == 2 and len(p2) == 2
+    assert {r["ticker"] for r in p1}.isdisjoint({r["ticker"] for r in p2})  # disjoint pages
+    # offset past the end yields an empty page (the infinite-scroll stop signal)
+    assert (await client.get("/api/stocks/trending?limit=2&offset=500")).json()["data"] == []
