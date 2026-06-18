@@ -13,6 +13,9 @@ const messages = {
       loadError: "Failed: {message}",
     },
   },
+  Portfolio: {
+    hiddenTitle: "Holdings are hidden",
+  },
 };
 
 // Control hideHoldings per test
@@ -77,7 +80,7 @@ describe("PerformanceCards", () => {
     expect(screen.getByText("VOO")).toBeInTheDocument();
   });
 
-  it("omits the portfolio card when hideHoldings is true; VOO and QQQ still render", async () => {
+  it("replaces the portfolio card with a no-link hidden placeholder when hideHoldings is true; VOO and QQQ still render", async () => {
     privacy.hideHoldings = true;
     wrap(vi.fn().mockResolvedValue({
       ranges: ["1d", "5d", "1m", "3m", "6m", "ytd", "1y"],
@@ -87,11 +90,16 @@ describe("PerformanceCards", () => {
     }));
     expect(await screen.findByText("VOO")).toBeInTheDocument();
     expect(screen.getByText("QQQ")).toBeInTheDocument();
-    // Portfolio card must be absent
+    // Portfolio value/card is gone; the slot shows the lock + wording placeholder instead
     expect(screen.queryByText("My portfolio")).toBeNull();
-    // Only 2 perf-cards (VOO + QQQ)
+    expect(screen.queryByText("$128,430.5")).toBeNull();
+    expect(screen.getByTestId("holdings-hidden-card")).toBeInTheDocument();
+    expect(screen.getByText("Holdings are hidden")).toBeInTheDocument();
+    // No "Show holdings" / portfolio link in the homepage placeholder
+    expect(screen.queryByRole("link", { name: /portfolio|show holdings/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /show holdings/i })).toBeNull();
+    // Still only 2 perf-cards (VOO + QQQ); the placeholder isn't a perf-card
     expect(screen.getAllByTestId("perf-card").length).toBe(2);
-    // Real percentage values for VOO/QQQ still visible
     expect(screen.getAllByText("+4.3%").length).toBe(2);
     expect(screen.getAllByText("-1.2%").length).toBe(2);
   });
