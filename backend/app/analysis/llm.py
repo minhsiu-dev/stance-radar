@@ -176,6 +176,7 @@ async def _default_runner(
             await proc.wait()  # reap the killed child
         except ProcessLookupError:
             pass
+        logger.warning("claude analysis timed out after %ss; killed and will retry", timeout)
         raise AnalysisError(f"claude timed out after {timeout}s")
     return proc.returncode, stdout, stderr
 
