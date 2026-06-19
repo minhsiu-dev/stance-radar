@@ -20,28 +20,50 @@ const WINDOWS = [
   { days: 90, key: "quarter" },
 ] as const;
 
+// Coverage bands: filter by distinct-channel count via min_channels / max_channels.
+// `all` leaves both sides unbounded; otherwise an undefined bound stays unbounded.
+const SEGMENTS = {
+  all: { key: "segAll" },
+  emerging: { key: "segEmerging", min: 2, max: 3 },
+  forming: { key: "segForming", min: 4, max: 6 },
+  hot: { key: "segHot", min: 7 },
+} as const;
+
+type SegmentKey = keyof typeof SEGMENTS;
+
+// Channel-count query fragment for a coverage band ("" for the unbounded `all`).
+export function segmentParams(segment: SegmentKey): string {
+  const seg = SEGMENTS[segment];
+  let q = "";
+  if ("min" in seg) q += `&min_channels=${seg.min}`;
+  if ("max" in seg) q += `&max_channels=${seg.max}`;
+  return q;
+}
+
 const PAGE_SIZE = 20;
 
 export function TrendingStocksPage() {
   const t = useTranslations("Trending");
   const [fresh, setFresh] = useState(30);
   const [count, setCount] = useState(90);
+  const [segment, setSegment] = useState<SegmentKey>("emerging");
 
   // Infinite scroll: fetch the ranked list PAGE_SIZE at a time via offset pagination.
   // A short page (< PAGE_SIZE) means we've reached the end, so getKey returns null.
   const getKey = useCallback(
     (pageIndex: number, previous: TrendingStock[] | null) => {
       if (previous && previous.length < PAGE_SIZE) return null;
-      return `/api/stocks/trending?limit=${PAGE_SIZE}&offset=${pageIndex * PAGE_SIZE}&days=${fresh}&count_days=${count}`;
+      const url = `/api/stocks/trending?limit=${PAGE_SIZE}&offset=${pageIndex * PAGE_SIZE}&days=${fresh}&count_days=${count}`;
+      return url + segmentParams(segment);
     },
-    [fresh, count],
+    [fresh, count, segment],
   );
   const { data: pages, isLoading, setSize } = useSWRInfinite<TrendingStock[]>(getKey);
 
   // Reset to the first page when the filters change.
   useEffect(() => {
     setSize(1);
-  }, [fresh, count, setSize]);
+  }, [fresh, count, segment, setSize]);
 
   const items = (pages ?? []).flat();
   const lastPage = pages?.[pages.length - 1];
@@ -73,6 +95,7 @@ export function TrendingStocksPage() {
         <div className="flex flex-wrap gap-4">
           <WindowSelect label={t("freshness")} value={fresh} onChange={setFresh} t={t} />
           <WindowSelect label={t("countWindow")} value={count} onChange={setCount} t={t} />
+          <SegmentSelect label={t("coverage")} value={segment} onChange={setSegment} t={t} />
         </div>
       </div>
       {isLoading ? (
@@ -116,6 +139,37 @@ function WindowSelect({
           {WINDOWS.map((w) => (
             <SelectItem key={w.days} value={String(w.days)}>
               {t(w.key)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </label>
+  );
+}
+
+function SegmentSelect({
+  label,
+  value,
+  onChange,
+  t,
+}: {
+  label: string;
+  value: SegmentKey;
+  onChange: (s: SegmentKey) => void;
+  t: ReturnType<typeof useTranslations<"Trending">>;
+}) {
+  const keys = Object.keys(SEGMENTS) as SegmentKey[];
+  return (
+    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+      {label}
+      <Select value={value} onValueChange={(v) => onChange(v as SegmentKey)}>
+        <SelectTrigger className="w-28">
+          <SelectValue>{t(SEGMENTS[value].key)}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {keys.map((k) => (
+            <SelectItem key={k} value={k}>
+              {t(SEGMENTS[k].key)}
             </SelectItem>
           ))}
         </SelectContent>

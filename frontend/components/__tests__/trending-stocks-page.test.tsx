@@ -2,14 +2,19 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
-import { TrendingStocksPage } from "@/components/trending-stocks-page";
+import { TrendingStocksPage, segmentParams } from "@/components/trending-stocks-page";
 
 const messages = {
   Trending: {
     title: "Trending stocks",
     freshness: "Freshness",
     countWindow: "Count window",
+    coverage: "Coverage",
     week: "1W", month: "1M", quarter: "3M",
+    segAll: "All",
+    segEmerging: "Emerging 2–3",
+    segForming: "Forming 4–6",
+    segHot: "Popular 7+",
     empty: "No stocks",
   },
   Dashboard: { recentStocks: { channelCount: "{count} channels" } },
@@ -49,12 +54,20 @@ describe("TrendingStocksPage", () => {
     wrap(fetcher);
     expect(await screen.findByTestId("recent-stock-card")).toBeInTheDocument();
     expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("days=30") && u.includes("count_days=90"))).toBe(true);
+    // default coverage segment is "emerging" -> 2–3 distinct channels
+    expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("min_channels=2") && u.includes("max_channels=3"))).toBe(true);
     // triggers show window labels, not raw day-count numbers
     expect(screen.getAllByText("1M").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("3M").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("30")).toBeNull();
     expect(screen.queryByText("90")).toBeNull();
   });
+
+  // Note: a test that drives the new coverage dropdown to "All" and asserts the key
+  // drops min_channels/max_channels was attempted but skipped — Radix Select's
+  // onValueChange does not fire under jsdom's pointer-event model, so the click
+  // never changes the segment. The band->params mapping is instead covered directly
+  // by the `segmentParams` unit tests below.
 
   it("shows the empty state when no stocks come back", async () => {
     wrap(vi.fn().mockResolvedValue([]));
@@ -75,5 +88,14 @@ describe("TrendingStocksPage", () => {
     await screen.findAllByTestId("recent-stock-card");
     expect(screen.getAllByTestId("recent-stock-card")).toHaveLength(8);
     expect(screen.queryByTestId("trending-load-more")).toBeNull(); // short page -> end
+  });
+});
+
+describe("segmentParams", () => {
+  it("maps each coverage band to the right channel-count query fragment", () => {
+    expect(segmentParams("all")).toBe(""); // unbounded -> neither param
+    expect(segmentParams("emerging")).toBe("&min_channels=2&max_channels=3");
+    expect(segmentParams("forming")).toBe("&min_channels=4&max_channels=6");
+    expect(segmentParams("hot")).toBe("&min_channels=7"); // open-ended -> min only
   });
 });

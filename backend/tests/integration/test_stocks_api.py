@@ -605,3 +605,61 @@ async def test_trending_offset_paginates(api, sessionmaker):
     assert {r["ticker"] for r in p1}.isdisjoint({r["ticker"] for r in p2})  # disjoint pages
     # offset past the end yields an empty page (the infinite-scroll stop signal)
     assert (await client.get("/api/stocks/trending?limit=2&offset=500")).json()["data"] == []
+
+
+@pytest.mark.asyncio
+async def test_trending_filters_by_channel_count(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    # ticker -> number of distinct channels mentioning it
+    plan = {"ONE": 1, "TWO": 2, "THREE": 3, "FOUR": 4, "SEVEN": 7}
+    async with sessionmaker() as s:
+        for ticker, n in plan.items():
+            for k in range(n):
+                ch_id = f"cf_{ticker}_{k}"
+                vid_id = f"vf_{ticker}_{k}"
+                s.add(Channel(id=ch_id, title=ch_id, thumbnail_url="",
+                              uploads_playlist_id=f"UUf_{ticker}_{k}"))
+                s.add(Video(id=vid_id, channel_id=ch_id, title="t",
+                            published_at=now - timedelta(days=1), thumbnail_url="",
+                            duration_seconds=60, status=VideoStatus.analyzed))
+                s.add(Mention(video_id=vid_id, ticker=ticker, start_seconds=1.0,
+                              quote="q", stance=Stance.buy, reasoning="r"))
+        await s.commit()
+
+    # 1) min+max band returns only the 2- and 3-channel tickers
+    rows = (await client.get(
+        "/api/stocks/trending?min_channels=2&max_channels=3&limit=50"
+    )).json()["data"]
+    assert {r["ticker"] for r in rows} == {"TWO", "THREE"}
+
+    # 2a) min_channels alone: >= 3 channels -> THREE, FOUR, SEVEN
+    rows = (await client.get(
+        "/api/stocks/trending?min_channels=3&limit=50"
+    )).json()["data"]
+    assert {r["ticker"] for r in rows} == {"THREE", "FOUR", "SEVEN"}
+
+    # 2b) max_channels alone: <= 2 channels -> ONE, TWO
+    rows = (await client.get(
+        "/api/stocks/trending?max_channels=2&limit=50"
+    )).json()["data"]
+    assert {r["ticker"] for r in rows} == {"ONE", "TWO"}
+
+    # 3) pagination operates WITHIN the filtered set.
+    # In-band (2..3 channels) ranked by channel_count desc -> [THREE, TWO]
+    page0 = (await client.get(
+        "/api/stocks/trending?min_channels=2&max_channels=3&limit=1&offset=0"
+    )).json()["data"]
+    page1 = (await client.get(
+        "/api/stocks/trending?min_channels=2&max_channels=3&limit=1&offset=1"
+    )).json()["data"]
+    assert [r["ticker"] for r in page0] == ["THREE"]
+    assert [r["ticker"] for r in page1] == ["TWO"]
+    # offset past the filtered count -> empty page
+    page2 = (await client.get(
+        "/api/stocks/trending?min_channels=2&max_channels=3&limit=1&offset=2"
+    )).json()["data"]
+    assert page2 == []

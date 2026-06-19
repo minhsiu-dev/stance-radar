@@ -16,9 +16,14 @@
     "title": "Trending stocks",
     "freshness": "Freshness",
     "countWindow": "Count window",
+    "coverage": "Coverage",
     "week": "1W",
     "month": "1M",
     "quarter": "3M",
+    "segAll": "All",
+    "segEmerging": "Emerging 2–3",
+    "segForming": "Forming 4–6",
+    "segHot": "Popular 7+",
     "empty": "No stocks discussed in this window"
   },
   "Footer": {

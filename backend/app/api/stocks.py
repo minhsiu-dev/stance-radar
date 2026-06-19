@@ -93,11 +93,16 @@ async def stocks_trending(
     offset: int = Query(0, ge=0),
     days: int = Query(90, ge=1, le=365),
     count_days: int | None = Query(None, ge=1, le=365),
+    min_channels: int | None = Query(None, ge=1),
+    max_channels: int | None = Query(None, ge=1),
     session: AsyncSession = Depends(get_session),
 ):
     """`days` = freshness: only include stocks mentioned within this window.
     `count_days` (defaults to days) = the window for counting channels and stances.
     Sort key = distinct channel count -> most recent mention -> ticker.
+    `min_channels`/`max_channels` (optional, inclusive) keep only tickers whose
+    distinct-channel count falls within the band; applied after ranking and before
+    pagination, so `offset`/`limit` page within the filtered set.
     `offset`/`limit` paginate the ranked list for infinite scroll."""
     now = datetime.now(timezone.utc)
     fresh_cutoff = now - timedelta(days=days)
@@ -155,6 +160,10 @@ async def stocks_trending(
             te[0],
         ),
     )
+    if min_channels is not None:
+        fresh = [te for te in fresh if len(te[1]["channels"]) >= min_channels]
+    if max_channels is not None:
+        fresh = [te for te in fresh if len(te[1]["channels"]) <= max_channels]
     span = count_days or days
     return ok([_trending_item(t, e, now, span) for t, e in fresh[offset:offset + limit]])
 
