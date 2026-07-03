@@ -54,7 +54,7 @@ function seedBase(windowDays = 90) {
   swrResponses[`/api/stocks/AAPL/stance-summary?days=${windowDays}`] = {
     buy: 3, neutral: 1, sell: 0, window_days: windowDays,
     buckets: [
-      { start: "2026-06-01T00:00:00+00:00", end: "2026-06-08T00:00:00+00:00", granularity: "week", buy: 2, neutral: 0, sell: 1 },
+      { start: "2026-06-01T00:00:00+00:00", end: "2026-06-08T00:00:00+00:00", granularity: "week", buy_new: 2, buy_repeat: 0, neutral_new: 0, neutral_repeat: 0, sell_new: 1, sell_repeat: 0 },
     ],
   };
   swrResponses["/api/stocks/AAPL"] = baseStock;

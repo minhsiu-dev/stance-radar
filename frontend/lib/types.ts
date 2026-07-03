@@ -173,9 +173,12 @@ export interface StanceBucket {
   start: string;
   end: string;
   granularity: "day" | "week" | "month" | "quarter";
-  buy: number;
-  neutral: number;
-  sell: number;
+  buy_new: number;
+  buy_repeat: number;
+  neutral_new: number;
+  neutral_repeat: number;
+  sell_new: number;
+  sell_repeat: number;
 }
 
 export interface TrendingStock {

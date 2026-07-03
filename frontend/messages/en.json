@@ -306,7 +306,7 @@
       "pretaxIncome": "Pretax income",
       "netIncome": "Net income"
     },
-    "stance": { "buy": "Buy", "sell": "Sell", "neutral": "Neutral" }
+    "stance": { "buy": "Buy", "sell": "Sell", "neutral": "Neutral", "new": "New", "repeat": "Repeat" }
   },
   "VideoDetail": {
     "loadError": "Failed to load video: {message}",

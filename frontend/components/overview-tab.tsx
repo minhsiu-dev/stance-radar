@@ -71,7 +71,14 @@ export function OverviewTab({ ticker }: { ticker: string }) {
   // trend chart, mirroring how the Trending cards present a stock.
   const buckets = summary.buckets ?? [];
   const aggTotal = summary.buy + summary.neutral + summary.sell;
-  const bucketTotal = buckets.reduce((n, b) => n + b.buy + b.neutral + b.sell, 0);
+  const bucketTotal = buckets.reduce(
+    (n, b) =>
+      n +
+      b.buy_new + b.buy_repeat +
+      b.neutral_new + b.neutral_repeat +
+      b.sell_new + b.sell_repeat,
+    0,
+  );
   const hasStance = aggTotal + bucketTotal > 0;
   const aggStances = {
     buy: { count: summary.buy, avatars: [] },
