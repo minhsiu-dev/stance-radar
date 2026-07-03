@@ -551,11 +551,17 @@ async def test_trending_includes_weekly_buckets(api, sessionmaker):
     abnb = next(r for r in rows if r["ticker"] == "ABNB")
     assert len(abnb["buckets"]) == 12  # 90d -> 12 weekly buckets
     b0 = abnb["buckets"][0]
-    assert set(b0.keys()) == {"start", "end", "granularity", "buy", "neutral", "sell"}
+    assert set(b0.keys()) == {
+        "start", "end", "granularity",
+        "buy_new", "buy_repeat", "neutral_new", "neutral_repeat",
+        "sell_new", "sell_repeat",
+    }
     assert all(b["granularity"] == "week" for b in abnb["buckets"])
-    # newest bucket has the BUY, an earlier bucket has the SELL
-    assert abnb["buckets"][-1]["buy"] == 1
-    assert sum(b["sell"] for b in abnb["buckets"]) == 1
+    # SELL (earlier) is this channel's first mention -> new; BUY (newer) is a
+    # stance change -> also new; neither is a same-stance repeat.
+    assert abnb["buckets"][-1]["buy_new"] == 1
+    assert sum(b["sell_new"] for b in abnb["buckets"]) == 1
+    assert sum(b["buy_repeat"] + b["sell_repeat"] for b in abnb["buckets"]) == 0
 
 
 @pytest.mark.asyncio
@@ -577,7 +583,8 @@ async def test_stance_summary_includes_buckets_from_mentions(api, sessionmaker):
     body = (await client.get("/api/stocks/SHOP/stance-summary?days=90")).json()["data"]
     assert len(body["buckets"]) == 12  # 90d -> 12 weekly buckets
     assert all(b["granularity"] == "week" for b in body["buckets"])
-    assert sum(b["buy"] for b in body["buckets"]) == 1
+    assert sum(b["buy_new"] for b in body["buckets"]) == 1
+    assert sum(b["buy_repeat"] for b in body["buckets"]) == 0
 
 
 @pytest.mark.asyncio
