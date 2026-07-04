@@ -9,8 +9,8 @@ import { usePrivacy } from "@/components/privacy-provider";
 // most on the privacy path, which is acceptable.)
 export function NavPortfolioLink({ className }: { className?: string }) {
   const t = useTranslations("Nav");
-  const { hideHoldings } = usePrivacy();
-  if (hideHoldings) return null;
+  const { locked } = usePrivacy();
+  if (locked) return null;
   return (
     <Link href="/portfolio" className={className}>
       {t("portfolio")}

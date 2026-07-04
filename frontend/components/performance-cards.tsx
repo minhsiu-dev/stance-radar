@@ -77,7 +77,7 @@ function PerfCard({
 export function PerformanceCards() {
   const t = useTranslations("Dashboard.performance");
   const tHidden = useTranslations("Portfolio");
-  const { hideHoldings, ready } = usePrivacy();
+  const { locked, ready } = usePrivacy();
   const { data, error } = useSWR<PerformanceSummary>(
     "/api/portfolio/performance/summary",
   );
@@ -100,7 +100,7 @@ export function PerformanceCards() {
     <div className="grid gap-3 sm:grid-cols-3">
       {!ready ? (
         <Skeleton className="h-28 w-full" />
-      ) : hideHoldings ? (
+      ) : locked ? (
         <Card data-testid="holdings-hidden-card">
           <CardContent className="flex h-full min-h-[7rem] flex-col items-center justify-center gap-1.5 p-4 text-center">
             <Lock className="h-5 w-5 text-muted-foreground" />

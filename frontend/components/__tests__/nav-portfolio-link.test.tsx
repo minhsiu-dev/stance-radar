@@ -9,7 +9,7 @@ vi.mock("@/i18n/navigation", () => ({
     <a href={href}>{children}</a>
   ),
 }));
-const privacy = { hideHoldings: false };
+const privacy = { locked: false };
 vi.mock("@/components/privacy-provider", () => ({
   usePrivacy: () => privacy,
 }));
@@ -18,12 +18,12 @@ import { NavPortfolioLink } from "@/components/nav-portfolio-link";
 
 describe("NavPortfolioLink", () => {
   it("renders the portfolio link when not hidden", () => {
-    privacy.hideHoldings = false;
+    privacy.locked = false;
     render(<NavPortfolioLink className="x" />);
     expect(screen.getByText("portfolio")).toBeInTheDocument();
   });
   it("renders nothing when holdings are hidden", () => {
-    privacy.hideHoldings = true;
+    privacy.locked = true;
     const { container } = render(<NavPortfolioLink className="x" />);
     expect(container).toBeEmptyDOMElement();
   });

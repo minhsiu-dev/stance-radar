@@ -18,8 +18,8 @@ const messages = {
   },
 };
 
-// Control hideHoldings per test
-const privacy = { hideHoldings: false, ready: true, toggle: vi.fn() };
+// Control locked per test
+const privacy = { locked: false, ready: true };
 vi.mock("@/components/privacy-provider", () => ({
   usePrivacy: () => privacy,
 }));
@@ -42,7 +42,7 @@ function wrap(summary: () => Promise<unknown>) {
 }
 
 beforeEach(() => {
-  privacy.hideHoldings = false;
+  privacy.locked = false;
   privacy.ready = true;
 });
 
@@ -80,8 +80,8 @@ describe("PerformanceCards", () => {
     expect(screen.getByText("VOO")).toBeInTheDocument();
   });
 
-  it("replaces the portfolio card with a no-link hidden placeholder when hideHoldings is true; VOO and QQQ still render", async () => {
-    privacy.hideHoldings = true;
+  it("replaces the portfolio card with a no-link hidden placeholder when locked is true; VOO and QQQ still render", async () => {
+    privacy.locked = true;
     wrap(vi.fn().mockResolvedValue({
       ranges: ["1d", "5d", "1m", "3m", "6m", "ytd", "1y"],
       portfolio: { total_value: 128430.5, changes },
@@ -104,8 +104,8 @@ describe("PerformanceCards", () => {
     expect(screen.getAllByText("-1.2%").length).toBe(2);
   });
 
-  it("shows all three cards when hideHoldings is false", async () => {
-    privacy.hideHoldings = false;
+  it("shows all three cards when locked is false", async () => {
+    privacy.locked = false;
     wrap(vi.fn().mockResolvedValue({
       ranges: ["1d", "5d", "1m", "3m", "6m", "ytd", "1y"],
       portfolio: { total_value: 128430.5, changes },

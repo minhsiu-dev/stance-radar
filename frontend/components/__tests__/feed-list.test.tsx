@@ -5,8 +5,8 @@ import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { FeedList, NO_FILTERS, type FeedFilters } from "@/components/feed-list";
 
-// Privacy mock — mutate `privacy` object per-test to control hideHoldings/ready
-const privacy = { hideHoldings: false, ready: true, toggle: vi.fn() };
+// Privacy mock — mutate `privacy` object per-test to control locked/ready
+const privacy = { locked: false, ready: true };
 vi.mock("@/components/privacy-provider", () => ({
   usePrivacy: () => privacy,
 }));
@@ -190,7 +190,7 @@ describe("FeedList holdings-only chip", () => {
 
 describe("FeedList holdings privacy", () => {
   it("does NOT fetch holdings when Hide Holdings is on", async () => {
-    privacy.hideHoldings = true;
+    privacy.locked = true;
     privacy.ready = true;
     const fetcher = vi.fn().mockImplementation((key: string) => {
       if (key.startsWith("/api/channels")) return Promise.resolve([]);
@@ -214,7 +214,7 @@ describe("FeedList holdings privacy", () => {
   });
 
   it("fetches holdings and shows the filter when not hidden", async () => {
-    privacy.hideHoldings = false;
+    privacy.locked = false;
     privacy.ready = true;
     const fetcher = vi.fn().mockImplementation((key: string) => {
       if (key.startsWith("/api/channels")) return Promise.resolve([]);

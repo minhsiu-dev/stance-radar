@@ -13,8 +13,6 @@ type PrivacyValue = {
   ready: boolean;
   unlock: (password: string) => Promise<boolean>;
   lock: () => Promise<void>;
-  /** @deprecated transitional alias for `locked`; removed once all consumers migrate. */
-  hideHoldings: boolean;
 };
 
 const PrivacyContext = createContext<PrivacyValue>({
@@ -24,7 +22,6 @@ const PrivacyContext = createContext<PrivacyValue>({
   ready: false,
   unlock: async () => false,
   lock: async () => {},
-  hideHoldings: false,
 });
 
 export function PrivacyProvider({ children }: { children: React.ReactNode }) {
@@ -76,9 +73,7 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
   const locked = state.enabled && !state.authenticated;
 
   return (
-    <PrivacyContext.Provider
-      value={{ ...state, locked, ready, unlock, lock, hideHoldings: locked }}
-    >
+    <PrivacyContext.Provider value={{ ...state, locked, ready, unlock, lock }}>
       {children}
     </PrivacyContext.Provider>
   );

@@ -187,9 +187,9 @@ export function FeedList({
   onFiltersChange: (filters: FeedFilters) => void;
 }) {
   const t = useTranslations("Dashboard");
-  const { hideHoldings, ready } = usePrivacy();
+  const { locked, ready } = usePrivacy();
   const { data: holdings } = useSWR<HoldingsResponse>(
-    ready && !hideHoldings ? "/api/portfolio/holdings" : null,
+    ready && !locked ? "/api/portfolio/holdings" : null,
   );
   const heldSet = useMemo(
     () => new Set((holdings?.holdings ?? []).map((h) => h.ticker)),
@@ -197,8 +197,8 @@ export function FeedList({
   );
   // When holdings are hidden, force holdingsOnly off so no holdings data drives the feed
   const effectiveFilters: FeedFilters = useMemo(
-    () => (hideHoldings ? { ...filters, holdingsOnly: false } : filters),
-    [hideHoldings, filters],
+    () => (locked ? { ...filters, holdingsOnly: false } : filters),
+    [locked, filters],
   );
   // Highlight set: a selected ticker → highlight only that ticker; holdingsOnly only → highlight holdings; otherwise nothing is dimmed
   const highlightSet: Set<string> | null =

@@ -26,8 +26,8 @@ const LINKS = [
 export function MobileNav() {
   const t = useTranslations("Nav")
   const [open, setOpen] = useState(false)
-  const { hideHoldings } = usePrivacy()
-  const links = LINKS.filter((l) => l.href !== "/portfolio" || !hideHoldings)
+  const { locked } = usePrivacy()
+  const links = LINKS.filter((l) => l.href !== "/portfolio" || !locked)
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
