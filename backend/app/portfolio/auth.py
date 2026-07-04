@@ -7,7 +7,9 @@ from fastapi import Request, Response
 from app.config import get_settings
 
 COOKIE_NAME = "sr_portfolio"
-COOKIE_PATH = "/api/portfolio"
+# Sent on all /api/* requests (not just /api/portfolio) so portfolio-derived
+# endpoints outside the portfolio router — e.g. /api/feed?holdings_only — can gate on it too.
+COOKIE_PATH = "/api"
 # Long-lived cookie for the "permanent" (idle_minutes=0) case so it survives a browser restart.
 _PERMANENT_MAX_AGE = 60 * 60 * 24 * 3650
 

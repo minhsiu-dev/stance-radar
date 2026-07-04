@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_session
 from app.envelope import fail, ok
 from app.models import PortfolioTransaction, Stance, Video, VideoStance, VideoStatus
+from app.portfolio.auth import PortfolioLocked, is_unlocked
 from app.portfolio.holdings import replay
 
 router = APIRouter(prefix="/api")
@@ -23,9 +24,12 @@ async def feed(
     stance: str | None = Query(None),
     holdings_only: bool = Query(False),
     session: AsyncSession = Depends(get_session),
+    authed: bool = Depends(is_unlocked),
 ):
     conditions = [Video.status.not_in(HIDDEN_STATUSES)]
     if holdings_only:
+        if not authed:
+            raise PortfolioLocked()
         txs = (await session.execute(
             select(PortfolioTransaction)
         )).scalars().all()

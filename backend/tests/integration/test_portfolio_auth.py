@@ -85,3 +85,18 @@ async def test_unlock_is_noop_when_feature_disabled(api):
     r = await client.post("/api/portfolio/unlock", json={"password": "anything"})
     assert r.status_code == 200 and r.json()["data"] == {"authenticated": True}
     assert "set-cookie" not in r.headers
+
+
+async def test_feed_holdings_only_gated_while_locked(locked_api):
+    _, client = locked_api
+    assert (await client.get("/api/feed")).status_code == 200  # unfiltered feed stays public
+    r = await client.get("/api/feed?holdings_only=true")
+    assert r.status_code == 401
+    assert r.json()["error"] == "Portfolio is locked"
+    await client.post("/api/portfolio/unlock", json={"password": PW})
+    assert (await client.get("/api/feed?holdings_only=true")).status_code == 200
+
+
+async def test_feed_holdings_only_open_when_feature_disabled(api):
+    _, client = api
+    assert (await client.get("/api/feed?holdings_only=true")).status_code == 200

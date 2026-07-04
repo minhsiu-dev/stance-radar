@@ -46,7 +46,7 @@ def test_issue_sets_scoped_httponly_cookie():
     cookie = resp.headers["set-cookie"].lower()
     assert auth.COOKIE_NAME in cookie
     assert "httponly" in cookie
-    assert "path=/api/portfolio" in cookie
+    assert "path=/api" in cookie
     assert "samesite=lax" in cookie
     assert "secure" not in cookie
     assert "domain" not in cookie
