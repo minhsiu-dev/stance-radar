@@ -16,7 +16,7 @@ const messages = {
 
 // usePrivacy mock with new shape (component no longer calls it, but kept for safety)
 vi.mock("@/components/privacy-provider", () => ({
-  usePrivacy: () => ({ hideHoldings: false, ready: true, toggle: vi.fn() }),
+  usePrivacy: () => ({ locked: false, ready: true }),
 }));
 
 function wrap(fetcher: () => Promise<unknown>) {
