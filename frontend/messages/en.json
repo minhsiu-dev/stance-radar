@@ -44,7 +44,8 @@
   },
   "Settings": {
     "open": "Settings",
-    "hideHoldings": "Hide Holdings",
+    "lockHoldings": "Lock holdings",
+    "unlockHoldings": "Unlock holdings…",
     "theme": "Dark mode",
     "language": "Language"
   },
@@ -368,7 +369,10 @@
   "Portfolio": {
     "title": "Portfolio",
     "hiddenTitle": "Holdings are hidden",
-    "showHoldings": "Show holdings",
+    "unlock": "Unlock",
+    "unlockPrompt": "Enter password to unlock holdings",
+    "passwordLabel": "Password",
+    "wrongPassword": "Wrong password",
     "totals": {
       "marketValue": "Market value",
       "costBasis": "Cost basis",
