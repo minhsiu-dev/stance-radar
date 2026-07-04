@@ -74,6 +74,28 @@ async def api(engine, monkeypatch):
     get_settings.cache_clear()
 
 
+@pytest.fixture
+async def locked_api(engine, monkeypatch):
+    """(app, client) like `api`, but with a portfolio password set (lock feature ON)."""
+    monkeypatch.setenv("USE_FAKE_ADAPTERS", "true")
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("PORTFOLIO_PASSWORD", "hunter2")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    from asgi_lifespan import LifespanManager
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import create_app
+
+    app = create_app()
+    async with LifespanManager(app):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield app, client
+    get_settings.cache_clear()
+
+
 async def wait_refresh(app) -> None:
     """Wait for the background refresh job (and any auto-continued follow-up) to finish."""
     runner = app.state.runner

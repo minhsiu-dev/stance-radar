@@ -94,6 +94,13 @@ def create_app() -> FastAPI:
     app.include_router(insights.router)
     app.include_router(portfolio.router)
 
+    from app.envelope import fail
+    from app.portfolio.auth import PortfolioLocked
+
+    @app.exception_handler(PortfolioLocked)
+    async def _portfolio_locked(_request, _exc):
+        return fail("Portfolio is locked", status_code=401)
+
     @app.get("/api/health")
     async def health() -> dict:
         return {"success": True, "data": {"status": "ok"}, "error": None}

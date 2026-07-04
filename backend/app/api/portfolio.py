@@ -1,20 +1,23 @@
 import asyncio
+import hmac
 import logging
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_market, get_price_store, get_session
+from app.config import get_settings
 from app.envelope import fail, ok
 from app.market.client import MarketClient
 from app.market.store import PriceStore
 from app.models import PortfolioTransaction, TransactionSide, utcnow
+from app.portfolio.auth import clear, is_unlocked, issue, require_unlock
 from app.portfolio.cash import get_cash, set_cash
 from app.portfolio.holdings import Holding, InvalidTransaction, replay
 from app.portfolio.performance import (
@@ -43,6 +46,41 @@ class CashBody(BaseModel):
     amount: float
 
 
+class UnlockBody(BaseModel):
+    password: str
+
+
+_WRONG_PASSWORD_DELAY = 0.3
+
+
+@router.post("/unlock")
+async def unlock(body: UnlockBody, response: Response):
+    settings = get_settings()
+    password = settings.portfolio_password
+    if not password:
+        return ok({"authenticated": True})  # feature disabled
+    if not hmac.compare_digest(body.password.encode(), password.encode()):
+        await asyncio.sleep(_WRONG_PASSWORD_DELAY)  # mild anti-guess
+        return fail("Wrong password", status_code=401)
+    issue(response, password, settings.portfolio_lock_idle_minutes)
+    return ok({"authenticated": True})
+
+
+@router.post("/lock")
+async def lock(response: Response):
+    clear(response)
+    return ok({"authenticated": False})
+
+
+@router.get("/session")
+async def session_status(request: Request, response: Response):
+    password = get_settings().portfolio_password
+    return ok({
+        "enabled": bool(password),
+        "authenticated": is_unlocked(request, response),
+    })
+
+
 def _tx_dict(t: PortfolioTransaction) -> dict:
     return {
         "id": t.id,
@@ -63,7 +101,10 @@ async def _all_transactions(session: AsyncSession) -> list[PortfolioTransaction]
 
 
 @router.get("/transactions")
-async def list_transactions(session: AsyncSession = Depends(get_session)):
+async def list_transactions(
+    session: AsyncSession = Depends(get_session),
+    _: None = Depends(require_unlock),
+):
     txs = (await session.execute(
         select(PortfolioTransaction).order_by(
             PortfolioTransaction.executed_on.desc(),
@@ -78,6 +119,7 @@ async def add_transaction(
     body: TransactionIn,
     session: AsyncSession = Depends(get_session),
     market: MarketClient = Depends(get_market),
+    _: None = Depends(require_unlock),
 ):
     ticker = body.ticker.upper().strip()
     today = datetime.now(timezone.utc).date()
@@ -105,7 +147,9 @@ async def add_transaction(
 
 @router.delete("/transactions/{tx_id}")
 async def delete_transaction(
-    tx_id: str, session: AsyncSession = Depends(get_session)
+    tx_id: str,
+    session: AsyncSession = Depends(get_session),
+    _: None = Depends(require_unlock),
 ):
     tx = await session.get(PortfolioTransaction, tx_id)
     if tx is None:
@@ -121,13 +165,18 @@ async def delete_transaction(
 
 
 @router.get("/cash")
-async def get_cash_balance(session: AsyncSession = Depends(get_session)):
+async def get_cash_balance(
+    session: AsyncSession = Depends(get_session),
+    _: None = Depends(require_unlock),
+):
     return ok({"amount": float(await get_cash(session))})
 
 
 @router.put("/cash")
 async def put_cash_balance(
-    body: CashBody, session: AsyncSession = Depends(get_session)
+    body: CashBody,
+    session: AsyncSession = Depends(get_session),
+    _: None = Depends(require_unlock),
 ):
     if body.amount < 0:
         return fail("cash must be >= 0", status_code=400)
@@ -143,6 +192,7 @@ async def _held(session: AsyncSession) -> dict[str, Holding]:
 async def holdings(
     session: AsyncSession = Depends(get_session),
     market: MarketClient = Depends(get_market),
+    _: None = Depends(require_unlock),
 ):
     held = await _held(session)
 
@@ -255,6 +305,7 @@ async def performance_summary(
     session: AsyncSession = Depends(get_session),
     market: MarketClient = Depends(get_market),
     store: PriceStore = Depends(get_price_store),
+    authed: bool = Depends(is_unlocked),
 ):
     held = await _held(session)
     cash = float(await get_cash(session))
@@ -282,7 +333,7 @@ async def performance_summary(
         }
 
     portfolio_payload = None
-    if held:
+    if held and authed:
         values = portfolio_values(
             {t: h.shares for t, h in held.items()}, bars, cash=cash
         )
@@ -303,6 +354,7 @@ async def performance(
     session: AsyncSession = Depends(get_session),
     market: MarketClient = Depends(get_market),
     store: PriceStore = Depends(get_price_store),
+    _: None = Depends(require_unlock),
 ):
     if range_key not in PERFORMANCE_RANGES:
         return fail(
