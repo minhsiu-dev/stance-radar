@@ -42,3 +42,5 @@ def test_defaults():
     assert settings.fetch_proxy_url == ""
     assert settings.gluetun_control_url == ""
     assert settings.claude_timeout_seconds == 180.0
+    assert settings.portfolio_password == ""
+    assert settings.portfolio_lock_idle_minutes == 30

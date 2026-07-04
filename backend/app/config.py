@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Opt-in VPN proxy (set by docker-compose.vpn.yml); empty = fetch directly
     fetch_proxy_url: str = ""
     gluetun_control_url: str = ""
+    # Portfolio lock. Empty password = feature disabled (portfolio stays fully open).
+    portfolio_password: str = ""
+    # Idle minutes before an unlocked portfolio auto-locks; 0 = never (permanent until manual lock).
+    portfolio_lock_idle_minutes: int = 30
 
     def validate_required_keys(self) -> None:
         if self.use_fake_adapters:
