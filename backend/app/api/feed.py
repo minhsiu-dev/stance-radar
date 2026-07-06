@@ -5,9 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_session
 from app.envelope import fail, ok
-from app.models import PortfolioTransaction, Stance, Video, VideoStance, VideoStatus
-from app.portfolio.auth import PortfolioLocked, is_unlocked
-from app.portfolio.holdings import replay
+from app.models import Stance, Video, VideoStance, VideoStatus
 
 router = APIRouter(prefix="/api")
 
@@ -22,25 +20,9 @@ async def feed(
     channel_id: str | None = Query(None),
     ticker: list[str] | None = Query(None),
     stance: str | None = Query(None),
-    holdings_only: bool = Query(False),
     session: AsyncSession = Depends(get_session),
-    authed: bool = Depends(is_unlocked),
 ):
     conditions = [Video.status.not_in(HIDDEN_STATUSES)]
-    if holdings_only:
-        if not authed:
-            raise PortfolioLocked()
-        txs = (await session.execute(
-            select(PortfolioTransaction)
-        )).scalars().all()
-        held = set(replay(list(txs)))
-        if not held:
-            return ok({"items": [], "total": 0, "page": page, "page_size": page_size})
-        conditions.append(
-            select(VideoStance)
-            .where(VideoStance.video_id == Video.id, VideoStance.ticker.in_(held))
-            .exists()
-        )
     if channel_id:
         conditions.append(Video.channel_id == channel_id)
     if ticker or stance:

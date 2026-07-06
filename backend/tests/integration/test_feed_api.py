@@ -50,31 +50,6 @@ async def test_feed_pagination(api):
     assert len(data["items"]) == 2
 
 
-async def test_feed_holdings_only_filters_by_held_tickers(api):
-    app, client = await seed(api)
-
-    # No portfolio holdings yet → holdings_only returns empty
-    resp = await client.get("/api/feed", params={"holdings_only": "true"})
-    assert resp.status_code == 200
-    assert resp.json()["data"]["items"] == []
-
-    # Buy AAPL → holdings_only should return only AAPL-stance videos
-    resp = await client.post(
-        "/api/portfolio/transactions",
-        json={"ticker": "AAPL", "side": "buy", "shares": 1, "price": 100,
-              "executed_on": "2026-01-15"},
-    )
-    assert resp.status_code == 200
-
-    resp = await client.get("/api/feed", params={"holdings_only": "true"})
-    assert resp.status_code == 200
-    items = resp.json()["data"]["items"]
-    assert len(items) > 0
-    assert all(
-        any(s["ticker"] == "AAPL" for s in item["stances"]) for item in items
-    )
-
-
 async def test_feed_filters_by_multiple_tickers(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
     from app.models import Channel, Stance, Video, VideoStance, VideoStatus
