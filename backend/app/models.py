@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import enum
-import uuid
 from datetime import date as date_type
 from datetime import datetime, timezone
-from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger, Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer,
-    Numeric, String, Text,
+    String, Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -45,11 +43,6 @@ class JobStatus(str, enum.Enum):
     running = "running"
     done = "done"
     failed = "failed"
-
-
-class TransactionSide(str, enum.Enum):
-    buy = "buy"
-    sell = "sell"
 
 
 def _enum(e: type[enum.Enum], name: str) -> Enum:
@@ -189,30 +182,3 @@ class PriceCoverage(Base):
     start_date: Mapped[date_type] = mapped_column(Date)
     end_date: Mapped[date_type] = mapped_column(Date)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # written by PriceStore on sync; no default at creation
-
-
-class PortfolioTransaction(Base):
-    __tablename__ = "portfolio_transactions"
-
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    ticker: Mapped[str] = mapped_column(String(10), index=True)
-    side: Mapped[TransactionSide] = mapped_column(
-        _enum(TransactionSide, "transaction_side")
-    )
-    shares: Mapped[Decimal] = mapped_column(Numeric(18, 6))
-    price: Mapped[Decimal] = mapped_column(Numeric(18, 4))
-    executed_on: Mapped[date_type] = mapped_column(Date)
-    note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow
-    )
-
-
-class PortfolioCash(Base):
-    """Singleton row (id=1) holding the manual USD cash balance."""
-    __tablename__ = "portfolio_cash"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)

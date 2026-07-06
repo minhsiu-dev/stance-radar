@@ -27,6 +27,10 @@ _STATEMENTS = (
     "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS condition TEXT",
     "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS excerpt TEXT",
     "ALTER TABLE video_stances ADD COLUMN IF NOT EXISTS confidence VARCHAR(8)",
+    # Portfolio feature removed: drop its tables + enum (no-op on fresh DBs)
+    "DROP TABLE IF EXISTS portfolio_transactions",
+    "DROP TABLE IF EXISTS portfolio_cash",
+    "DROP TYPE IF EXISTS transaction_side",
 )
 
 

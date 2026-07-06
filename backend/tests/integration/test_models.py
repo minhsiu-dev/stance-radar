@@ -1,9 +1,8 @@
 from datetime import date, datetime, timezone
-from decimal import Decimal
 
 from sqlalchemy import delete, func, select
 
-from app.models import Channel, Job, JobStatus, Mention, PortfolioTransaction, PriceBar, PriceCoverage, Stance, TransactionSide, Video, VideoStance, VideoStatus, utcnow
+from app.models import Channel, Job, JobStatus, Mention, PriceBar, PriceCoverage, Stance, Video, VideoStance, VideoStatus, utcnow
 
 
 def _channel() -> Channel:
@@ -108,18 +107,3 @@ async def test_price_bar_roundtrip(session):
     assert bar is not None and bar.close == 1.5
     cov = await session.get(PriceCoverage, "AAPL")
     assert cov.end_date == date(2026, 6, 1)
-
-
-async def test_portfolio_transaction_roundtrip(session):
-    tx = PortfolioTransaction(
-        ticker="AAPL", side=TransactionSide.buy,
-        shares=Decimal("10.5"), price=Decimal("123.45"),
-        executed_on=date(2026, 6, 1),
-    )
-    session.add(tx)
-    await session.commit()
-    loaded = await session.get(PortfolioTransaction, tx.id)
-    assert loaded.shares == Decimal("10.5")
-    assert loaded.side is TransactionSide.buy
-    assert loaded.note is None
-    assert loaded.created_at.tzinfo is not None
