@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { PerformanceCards } from "@/components/performance-cards";
+import { BenchmarkCards } from "@/components/benchmark-cards";
 import { RecentStocks } from "@/components/recent-stocks";
 import { LatestVideos } from "@/components/latest-videos";
 
@@ -8,7 +8,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <h1 className="sr-only">{t("home")}</h1>
-      <PerformanceCards />
+      <BenchmarkCards />
       <RecentStocks />
       <LatestVideos />
     </div>

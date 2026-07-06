@@ -60,6 +60,10 @@
       "reversalHint": "Same channel flipped between buy and sell on the same stock",
       "empty": "No reversals in this window"
     },
+    "benchmarks": {
+      "title": "Benchmarks",
+      "loadError": "Failed to load benchmarks: {message}"
+    },
     "performance": {
       "portfolio": "My portfolio",
       "empty": "No holdings yet",

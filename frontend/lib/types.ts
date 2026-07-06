@@ -419,6 +419,17 @@ export interface CashResponse {
 
 export type PerfChanges = Record<string, number | null>;
 
+export interface BenchmarkItem {
+  ticker: string;
+  price: number | null;
+  changes: PerfChanges;
+}
+
+export interface BenchmarksResponse {
+  ranges: string[];
+  items: BenchmarkItem[];
+}
+
 export interface PerformanceSummary {
   ranges: string[];
   portfolio: { total_value: number | null; changes: PerfChanges } | null;
