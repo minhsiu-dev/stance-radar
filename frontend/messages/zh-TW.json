@@ -140,7 +140,7 @@
       "pendingBadge": "{count} 部待挑選",
       "autoBadge": "自動分析",
       "analyzedCount": "{count} 部已分析",
-      "perfLine": "近180天 vs VOO · 買進勝率 {winRate} · 中位數 {median} · 樣本 {n}"
+      "perfLine": "90天 vs VOO · 買進勝率 {winRate} · 中位數 {median} · 樣本 {n}"
     },
     "activity": {
       "legend": "發佈 / 已分析",

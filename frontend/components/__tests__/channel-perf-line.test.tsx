@@ -25,7 +25,7 @@ const base = {
     all: empties,
     buy: {
       ...empties,
-      now: { win_rate: 58, avg: 4.1, median: 3.2, avg_return: 6.5, median_return: 5.5, n: 37 },
+      "90": { win_rate: 58, avg: 4.1, median: 3.2, avg_return: 6.5, median_return: 5.5, n: 37 },
     },
     sell: empties,
   },
@@ -33,13 +33,13 @@ const base = {
 };
 
 describe("ChannelPerfLine", () => {
-  it("renders buy win rate, median and sample count for the buy/now slice", () => {
+  it("renders buy win rate, median and sample count for the buy/90 slice", () => {
     swrResponses["/api/channels/ch1/performance"] = base;
     render(<ChannelPerfLine channelId="ch1" />);
     const line = screen.getByTestId("channel-perf-line").textContent ?? "";
-    expect(line).toContain("58%"); // buy win rate
-    expect(line).toContain("+3.2%"); // buy median
-    expect(line).toContain("37"); // sample count
+    expect(line).toContain("58%"); // buy win rate (90d)
+    expect(line).toContain("+3.2%"); // buy median (90d)
+    expect(line).toContain("37"); // sample count (90d)
   });
 
   it("renders nothing when there are no buy calls", () => {
@@ -51,7 +51,7 @@ describe("ChannelPerfLine", () => {
     expect(container.querySelector('[data-testid="channel-perf-line"]')).toBeNull();
   });
 
-  it("renders nothing when buy calls exist but none have settled returns (now.n === 0)", () => {
+  it("renders nothing when buy calls exist but none have reached the 90-day horizon (90.n === 0)", () => {
     swrResponses["/api/channels/ch3/performance"] = {
       ...base,
       summary: { ...base.summary, buy: { ...empties } },

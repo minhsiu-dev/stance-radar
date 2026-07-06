@@ -11,18 +11,18 @@ export function ChannelPerfLine({ channelId }: { channelId: string }) {
     `/api/channels/${channelId}/performance`,
   );
   if (!data || data.counts.buy === 0) return null;
-  const now = data.summary.buy.now;
-  if (now.n === 0) return null;
-  if (now.win_rate == null || now.median == null) return null;
+  const cell = data.summary.buy["90"];
+  if (cell.n === 0) return null;
+  if (cell.win_rate == null || cell.median == null) return null;
   return (
     <p
       className="mt-1 text-xs text-muted-foreground"
       data-testid="channel-perf-line"
     >
       {t("perfLine", {
-        winRate: formatWinRate(now.win_rate),
-        median: formatSignedPct(now.median),
-        n: now.n,
+        winRate: formatWinRate(cell.win_rate),
+        median: formatSignedPct(cell.median),
+        n: cell.n,
       })}
     </p>
   );

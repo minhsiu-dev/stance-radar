@@ -140,7 +140,7 @@
       "pendingBadge": "{count} awaiting review",
       "autoBadge": "Auto-analyze",
       "analyzedCount": "{count} analyzed",
-      "perfLine": "180d vs VOO · Buy win {winRate} · Median {median} · n {n}"
+      "perfLine": "90d vs VOO · Buy win {winRate} · Median {median} · n {n}"
     },
     "activity": {
       "legend": "published / analyzed",
