@@ -390,6 +390,7 @@ class FakeMarketClient:
         "TSLA": "Tesla, Inc.",
         "VOO": "Vanguard S&P 500 ETF",
         "QQQ": "Invesco QQQ Trust",
+        "VT": "Vanguard Total World Stock ETF",
         "SPY": "SPDR S&P 500 ETF Trust",
     }
 
