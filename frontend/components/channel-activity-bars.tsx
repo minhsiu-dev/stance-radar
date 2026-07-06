@@ -27,7 +27,7 @@ export function ChannelActivityBars({ weekly }: { weekly: WeeklyActivity[] }) {
               <HoverCardTrigger
                 delay={100}
                 render={
-                  <div className="relative flex h-full w-3 cursor-help items-end overflow-hidden rounded-sm bg-muted">
+                  <div className="relative flex h-full w-3 cursor-help items-end overflow-hidden rounded-none bg-muted">
                     <div
                       data-testid="bar-total"
                       className="w-full bg-zinc-300 dark:bg-zinc-600"
@@ -54,8 +54,8 @@ export function ChannelActivityBars({ weekly }: { weekly: WeeklyActivity[] }) {
         })}
       </div>
       <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-        <span className="inline-block h-2 w-2 rounded-sm bg-zinc-300 dark:bg-zinc-600" />
-        <span className="inline-block h-2 w-2 rounded-sm bg-sky-500" />
+        <span className="inline-block h-2 w-2 rounded-none bg-zinc-300 dark:bg-zinc-600" />
+        <span className="inline-block h-2 w-2 rounded-none bg-sky-500" />
         {t("legend")}
       </span>
     </div>
