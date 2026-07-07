@@ -23,11 +23,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { VideoCard } from "@/components/video-card";
-import { usePrivacy } from "@/components/privacy-provider";
 import type {
   ChannelItem,
   FeedResponse,
-  HoldingsResponse,
   StanceValue,
   StockListItem,
 } from "@/lib/types";
@@ -38,10 +36,9 @@ export interface FeedFilters {
   channelId: string;
   tickers: string[];
   stance: StanceValue | "all";
-  holdingsOnly: boolean;
 }
 
-export const NO_FILTERS: FeedFilters = { channelId: "all", tickers: [], stance: "all", holdingsOnly: false };
+export const NO_FILTERS: FeedFilters = { channelId: "all", tickers: [], stance: "all" };
 
 export function toggleTicker(tickers: string[], ticker: string): string[] {
   return tickers.includes(ticker)
@@ -57,25 +54,20 @@ function feedQuery(page: number, filters: FeedFilters): string {
   if (filters.channelId !== "all") params.set("channel_id", filters.channelId);
   for (const tk of filters.tickers) params.append("ticker", tk);
   if (filters.stance !== "all") params.set("stance", filters.stance);
-  if (filters.holdingsOnly) params.set("holdings_only", "true");
   return `/api/feed?${params.toString()}`;
 }
 
 function FeedFilterBar({
   filters,
   onChange,
-  holdings,
 }: {
   filters: FeedFilters;
   onChange: (filters: FeedFilters) => void;
-  holdings: HoldingsResponse | undefined;
 }) {
   const t = useTranslations("Dashboard.feed.filter");
   const tStance = useTranslations("Stock.stance");
   const { data: channels } = useSWR<ChannelItem[]>("/api/channels");
   const { data: stocks } = useSWR<StockListItem[]>("/api/stocks");
-
-  const hasHoldings = (holdings?.holdings?.length ?? 0) > 0;
 
   const channelTitle =
     filters.channelId === "all"
@@ -84,19 +76,6 @@ function FeedFilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {hasHoldings && (
-        <Button
-          size="sm"
-          variant={filters.holdingsOnly ? "default" : "outline"}
-          aria-pressed={filters.holdingsOnly}
-          data-testid="feed-filter-holdings"
-          onClick={() =>
-            onChange({ ...filters, holdingsOnly: !filters.holdingsOnly })
-          }
-        >
-          {t("holdingsOnly")}
-        </Button>
-      )}
       <Select
         value={filters.channelId}
         onValueChange={(v) => onChange({ ...filters, channelId: v ?? "all" })}
@@ -187,32 +166,17 @@ export function FeedList({
   onFiltersChange: (filters: FeedFilters) => void;
 }) {
   const t = useTranslations("Dashboard");
-  const { locked, ready } = usePrivacy();
-  const { data: holdings } = useSWR<HoldingsResponse>(
-    ready && !locked ? "/api/portfolio/holdings" : null,
+  // Highlight the selected tickers (dims the others); null = nothing dimmed
+  const highlightSet = useMemo<Set<string> | null>(
+    () => (filters.tickers.length > 0 ? new Set(filters.tickers) : null),
+    [filters.tickers],
   );
-  const heldSet = useMemo(
-    () => new Set((holdings?.holdings ?? []).map((h) => h.ticker)),
-    [holdings],
-  );
-  // When holdings are hidden, force holdingsOnly off so no holdings data drives the feed
-  const effectiveFilters: FeedFilters = useMemo(
-    () => (locked ? { ...filters, holdingsOnly: false } : filters),
-    [locked, filters],
-  );
-  // Highlight set: a selected ticker → highlight only that ticker; holdingsOnly only → highlight holdings; otherwise nothing is dimmed
-  const highlightSet: Set<string> | null =
-    effectiveFilters.tickers.length > 0
-      ? new Set(effectiveFilters.tickers)
-      : effectiveFilters.holdingsOnly
-        ? heldSet
-        : null;
   const getKey = useMemo(
     () => (pageIndex: number, previous: FeedResponse | null) => {
       if (previous && previous.items.length < PAGE_SIZE) return null;
-      return feedQuery(pageIndex + 1, effectiveFilters);
+      return feedQuery(pageIndex + 1, filters);
     },
-    [effectiveFilters],
+    [filters],
   );
   const { data, error, isLoading, setSize, isValidating } =
     useSWRInfinite<FeedResponse>(getKey);
@@ -223,10 +187,9 @@ export function FeedList({
   const last = pages[pages.length - 1];
   const reachedEnd = last ? last.items.length < PAGE_SIZE : false;
   const filtersActive =
-    effectiveFilters.channelId !== "all" ||
-    effectiveFilters.tickers.length > 0 ||
-    effectiveFilters.stance !== "all" ||
-    effectiveFilters.holdingsOnly;
+    filters.channelId !== "all" ||
+    filters.tickers.length > 0 ||
+    filters.stance !== "all";
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -270,7 +233,7 @@ export function FeedList({
 
   return (
     <div className="space-y-3">
-      <FeedFilterBar filters={effectiveFilters} onChange={onFiltersChange} holdings={holdings} />
+      <FeedFilterBar filters={filters} onChange={onFiltersChange} />
       {items.length === 0 && !isValidating && (
         <p className="py-6 text-center text-sm text-muted-foreground">
           {t("feed.noMatch")}

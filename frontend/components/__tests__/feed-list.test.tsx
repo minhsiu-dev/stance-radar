@@ -5,12 +5,6 @@ import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { FeedList, NO_FILTERS, type FeedFilters } from "@/components/feed-list";
 
-// Privacy mock — mutate `privacy` object per-test to control locked/ready
-const privacy = { locked: false, ready: true };
-vi.mock("@/components/privacy-provider", () => ({
-  usePrivacy: () => privacy,
-}));
-
 const messages = {
   Dashboard: {
     feed: {
@@ -74,8 +68,6 @@ describe("FeedList infinite scroll", () => {
     const fetcher = vi.fn().mockImplementation((key: string) => {
       if (key.startsWith("/api/channels")) return Promise.resolve([]);
       if (key.startsWith("/api/stocks")) return Promise.resolve([]);
-      if (key.startsWith("/api/portfolio/holdings"))
-        return Promise.resolve({ holdings: [], totals: HOLDINGS_TOTALS });
       return Promise.resolve({
         items: [makeItem(0)],
         total: 1,
@@ -89,41 +81,10 @@ describe("FeedList infinite scroll", () => {
   });
 });
 
-const HOLDINGS_TOTALS = {
-  market_value: 1,
-  cost_basis: 1,
-  unrealized_pl: 0,
-  unrealized_pl_percent: 0,
-};
-
-describe("FeedList holdings-only chip", () => {
-  it("shows chip and sets holdings_only=true when clicked", async () => {
-    const fetcher = vi.fn().mockImplementation((key: string) => {
-      if (key.startsWith("/api/portfolio/holdings"))
-        return Promise.resolve({ holdings: [{ ticker: "AAPL" }], totals: HOLDINGS_TOTALS });
-      if (key.startsWith("/api/channels")) return Promise.resolve([]);
-      if (key.startsWith("/api/stocks")) return Promise.resolve([]);
-      // Return one item so FeedList renders the filter bar (not the empty-state card)
-      return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
-    });
-
-    wrap(fetcher);
-
-    const chip = await screen.findByRole("button", { name: "Holdings only" });
-    fireEvent.click(chip);
-
-    await waitFor(() => {
-      expect(
-        fetcher.mock.calls.some(([url]: string[]) => url.includes("holdings_only=true")),
-      ).toBe(true);
-    });
-  });
-
+describe("FeedList ticker filters", () => {
   it("emits one ticker query param per selected ticker", async () => {
     const fetcher = vi.fn().mockImplementation((key: string) => {
       if (key.startsWith("/api/channels") || key.startsWith("/api/stocks")) return Promise.resolve([]);
-      if (key.startsWith("/api/portfolio/holdings"))
-        return Promise.resolve({ holdings: [], totals: HOLDINGS_TOTALS });
       return Promise.resolve({ items: [], total: 0, page: 1, page_size: PAGE_SIZE });
     });
     render(
@@ -145,8 +106,6 @@ describe("FeedList holdings-only chip", () => {
   it("removes a ticker when its chip is clicked", async () => {
     const fetcher = vi.fn().mockImplementation((key: string) => {
       if (key.startsWith("/api/channels") || key.startsWith("/api/stocks")) return Promise.resolve([]);
-      if (key.startsWith("/api/portfolio/holdings"))
-        return Promise.resolve({ holdings: [], totals: HOLDINGS_TOTALS });
       return Promise.resolve({ items: [], total: 0, page: 1, page_size: PAGE_SIZE });
     });
     render(
@@ -161,78 +120,6 @@ describe("FeedList holdings-only chip", () => {
     fireEvent.click(chip);
     await waitFor(() => {
       expect(screen.queryByTestId("active-ticker-chip")).toBeNull();
-    });
-  });
-
-  it("does not render chip when holdings list is empty", async () => {
-    const fetcher = vi.fn().mockImplementation((key: string) => {
-      if (key.startsWith("/api/portfolio/holdings"))
-        return Promise.resolve({ holdings: [], totals: HOLDINGS_TOTALS });
-      if (key.startsWith("/api/channels")) return Promise.resolve([]);
-      if (key.startsWith("/api/stocks")) return Promise.resolve([]);
-      // Return one item so FeedList renders the filter bar (not the empty-state card)
-      return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
-    });
-
-    wrap(fetcher);
-
-    // Wait for feed items to appear (filter bar is rendered), then check chip is absent
-    await screen.findByText("Video 0");
-
-    // Wait for holdings fetch to settle
-    await waitFor(() => {
-      expect(fetcher).toHaveBeenCalledWith("/api/portfolio/holdings");
-    });
-
-    expect(screen.queryByRole("button", { name: "Holdings only" })).toBeNull();
-  });
-});
-
-describe("FeedList holdings privacy", () => {
-  it("does NOT fetch holdings when Hide Holdings is on", async () => {
-    privacy.locked = true;
-    privacy.ready = true;
-    const fetcher = vi.fn().mockImplementation((key: string) => {
-      if (key.startsWith("/api/channels")) return Promise.resolve([]);
-      if (key.startsWith("/api/stocks")) return Promise.resolve([]);
-      if (key.startsWith("/api/portfolio/holdings"))
-        return Promise.resolve({ holdings: [{ ticker: "AAA" }], totals: HOLDINGS_TOTALS });
-      return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
-    });
-    render(
-      <NextIntlClientProvider locale="en" messages={messages}>
-        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
-          <ControlledFeedList />
-        </SWRConfig>
-      </NextIntlClientProvider>,
-    );
-    // Wait for the feed to render
-    await screen.findByText("Video 0");
-    // Holdings must not have been fetched and the filter button must be absent
-    expect(fetcher).not.toHaveBeenCalledWith("/api/portfolio/holdings");
-    expect(screen.queryByTestId("feed-filter-holdings")).not.toBeInTheDocument();
-  });
-
-  it("fetches holdings and shows the filter when not hidden", async () => {
-    privacy.locked = false;
-    privacy.ready = true;
-    const fetcher = vi.fn().mockImplementation((key: string) => {
-      if (key.startsWith("/api/channels")) return Promise.resolve([]);
-      if (key.startsWith("/api/stocks")) return Promise.resolve([]);
-      if (key.startsWith("/api/portfolio/holdings"))
-        return Promise.resolve({ holdings: [{ ticker: "AAA" }], totals: HOLDINGS_TOTALS });
-      return Promise.resolve({ items: [makeItem(0)], total: 1, page: 1, page_size: PAGE_SIZE });
-    });
-    render(
-      <NextIntlClientProvider locale="en" messages={messages}>
-        <SWRConfig value={{ fetcher, provider: () => new Map() }}>
-          <ControlledFeedList />
-        </SWRConfig>
-      </NextIntlClientProvider>,
-    );
-    await screen.findByText("Video 0");
-    await waitFor(() => {
-      expect(fetcher).toHaveBeenCalledWith("/api/portfolio/holdings");
     });
   });
 });
