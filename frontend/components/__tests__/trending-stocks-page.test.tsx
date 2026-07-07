@@ -54,8 +54,8 @@ describe("TrendingStocksPage", () => {
     wrap(fetcher);
     expect(await screen.findByTestId("recent-stock-card")).toBeInTheDocument();
     expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("days=30") && u.includes("count_days=90"))).toBe(true);
-    // default coverage segment is "emerging" -> 2–3 distinct channels
-    expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("min_channels=2") && u.includes("max_channels=3"))).toBe(true);
+    // default coverage segment is "all" -> no channel-count bounds
+    expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("min_channels") || u.includes("max_channels"))).toBe(false);
     // triggers show window labels, not raw day-count numbers
     expect(screen.getAllByText("1M").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("3M").length).toBeGreaterThanOrEqual(1);

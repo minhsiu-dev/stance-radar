@@ -46,7 +46,7 @@ export function TrendingStocksPage() {
   const t = useTranslations("Trending");
   const [fresh, setFresh] = useState(30);
   const [count, setCount] = useState(90);
-  const [segment, setSegment] = useState<SegmentKey>("emerging");
+  const [segment, setSegment] = useState<SegmentKey>("all");
 
   // Infinite scroll: fetch the ranked list PAGE_SIZE at a time via offset pagination.
   // A short page (< PAGE_SIZE) means we've reached the end, so getKey returns null.
