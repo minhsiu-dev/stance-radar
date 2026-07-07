@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -49,6 +49,15 @@ describe("BenchmarkCards", () => {
     for (const el of screen.getAllByText("-1.2%")) {
       expect(el).toHaveClass("text-rose-600");
     }
+
+    const cards = await screen.findAllByTestId("perf-card");
+    expect(cards).toHaveLength(3);
+    ["VOO", "QQQ", "VT"].forEach((t, i) =>
+      expect(within(cards[i]).getByText(t)).toBeInTheDocument(),
+    );
+    expect(within(cards[0]).getByText("$512.3")).toBeInTheDocument();
+    expect(within(cards[1]).getByText("$478.91")).toBeInTheDocument();
+    expect(within(cards[2]).getByText("$118.02")).toBeInTheDocument();
   });
 
   it("shows an error message when the fetch fails", async () => {

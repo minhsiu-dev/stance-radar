@@ -21,7 +21,6 @@ const messages = {
         allChannels: "All channels",
         allTickers: "All stocks",
         allStances: "All stances",
-        holdingsOnly: "Holdings only",
         active: "Filtering:",
         tickersSelected: "{count} selected",
       },

@@ -11,3 +11,4 @@ async def test_benchmarks_returns_voo_qqq_vt_with_changes(api):
         assert item["price"] is not None
         assert item["changes"]["1d"] is not None
         assert item["changes"]["1m"] is not None
+        assert set(item["changes"].keys()) == set(data["ranges"])

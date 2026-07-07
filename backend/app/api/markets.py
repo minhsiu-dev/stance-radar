@@ -42,7 +42,7 @@ async def benchmarks(
     store: PriceStore = Depends(get_price_store),
 ):
     today = datetime.now(timezone.utc).date()
-    start = min(today - timedelta(days=_MAX_HISTORY_DAYS), date(today.year, 1, 1))
+    start = today - timedelta(days=_MAX_HISTORY_DAYS)
     bars = await store.get_daily(list(BENCHMARKS), start)
     day1 = await _one_day_changes(market, BENCHMARKS)
 

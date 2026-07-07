@@ -366,7 +366,6 @@
     "candlesLoad": "Failed to load candles: {message}",
     "summaryLoad": "Failed to load summary: {message}",
     "financialsLoad": "Failed to load financials: {message}",
-    "performanceLoad": "Failed to load performance: {message}",
     "searchUnavailable": "Search is temporarily unavailable"
   }
 }

@@ -13,15 +13,19 @@ const RANGE_LABEL: Record<(typeof CHIP_RANGES)[number], string> = {
   "5d": "5D", "1m": "1M", "3m": "3M", "6m": "6M", ytd: "YTD", "1y": "1Y",
 };
 
+function round1(v: number): number {
+  return Math.round(v * 10) / 10 + 0; // +0 avoids -0.0 rendering as "-0.0%"
+}
+
 function pctText(v: number | null | undefined): string {
   if (v == null) return "—";
-  const rounded = Math.round(v * 10) / 10 + 0; // avoid -0.04 rendering as "-0.0%"
+  const rounded = round1(v);
   return `${rounded >= 0 ? "+" : ""}${rounded.toFixed(1)}%`;
 }
 
 function pctClass(v: number | null | undefined): string {
   if (v == null) return "text-muted-foreground";
-  return Math.round(v * 10) / 10 + 0 >= 0
+  return round1(v) >= 0
     ? "text-emerald-600 dark:text-emerald-400"
     : "text-rose-600 dark:text-rose-400";
 }
