@@ -8,7 +8,6 @@
     "home": "首頁",
     "trending": "熱門個股",
     "videos": "最新影片",
-    "portfolio": "持股狀態",
     "channels": "頻道管理",
     "openMenu": "開啟選單"
   },
@@ -44,8 +43,6 @@
   },
   "Settings": {
     "open": "設定",
-    "lockHoldings": "鎖定持股",
-    "unlockHoldings": "解鎖持股…",
     "theme": "深色模式",
     "language": "語言"
   },
@@ -63,12 +60,6 @@
     "benchmarks": {
       "title": "大盤",
       "loadError": "大盤資料載入失敗:{message}"
-    },
-    "performance": {
-      "portfolio": "我的組合",
-      "empty": "還沒有持股",
-      "emptyCta": "前往持股頁新增",
-      "loadError": "績效資料載入失敗:{message}"
     },
     "leaderboard": {
       "title": "頻道準確度排行",
@@ -111,7 +102,6 @@
         "allChannels": "全部頻道",
         "allTickers": "全部股票",
         "allStances": "全部立場",
-        "holdingsOnly": "只看持股",
         "active": "篩選中:",
         "tickersSelected": "已選 {count} 檔"
       }
@@ -368,72 +358,6 @@
       "allStances": "全部立場",
       "ticker": "股票",
       "allTickers": "全部股票"
-    }
-  },
-  "Portfolio": {
-    "title": "持股",
-    "hiddenTitle": "持股已隱藏",
-    "unlock": "解鎖",
-    "unlockPrompt": "輸入密碼以解鎖持股",
-    "passwordLabel": "密碼",
-    "wrongPassword": "密碼錯誤",
-    "totals": {
-      "marketValue": "總市值",
-      "costBasis": "總成本",
-      "unrealizedPl": "未實現損益",
-      "totalValue": "總值",
-      "cash": "現金",
-      "todayPl": "今日損益"
-    },
-    "cashDialog": {
-      "title": "設定現金 (USD)",
-      "placeholder": "0.00",
-      "save": "儲存",
-      "edit": "編輯"
-    },
-    "chart": {
-      "title": "組合 vs VOO / QQQ（報酬 %）",
-      "portfolioSeries": "我的組合",
-      "noData": "尚無足夠價格資料"
-    },
-    "holdings": {
-      "title": "持股明細",
-      "ticker": "股票",
-      "shares": "股數",
-      "avgCost": "平均成本",
-      "price": "現價",
-      "marketValue": "市值",
-      "pl": "損益",
-      "weight": "比重",
-      "cash": "現金 (USD)",
-      "empty": "尚無持股,先在下方新增一筆交易"
-    },
-    "categories": {
-      "uncategorized": "未分類",
-      "cash": "現金",
-      "newPlaceholder": "新分類名稱",
-      "add": "新增分類",
-      "delete": "刪除",
-      "rename": "重新命名",
-      "empty": "尚無持股",
-      "dragHint": "把股票拖到分類即可歸類",
-      "detailTab": "明細",
-      "categoriesTab": "分類"
-    },
-    "transactions": {
-      "title": "交易紀錄",
-      "add": "新增",
-      "buy": "買入",
-      "sell": "賣出",
-      "shares": "股數",
-      "price": "價格",
-      "dateLabel": "日期",
-      "note": "備註(選填)",
-      "tickerPlaceholder": "代號,如 AAPL",
-      "delete": "刪除",
-      "empty": "尚無交易",
-      "addFailed": "新增失敗:{message}",
-      "deleteFailed": "刪除失敗:{message}"
     }
   },
   "Errors": {

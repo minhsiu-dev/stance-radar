@@ -8,7 +8,6 @@
     "home": "Home",
     "trending": "Trending stocks",
     "videos": "Latest videos",
-    "portfolio": "Holdings",
     "channels": "Channels",
     "openMenu": "Open menu"
   },
@@ -44,8 +43,6 @@
   },
   "Settings": {
     "open": "Settings",
-    "lockHoldings": "Lock holdings",
-    "unlockHoldings": "Unlock holdings…",
     "theme": "Dark mode",
     "language": "Language"
   },
@@ -63,12 +60,6 @@
     "benchmarks": {
       "title": "Benchmarks",
       "loadError": "Failed to load benchmarks: {message}"
-    },
-    "performance": {
-      "portfolio": "My portfolio",
-      "empty": "No holdings yet",
-      "emptyCta": "Add some on the portfolio page",
-      "loadError": "Failed to load performance: {message}"
     },
     "leaderboard": {
       "title": "Channel accuracy leaderboard",
@@ -111,7 +102,6 @@
         "allChannels": "All channels",
         "allTickers": "All stocks",
         "allStances": "All stances",
-        "holdingsOnly": "Holdings only",
         "active": "Filtering:",
         "tickersSelected": "{count} selected"
       }
@@ -368,72 +358,6 @@
       "allStances": "All stances",
       "ticker": "Ticker",
       "allTickers": "All tickers"
-    }
-  },
-  "Portfolio": {
-    "title": "Portfolio",
-    "hiddenTitle": "Holdings are hidden",
-    "unlock": "Unlock",
-    "unlockPrompt": "Enter password to unlock holdings",
-    "passwordLabel": "Password",
-    "wrongPassword": "Wrong password",
-    "totals": {
-      "marketValue": "Market value",
-      "costBasis": "Cost basis",
-      "unrealizedPl": "Unrealized P/L",
-      "totalValue": "Total value",
-      "cash": "Cash",
-      "todayPl": "Today's P/L"
-    },
-    "cashDialog": {
-      "title": "Set cash (USD)",
-      "placeholder": "0.00",
-      "save": "Save",
-      "edit": "Edit"
-    },
-    "chart": {
-      "title": "Portfolio vs VOO / QQQ (return %)",
-      "portfolioSeries": "My portfolio",
-      "noData": "Not enough price data yet"
-    },
-    "holdings": {
-      "title": "Holdings",
-      "ticker": "Ticker",
-      "shares": "Shares",
-      "avgCost": "Avg cost",
-      "price": "Price",
-      "marketValue": "Value",
-      "pl": "P/L",
-      "weight": "Weight",
-      "cash": "Cash (USD)",
-      "empty": "No holdings yet — add a transaction below"
-    },
-    "categories": {
-      "uncategorized": "Uncategorized",
-      "cash": "Cash",
-      "newPlaceholder": "New category name",
-      "add": "Add category",
-      "delete": "Delete",
-      "rename": "Rename",
-      "empty": "No holdings yet",
-      "dragHint": "Drag a ticker into a category",
-      "detailTab": "Detail",
-      "categoriesTab": "Categories"
-    },
-    "transactions": {
-      "title": "Transactions",
-      "add": "Add",
-      "buy": "Buy",
-      "sell": "Sell",
-      "shares": "Shares",
-      "price": "Price",
-      "dateLabel": "Date",
-      "note": "Note (optional)",
-      "tickerPlaceholder": "Ticker, e.g. AAPL",
-      "delete": "Delete",
-      "empty": "No transactions yet",
-      "addFailed": "Add failed: {message}",
-      "deleteFailed": "Delete failed: {message}"
     }
   },
   "Errors": {

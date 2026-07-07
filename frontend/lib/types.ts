@@ -375,48 +375,6 @@ export interface LeaderboardResponse {
   items: LeaderboardItem[];
 }
 
-export type TransactionSide = "buy" | "sell";
-
-export interface PortfolioTransaction {
-  id: string;
-  ticker: string;
-  side: TransactionSide;
-  shares: number;
-  price: number;
-  executed_on: string;
-  note: string | null;
-  created_at: string;
-}
-
-export interface HoldingItem {
-  ticker: string;
-  shares: number;
-  avg_cost: number;
-  price: number | null;
-  change_percent: number | null;
-  market_value: number | null;
-  unrealized_pl: number | null;
-  unrealized_pl_percent: number | null;
-  weight: number | null;
-}
-
-export interface HoldingsResponse {
-  holdings: HoldingItem[];
-  totals: {
-    market_value: number | null;
-    cost_basis: number;
-    unrealized_pl: number | null;
-    unrealized_pl_percent: number | null;
-    cash: number;
-    total_value: number | null;
-    cash_weight: number | null;
-  };
-}
-
-export interface CashResponse {
-  amount: number;
-}
-
 export type PerfChanges = Record<string, number | null>;
 
 export interface BenchmarkItem {
@@ -428,31 +386,6 @@ export interface BenchmarkItem {
 export interface BenchmarksResponse {
   ranges: string[];
   items: BenchmarkItem[];
-}
-
-export interface PerformanceSummary {
-  ranges: string[];
-  portfolio: { total_value: number | null; changes: PerfChanges } | null;
-  voo: { price: number | null; changes: PerfChanges };
-  qqq: { price: number | null; changes: PerfChanges };
-}
-
-export interface SeriesPoint {
-  date: string;
-  value: number;
-}
-
-export interface PerformanceSeries {
-  change_percent: number | null;
-  series: SeriesPoint[] | null;
-}
-
-export interface PerformanceRangeResponse {
-  range: string;
-  effective_start: string | null;
-  portfolio: PerformanceSeries | null;
-  voo: PerformanceSeries;
-  qqq: PerformanceSeries;
 }
 
 export interface AnalystData {

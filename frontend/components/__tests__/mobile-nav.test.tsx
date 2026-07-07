@@ -11,7 +11,6 @@ const messages = {
     trending: "Trending stocks",
     videos: "Latest videos",
     channels: "Channels",
-    portfolio: "Holdings",
     openMenu: "Open menu",
   },
 };
@@ -30,16 +29,11 @@ describe("MobileNav", () => {
     expect(screen.queryByRole("link", { name: "Home" })).toBeNull();
   });
 
-  it("opens the drawer with all five links", async () => {
+  it("opens the drawer with all four links", async () => {
     renderNav();
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     expect(await screen.findByRole("link", { name: "Home" })).toBeInTheDocument();
-    for (const name of [
-      "Trending stocks",
-      "Latest videos",
-      "Channels",
-      "Holdings",
-    ]) {
+    for (const name of ["Trending stocks", "Latest videos", "Channels"]) {
       expect(screen.getByRole("link", { name })).toBeInTheDocument();
     }
   });
