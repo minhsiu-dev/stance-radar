@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_runner, get_session, get_youtube
+from app.auth import require_admin
 from app.envelope import fail, ok
 from app.models import (
     Channel, JobKind, Stance, Video, VideoStance, VideoStatus, utcnow,
@@ -85,6 +86,7 @@ async def add_channels(
     session: AsyncSession = Depends(get_session),
     youtube: YouTubeClient = Depends(get_youtube),
     runner: RefreshRunner = Depends(get_runner),
+    _: None = Depends(require_admin),
 ):
     tokens = parse_channel_ids(body.channel_ids)
     if not tokens:
@@ -380,6 +382,7 @@ async def update_channel(
     channel_id: str,
     body: UpdateChannelRequest,
     session: AsyncSession = Depends(get_session),
+    _: None = Depends(require_admin),
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:
@@ -394,6 +397,7 @@ async def load_older(
     channel_id: str,
     session: AsyncSession = Depends(get_session),
     runner: RefreshRunner = Depends(get_runner),
+    _: None = Depends(require_admin),
 ):
     if await session.get(Channel, channel_id) is None:
         return fail(f"Channel {channel_id} not found", status_code=404)
@@ -403,7 +407,9 @@ async def load_older(
 
 @router.delete("/{channel_id}")
 async def delete_channel(
-    channel_id: str, session: AsyncSession = Depends(get_session)
+    channel_id: str,
+    session: AsyncSession = Depends(get_session),
+    _: None = Depends(require_admin),
 ):
     channel = await session.get(Channel, channel_id)
     if channel is None:

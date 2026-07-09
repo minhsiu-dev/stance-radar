@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_price_store, get_runner, get_session
+from app.auth import require_admin
 from app.envelope import fail, ok
 from app.models import JobKind, Mention, Stance, Video, VideoStance, VideoStatus
 from app.pipeline.refresh import RefreshRunner
@@ -82,6 +83,7 @@ async def analyze_videos(
     body: VideoIdsRequest,
     session: AsyncSession = Depends(get_session),
     runner: RefreshRunner = Depends(get_runner),
+    _: None = Depends(require_admin),
 ):
     videos, error = await _load_videos(session, body.video_ids)
     if error is not None:
@@ -99,6 +101,7 @@ async def analyze_videos(
 async def skip_videos(
     body: VideoIdsRequest,
     session: AsyncSession = Depends(get_session),
+    _: None = Depends(require_admin),
 ):
     videos, error = await _load_videos(session, body.video_ids)
     if error is not None:

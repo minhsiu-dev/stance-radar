@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_runner, get_session
+from app.auth import require_admin
 from app.config import get_settings
 from app.envelope import ok
 from app.models import Job, JobKind
@@ -25,7 +26,10 @@ def job_to_dict(job: Job) -> dict:
 
 
 @router.post("/refresh")
-async def trigger_refresh(runner: RefreshRunner = Depends(get_runner)):
+async def trigger_refresh(
+    runner: RefreshRunner = Depends(get_runner),
+    _: None = Depends(require_admin),
+):
     job_id, created = await runner.start(JobKind.discover)
     return ok({"job_id": job_id, "created": created})
 
