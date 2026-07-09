@@ -83,9 +83,10 @@ async def lifespan(application: FastAPI):
 
 
 def create_app() -> FastAPI:
-    from app.api import channels, feed, insights, markets, refresh, stocks, videos
+    from app.api import admin, channels, feed, insights, markets, refresh, stocks, videos
 
     app = FastAPI(title="Stance Radar API", lifespan=lifespan)
+    app.include_router(admin.router)
     app.include_router(channels.router)
     app.include_router(refresh.router)
     app.include_router(feed.router)
@@ -93,6 +94,17 @@ def create_app() -> FastAPI:
     app.include_router(videos.router)
     app.include_router(insights.router)
     app.include_router(markets.router)
+
+    from fastapi.responses import JSONResponse
+
+    from app.auth import AdminLocked
+
+    @app.exception_handler(AdminLocked)
+    async def _admin_locked(_request, _exc):
+        return JSONResponse(
+            status_code=401,
+            content={"success": False, "data": None, "error": "Admin locked"},
+        )
 
     @app.get("/api/health")
     async def health() -> dict:

@@ -55,9 +55,55 @@ async def sessionmaker(engine):
 
 @pytest.fixture
 async def api(engine, monkeypatch):
-    """(app, client) — full ASGI app with fake adapters + test db."""
+    """(app, client) — full ASGI app with fake adapters + test db, admin UNLOCKED."""
     monkeypatch.setenv("USE_FAKE_ADAPTERS", "true")
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("ADMIN_PASSWORD", "hunter2")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    from asgi_lifespan import LifespanManager
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import create_app
+
+    app = create_app()
+    async with LifespanManager(app):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.post("/api/admin/unlock", json={"password": "hunter2"})
+            yield app, client
+    get_settings.cache_clear()
+
+
+@pytest.fixture
+async def locked_api(engine, monkeypatch):
+    """(app, client) with ADMIN_PASSWORD set but NOT unlocked (fresh cookie jar)."""
+    monkeypatch.setenv("USE_FAKE_ADAPTERS", "true")
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("ADMIN_PASSWORD", "hunter2")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    from asgi_lifespan import LifespanManager
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import create_app
+
+    app = create_app()
+    async with LifespanManager(app):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield app, client
+    get_settings.cache_clear()
+
+
+@pytest.fixture
+async def no_admin_api(engine, monkeypatch):
+    """(app, client) with NO ADMIN_PASSWORD -> deny-all writes."""
+    monkeypatch.setenv("USE_FAKE_ADAPTERS", "true")
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
     from app.config import get_settings
 
     get_settings.cache_clear()
