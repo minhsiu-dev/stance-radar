@@ -3,11 +3,14 @@
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { useAdmin } from "@/components/admin-provider";
 import type { DiscoveredResponse } from "@/lib/types";
 
 export function PendingReviewBanner() {
   const t = useTranslations("Review");
+  const { authenticated } = useAdmin();
   const { data } = useSWR<DiscoveredResponse>("/api/videos?status=discovered");
+  if (!authenticated) return null;
   if (!data || data.total === 0) return null;
   return (
     <Link

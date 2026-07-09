@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
+import { useAdmin } from "@/components/admin-provider";
 import { apiFetch } from "@/lib/api";
 import type { JobInfo } from "@/lib/types";
 
@@ -32,6 +33,7 @@ export function RefreshButton() {
   const t = useTranslations("Dashboard.refresh");
   const router = useRouter();
   const { mutate } = useSWRConfig();
+  const { authenticated, handleAuthError } = useAdmin();
   const [triggerError, setTriggerError] = useState<string | null>(null);
   const [noNew, setNoNew] = useState(false);
   const prevStatus = useRef<string | null>(null);
@@ -69,9 +71,12 @@ export function RefreshButton() {
       await apiFetch("/api/refresh", { method: "POST" });
       await mutate("/api/jobs/current");
     } catch (error) {
+      handleAuthError(error);
       setTriggerError(error instanceof Error ? error.message : t("triggerFailed"));
     }
   }
+
+  if (!authenticated) return null;
 
   return (
     <div className="flex flex-col items-end gap-1">

@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -49,6 +49,13 @@ vi.mock("@/i18n/navigation", () => ({
     <a href={href}>{children}</a>
   ),
 }));
+
+const useAdmin = vi.fn();
+vi.mock("@/components/admin-provider", () => ({ useAdmin: () => useAdmin() }));
+
+beforeEach(() => {
+  useAdmin.mockReturnValue({ authenticated: true, handleAuthError: vi.fn() });
+});
 
 const messages = {
   Channels: {
@@ -154,5 +161,40 @@ describe("ChannelManager", () => {
     await waitFor(() =>
       expect(screen.queryByTestId("load-more-sentinel")).not.toBeInTheDocument(),
     );
+  });
+
+  it("shows the Remove button when authenticated", async () => {
+    wrap();
+    expect(await screen.findByText("Channel a1")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Remove" }).length).toBeGreaterThan(0);
+  });
+
+  it("hides the Remove button when not authenticated", async () => {
+    useAdmin.mockReturnValue({ authenticated: false, handleAuthError: vi.fn() });
+    wrap();
+    expect(await screen.findByText("Channel a1")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+  });
+
+  it("routes a 401 from a failed remove back through handleAuthError", async () => {
+    const handleAuthError = vi.fn();
+    useAdmin.mockReturnValue({ authenticated: true, handleAuthError });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ success: false, error: "Unauthorized" }),
+      }),
+    );
+    wrap();
+    const removeBtn = (await screen.findAllByRole("button", { name: "Remove" }))[0];
+    fireEvent.click(removeBtn);
+    await waitFor(() => {
+      expect(handleAuthError).toHaveBeenCalledTimes(1);
+    });
+    const [err] = handleAuthError.mock.calls[0];
+    expect(err).toMatchObject({ status: 401 });
   });
 });

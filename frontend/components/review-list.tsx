@@ -7,6 +7,7 @@ import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAdmin } from "@/components/admin-provider";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type { DiscoveredResponse } from "@/lib/types";
@@ -22,6 +23,7 @@ export function ReviewList() {
   const t = useTranslations("Review");
   const router = useRouter();
   const { mutate } = useSWRConfig();
+  const { authenticated, handleAuthError } = useAdmin();
   const { data, error, isLoading } = useSWR<DiscoveredResponse>(
     "/api/videos?status=discovered",
   );
@@ -78,6 +80,7 @@ export function ReviewList() {
       );
       router.push("/");
     } catch (err) {
+      handleAuthError(err);
       setMessage(err instanceof Error ? err.message : t("confirmFailed"));
       setSubmitting(false);
     }
@@ -128,22 +131,24 @@ export function ReviewList() {
                 )}
                 {group.channel.title}
               </CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setMany(ids, true)}
-                >
-                  {t("selectAll")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setMany(ids, false)}
-                >
-                  {t("deselectAll")}
-                </Button>
-              </div>
+              {authenticated && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMany(ids, true)}
+                  >
+                    {t("selectAll")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMany(ids, false)}
+                  >
+                    {t("deselectAll")}
+                  </Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="space-y-1">
               {group.videos.map((video) => (
@@ -151,12 +156,16 @@ export function ReviewList() {
                   key={video.id}
                   className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/50"
                 >
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-primary"
-                    checked={checked.has(video.id)}
-                    onChange={() => toggle(video.id)}
-                  />
+                  {authenticated ? (
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={checked.has(video.id)}
+                      onChange={() => toggle(video.id)}
+                    />
+                  ) : (
+                    <div aria-hidden className="h-4 w-4" />
+                  )}
                   {video.thumbnail_url && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -181,14 +190,16 @@ export function ReviewList() {
           </Card>
         );
       })}
-      <div className="sticky bottom-4 flex items-center justify-end gap-3">
-        {message && <p className="text-sm text-red-500">{message}</p>}
-        <Button onClick={confirm} disabled={submitting}>
-          {submitting
-            ? t("confirming")
-            : t("confirm", { count: selected.length })}
-        </Button>
-      </div>
+      {authenticated && (
+        <div className="sticky bottom-4 flex items-center justify-end gap-3">
+          {message && <p className="text-sm text-red-500">{message}</p>}
+          <Button onClick={confirm} disabled={submitting}>
+            {submitting
+              ? t("confirming")
+              : t("confirm", { count: selected.length })}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

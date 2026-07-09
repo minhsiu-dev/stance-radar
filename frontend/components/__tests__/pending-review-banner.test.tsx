@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { PendingReviewBanner } from "@/components/pending-review-banner";
@@ -11,6 +11,13 @@ vi.mock("@/i18n/navigation", () => ({
     </a>
   ),
 }));
+
+const useAdmin = vi.fn();
+vi.mock("@/components/admin-provider", () => ({ useAdmin: () => useAdmin() }));
+
+beforeEach(() => {
+  useAdmin.mockReturnValue({ authenticated: true, handleAuthError: vi.fn() });
+});
 
 const messages = {
   Review: {
@@ -42,6 +49,13 @@ describe("PendingReviewBanner", () => {
   it("renders nothing when there is nothing to review", async () => {
     renderBanner(0);
     // Should still not appear after SWR resolves
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing when not authenticated, even with videos awaiting review", async () => {
+    useAdmin.mockReturnValue({ authenticated: false, handleAuthError: vi.fn() });
+    renderBanner(4);
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChannelActivityBars } from "@/components/channel-activity-bars";
 import { ChannelPerfLine } from "@/components/channel-perf-line";
+import { useAdmin } from "@/components/admin-provider";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type { ChannelOverviewItem, ChannelOverviewResponse } from "@/lib/types";
@@ -17,6 +18,7 @@ const PAGE_SIZE = 10;
 
 export function ChannelManager() {
   const t = useTranslations("Channels");
+  const { authenticated, handleAuthError } = useAdmin();
   const [message, setMessage] = useState<string | null>(null);
 
   const getKey = useCallback(
@@ -70,6 +72,7 @@ export function ChannelManager() {
       await apiFetch(`/api/channels/${channel.id}`, { method: "DELETE" });
       await mutate();
     } catch (error) {
+      handleAuthError(error);
       setMessage(error instanceof Error ? error.message : t("list.removeFailed"));
     }
   }
@@ -125,9 +128,11 @@ export function ChannelManager() {
                 </div>
               </div>
               <ChannelActivityBars weekly={channel.weekly_activity} />
-              <Button variant="destructive" size="sm" onClick={() => remove(channel)}>
-                {t("list.remove")}
-              </Button>
+              {authenticated && (
+                <Button variant="destructive" size="sm" onClick={() => remove(channel)}>
+                  {t("list.remove")}
+                </Button>
+              )}
             </CardContent>
           </Card>
         );

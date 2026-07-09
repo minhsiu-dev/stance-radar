@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAdmin } from "@/components/admin-provider";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { JobInfo } from "@/lib/types";
@@ -23,6 +24,7 @@ export function ReanalyzeButton({
   onDone: () => void;
 }) {
   const t = useTranslations("VideoDetail");
+  const { authenticated, handleAuthError } = useAdmin();
   const [active, setActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const startedJobId = useRef<number | null>(null);
@@ -52,9 +54,12 @@ export function ReanalyzeButton({
       startedJobId.current = res.job_id;
       setActive(true);
     } catch (err) {
+      handleAuthError(err);
       setError(err instanceof Error ? err.message : t("reanalyzeFailed"));
     }
   }
+
+  if (!authenticated) return null;
 
   return (
     <div className="flex flex-col items-end gap-1">

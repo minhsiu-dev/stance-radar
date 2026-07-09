@@ -53,6 +53,13 @@ vi.mock("@/components/channel-performance-summary", () => ({
   ChannelPerformanceSummary: () => <div data-testid="perf-summary" />,
 }));
 
+const useAdmin = vi.fn();
+vi.mock("@/components/admin-provider", () => ({ useAdmin: () => useAdmin() }));
+
+beforeEach(() => {
+  useAdmin.mockReturnValue({ authenticated: true, handleAuthError: vi.fn() });
+});
+
 const messages = {
   ChannelDetail: {
     loadError: "Failed: {message}",
@@ -495,5 +502,48 @@ describe("ChannelDetail", () => {
     expect(screen.queryByText("Analyzed video")).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("tab", { name: "Videos tab" }));
     expect(await screen.findByText("Analyzed video")).toBeInTheDocument();
+  });
+
+  it("hides write controls (toggle, checkboxes, load-older, row actions) when not authenticated, keeping the video list visible", async () => {
+    useAdmin.mockReturnValue({ authenticated: false, handleAuthError: vi.fn() });
+    renderDetail();
+    expect(await screen.findByText("Alpha")).toBeInTheDocument();
+    expect(screen.queryByTestId("auto-analyze-toggle")).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
+    // Read-only video content stays visible
+    expect(await screen.findByText("Analyzed video")).toBeInTheDocument();
+    expect(screen.getByText("Skipped video")).toBeInTheDocument();
+    // Write affordances are gone
+    expect(screen.queryByTestId("select-all")).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Analyze" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Load older videos" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("routes a 401 during a skip action back through handleAuthError", async () => {
+    const handleAuthError = vi.fn();
+    useAdmin.mockReturnValue({ authenticated: true, handleAuthError });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ success: false, error: "Unauthorized" }),
+      }),
+    );
+    renderDetail(pagedVideos(1));
+    fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
+    expect(await screen.findByText("Video 1")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+
+    await waitFor(() => {
+      expect(handleAuthError).toHaveBeenCalledTimes(1);
+    });
+    const [err] = handleAuthError.mock.calls[0];
+    expect(err).toMatchObject({ status: 401 });
   });
 });

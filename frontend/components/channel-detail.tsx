@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StanceBadge } from "@/components/stance-badge";
+import { useAdmin } from "@/components/admin-provider";
 import { apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type {
@@ -79,6 +80,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
   const t = useTranslations("ChannelDetail");
   const tChannels = useTranslations("Channels");
   const { mutate } = useSWRConfig();
+  const { authenticated, handleAuthError } = useAdmin();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
@@ -187,6 +189,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         mutateVideos(),
       ]);
     } catch (err) {
+      handleAuthError(err);
       setMessage(
         t("videos.actionFailed", {
           message: err instanceof Error ? err.message : "?",
@@ -222,6 +225,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         mutateVideos(),
       ]);
     } catch (err) {
+      handleAuthError(err);
       setMessage(
         t("videos.actionFailed", {
           message: err instanceof Error ? err.message : "?",
@@ -264,6 +268,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         mutateVideos(),
       ]);
     } catch (err) {
+      handleAuthError(err);
       setMessage(
         t("videos.actionFailed", {
           message: err instanceof Error ? err.message : "?",
@@ -317,28 +322,30 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
-          <button
-            type="button"
-            onClick={toggleAutoAnalyze}
-            disabled={busy}
-            aria-pressed={detail.auto_analyze}
-            title={t("autoAnalyze.hint")}
-            data-testid="auto-analyze-toggle"
-            className={
-              detail.auto_analyze
-                ? "inline-flex items-center gap-1.5 rounded-md border border-sky-500/40 bg-sky-500/15 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-500/25 dark:text-sky-300"
-                : "inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            }
-          >
-            {detail.auto_analyze ? (
-              <Zap className="h-3.5 w-3.5" />
-            ) : (
-              <ZapOff className="h-3.5 w-3.5" />
-            )}
-            {detail.auto_analyze
-              ? t("autoAnalyze.on")
-              : t("autoAnalyze.off")}
-          </button>
+          {authenticated && (
+            <button
+              type="button"
+              onClick={toggleAutoAnalyze}
+              disabled={busy}
+              aria-pressed={detail.auto_analyze}
+              title={t("autoAnalyze.hint")}
+              data-testid="auto-analyze-toggle"
+              className={
+                detail.auto_analyze
+                  ? "inline-flex items-center gap-1.5 rounded-md border border-sky-500/40 bg-sky-500/15 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-500/25 dark:text-sky-300"
+                  : "inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              }
+            >
+              {detail.auto_analyze ? (
+                <Zap className="h-3.5 w-3.5" />
+              ) : (
+                <ZapOff className="h-3.5 w-3.5" />
+              )}
+              {detail.auto_analyze
+                ? t("autoAnalyze.on")
+                : t("autoAnalyze.off")}
+            </button>
+          )}
           <a
             href={`https://www.youtube.com/channel/${detail.id}`}
             target="_blank"
@@ -388,7 +395,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-y-2 space-y-0">
               <CardTitle className="text-base">{t("videos.title")}</CardTitle>
               <div className="flex flex-wrap items-center gap-2">
-                {actionableIds.length > 0 && (
+                {authenticated && actionableIds.length > 0 && (
                   <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <input
                       ref={selectAllRef}
@@ -403,7 +410,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
                     {t("videos.selectAll")}
                   </label>
                 )}
-                {selectedIds.length > 0 && (
+                {authenticated && selectedIds.length > 0 && (
                   <>
                     <span className="text-xs text-muted-foreground">
                       {t("videos.selectedCount", { count: selectedIds.length })}
@@ -465,6 +472,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
                   onToggle={() => toggle(video.id)}
                   onAct={act}
                   busy={busy}
+                  authenticated={authenticated}
                 />
               ))}
               {videosLoaded && videoItems.length > 0 && (
@@ -487,19 +495,21 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
                       )}
                     </div>
                   ) : (
-                    // All videos in the DB are loaded → dig back for older videos (go to skipped, no review needed)
-                    <div className="flex justify-center">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={loadOlder}
-                      >
-                        {busy
-                          ? t("videos.loadingOlder")
-                          : t("videos.loadOlder")}
-                      </Button>
-                    </div>
+                    authenticated && (
+                      // All videos in the DB are loaded → dig back for older videos (go to skipped, no review needed)
+                      <div className="flex justify-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={loadOlder}
+                        >
+                          {busy
+                            ? t("videos.loadingOlder")
+                            : t("videos.loadOlder")}
+                        </Button>
+                      </div>
+                    )
                   )}
                 </div>
               )}
@@ -542,12 +552,14 @@ function VideoRow({
   onToggle,
   onAct,
   busy,
+  authenticated,
 }: {
   video: ChannelVideoItem;
   checked: boolean;
   onToggle: () => void;
   onAct: (path: "analyze" | "skip", ids: string[]) => Promise<void>;
   busy: boolean;
+  authenticated: boolean;
 }) {
   const t = useTranslations("ChannelDetail");
   const actionable = ACTIONABLE.has(video.status);
@@ -557,14 +569,18 @@ function VideoRow({
 
   return (
     <div className="group grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-start gap-3 rounded-md px-2 py-3 transition-colors hover:bg-muted/40">
-      <input
-        type="checkbox"
-        className="mt-3 h-4 w-4 accent-primary disabled:opacity-30"
-        checked={checked}
-        onChange={onToggle}
-        disabled={!actionable}
-        aria-label={video.title}
-      />
+      {authenticated ? (
+        <input
+          type="checkbox"
+          className="mt-3 h-4 w-4 accent-primary disabled:opacity-30"
+          checked={checked}
+          onChange={onToggle}
+          disabled={!actionable}
+          aria-label={video.title}
+        />
+      ) : (
+        <div aria-hidden className="mt-3 h-4 w-4" />
+      )}
       <VideoRowThumb url={video.thumbnail_url} />
 
       {/* Main info column: title → time/status badges → stance chips */}
@@ -614,7 +630,7 @@ function VideoRow({
 
       {/* Actions column: shown on hover on desktop; touch devices have no hover, so always visible */}
       <div className="flex shrink-0 items-center gap-0.5 transition-opacity focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-        {action && (
+        {authenticated && action && (
           <Button
             size="sm"
             variant="ghost"
@@ -624,7 +640,7 @@ function VideoRow({
             {t(`videos.${action}`)}
           </Button>
         )}
-        {SKIPPABLE.has(video.status) && (
+        {authenticated && SKIPPABLE.has(video.status) && (
           <Button
             size="sm"
             variant="ghost"

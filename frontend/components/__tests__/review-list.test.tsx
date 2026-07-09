@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { ReviewList } from "@/components/review-list";
@@ -10,6 +10,13 @@ vi.mock("@/i18n/navigation", () => ({
     <a href={href}>{children}</a>
   ),
 }));
+
+const useAdmin = vi.fn();
+vi.mock("@/components/admin-provider", () => ({ useAdmin: () => useAdmin() }));
+
+beforeEach(() => {
+  useAdmin.mockReturnValue({ authenticated: true, handleAuthError: vi.fn() });
+});
 
 const messages = {
   Review: {
@@ -127,5 +134,41 @@ describe("ReviewList", () => {
     expect(
       await screen.findByText("No videos awaiting review."),
     ).toBeInTheDocument();
+  });
+
+  it("hides selection and confirm controls when not authenticated, keeping the video list visible", async () => {
+    useAdmin.mockReturnValue({ authenticated: false, handleAuthError: vi.fn() });
+    renderList();
+    // Read-only content stays visible
+    expect(await screen.findByText("Video 1")).toBeInTheDocument();
+    expect(screen.getByText("Video 3")).toBeInTheDocument();
+    // Write affordances are gone
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Select all" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Analyze selected/ })).not.toBeInTheDocument();
+  });
+
+  it("routes a 401 during confirm back through handleAuthError", async () => {
+    const handleAuthError = vi.fn();
+    useAdmin.mockReturnValue({ authenticated: true, handleAuthError });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ success: false, error: "Unauthorized" }),
+      }),
+    );
+    renderList();
+    await screen.findByText("Video 1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Analyze selected (0)" }));
+
+    await waitFor(() => {
+      expect(handleAuthError).toHaveBeenCalledTimes(1);
+    });
+    const [err] = handleAuthError.mock.calls[0];
+    expect(err).toMatchObject({ status: 401 });
+    vi.unstubAllGlobals();
   });
 });

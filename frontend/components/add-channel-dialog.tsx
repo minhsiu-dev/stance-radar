@@ -14,12 +14,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { apiFetchEnvelope } from "@/lib/api";
+import { useAdmin } from "@/components/admin-provider";
+import { ApiError, apiFetchEnvelope } from "@/lib/api";
 import type { AddChannelsResult } from "@/lib/types";
 
 export function AddChannelDialog() {
   const t = useTranslations("Channels");
   const { mutate } = useSWRConfig();
+  const { authenticated, handleAuthError } = useAdmin();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -30,10 +32,14 @@ export function AddChannelDialog() {
     setSubmitting(true);
     setMessage(null);
     try {
-      const { body } = await apiFetchEnvelope<AddChannelsResult>("/api/channels", {
+      const { status, body } = await apiFetchEnvelope<AddChannelsResult>("/api/channels", {
         method: "POST",
         body: JSON.stringify({ channel_ids: input }),
       });
+      if (status === 401) {
+        handleAuthError(new ApiError(body.error ?? "", 401));
+        return;
+      }
       const data = body.data;
       if (!data) {
         setMessage(body.error ?? t("add.failedGeneric"));
@@ -59,6 +65,8 @@ export function AddChannelDialog() {
       setSubmitting(false);
     }
   }
+
+  if (!authenticated) return null;
 
   return (
     <Dialog
