@@ -6,6 +6,7 @@ import { fontVariables } from "@/app/layout";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/app-shell";
 import { SWRProvider } from "@/components/swr-provider";
+import { AdminProvider } from "@/components/admin-provider";
 import { routing } from "@/i18n/routing";
 
 export async function generateMetadata({
@@ -54,7 +55,9 @@ export default async function LocaleLayout({
         >
           <NextIntlClientProvider messages={messages}>
             <SWRProvider>
-              <AppShell>{children}</AppShell>
+              <AdminProvider>
+                <AppShell>{children}</AppShell>
+              </AdminProvider>
             </SWRProvider>
           </NextIntlClientProvider>
         </ThemeProvider>

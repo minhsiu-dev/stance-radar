@@ -367,5 +367,14 @@
     "summaryLoad": "摘要讀取失敗:{message}",
     "financialsLoad": "財報讀取失敗:{message}",
     "searchUnavailable": "搜尋暫時無法使用"
+  },
+  "Admin": {
+    "unlock": "解鎖",
+    "lock": "鎖定",
+    "unlockPrompt": "輸入管理密碼",
+    "passwordLabel": "密碼",
+    "wrongPassword": "密碼錯誤",
+    "unlockAria": "解鎖管理功能",
+    "lockAria": "鎖定管理功能"
   }
 }

@@ -367,5 +367,14 @@
     "summaryLoad": "Failed to load summary: {message}",
     "financialsLoad": "Failed to load financials: {message}",
     "searchUnavailable": "Search is temporarily unavailable"
+  },
+  "Admin": {
+    "unlock": "Unlock",
+    "lock": "Lock",
+    "unlockPrompt": "Enter admin password",
+    "passwordLabel": "Password",
+    "wrongPassword": "Wrong password",
+    "unlockAria": "Unlock admin actions",
+    "lockAria": "Lock admin actions"
   }
 }
