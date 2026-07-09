@@ -83,10 +83,15 @@ def test_is_admin_denies_when_password_unset(monkeypatch):
 def test_is_admin_requires_valid_cookie_and_slides(monkeypatch):
     monkeypatch.setattr(auth, "get_settings", lambda: _settings(PW))
     assert auth.is_admin(_req({}), Response()) is False
-    token = auth._sign(int(time.time()) + 60, PW)
+    original_expiry = int(time.time()) + 5  # near-term: still valid, but about to expire
+    token = auth._sign(original_expiry, PW)
     resp = Response()
     assert auth.is_admin(_req({auth.COOKIE_NAME: token}), resp) is True
-    assert auth.COOKIE_NAME in resp.headers["set-cookie"]  # sliding re-issue
+    set_cookie = resp.headers["set-cookie"]
+    assert auth.COOKIE_NAME in set_cookie  # sliding re-issue
+    new_token = set_cookie.split(f"{auth.COOKIE_NAME}=", 1)[1].split(";", 1)[0]
+    new_expiry = int(new_token.split(".", 1)[0])
+    assert new_expiry > original_expiry  # re-issued token's expiry actually advanced
 
 
 def test_require_admin_raises_when_locked(monkeypatch):

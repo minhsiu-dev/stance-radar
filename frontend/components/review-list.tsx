@@ -190,9 +190,9 @@ export function ReviewList() {
           </Card>
         );
       })}
+      {message && <p className="text-sm text-red-500">{message}</p>}
       {authenticated && (
         <div className="sticky bottom-4 flex items-center justify-end gap-3">
-          {message && <p className="text-sm text-red-500">{message}</p>}
           <Button onClick={confirm} disabled={submitting}>
             {submitting
               ? t("confirming")

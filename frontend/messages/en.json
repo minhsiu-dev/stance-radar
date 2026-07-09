@@ -370,7 +370,6 @@
   },
   "Admin": {
     "unlock": "Unlock",
-    "lock": "Lock",
     "unlockPrompt": "Enter admin password",
     "passwordLabel": "Password",
     "wrongPassword": "Wrong password",

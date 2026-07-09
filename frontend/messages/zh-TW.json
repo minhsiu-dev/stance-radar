@@ -370,7 +370,6 @@
   },
   "Admin": {
     "unlock": "解鎖",
-    "lock": "鎖定",
     "unlockPrompt": "輸入管理密碼",
     "passwordLabel": "密碼",
     "wrongPassword": "密碼錯誤",
