@@ -42,3 +42,6 @@ def test_defaults():
     assert settings.fetch_proxy_url == ""
     assert settings.gluetun_control_url == ""
     assert settings.claude_timeout_seconds == 300.0
+    assert settings.admin_password == ""
+    assert settings.admin_session_minutes == 30
+    assert settings.admin_cookie_secure is False

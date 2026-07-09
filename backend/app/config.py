@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     # Skip imported videos this many seconds or shorter (YouTube Shorts / too-short
     # clips have no analyzable content); 0 disables the filter
     shorts_max_seconds: int = 240
+    # Admin lock: password required before add/remove channel, review videos, trigger analysis.
+    # Empty = deny all writes (secure default for the public tunnel; set ADMIN_PASSWORD to enable).
+    admin_password: str = ""
+    # Minutes of inactivity before the admin cookie expires (sliding). 0 = permanent (never idle-lock).
+    admin_session_minutes: int = 30
+    # Set true when served over HTTPS (the Cloudflare tunnel) so the cookie is Secure.
+    # Keep false for local http://localhost dev, or the browser drops the cookie.
+    admin_cookie_secure: bool = False
     # Auto discover + analyze every N minutes (0 = disabled, stays fully manual)
     auto_refresh_minutes: int = 0
     database_url: str = "postgresql+asyncpg://stance:stance@localhost:5432/stance_radar"
