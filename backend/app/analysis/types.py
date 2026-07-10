@@ -24,6 +24,7 @@ class StanceResult:
     stance: str  # buy | neutral | sell
     summary: str
     confidence: str | None = None  # high | medium | low
+    is_conditional: bool | None = None
 
 
 @dataclass(frozen=True)

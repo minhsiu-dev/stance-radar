@@ -202,3 +202,43 @@ async def test_fake_llm_returns_seeded_results():
         video_id="alpha_vid_1", video_title="t", transcript=transcript
     )
     assert empty == AnalysisResult.empty()
+
+
+# ---- overall stance is_conditional (parse + derive) ----
+
+
+def test_parse_payload_reads_overall_is_conditional():
+    result = parse_analysis_payload({
+        "mentions": [],
+        "stances": [{
+            "ticker": "AMD", "stance": "sell", "summary": "exit plan at 625+",
+            "confidence": "high", "is_conditional": True,
+        }],
+    })
+    assert result.stances[0].is_conditional is True
+
+
+def test_fill_missing_stance_marks_conditional_when_backing_mentions_conditional():
+    result = parse_analysis_payload({
+        "mentions": [{
+            "ticker": "AMD", "start_seconds": 1.0, "quote": "exit plan",
+            "stance": "sell", "reasoning": "will trim at 625+",
+            "is_conditional": True, "condition": "at 625+",
+        }],
+        "stances": [],  # model omitted the overall stance entry
+    })
+    assert result.stances[0].stance == "sell"
+    assert result.stances[0].is_conditional is True
+
+
+def test_fill_missing_stance_not_conditional_when_a_backing_mention_is_firm():
+    result = parse_analysis_payload({
+        "mentions": [
+            {"ticker": "AMD", "start_seconds": 1.0, "quote": "q1", "stance": "sell",
+             "reasoning": "r", "is_conditional": True, "condition": "at 625+"},
+            {"ticker": "AMD", "start_seconds": 2.0, "quote": "q2", "stance": "sell",
+             "reasoning": "r", "is_conditional": False, "condition": None},
+        ],
+        "stances": [],
+    })
+    assert result.stances[0].is_conditional is False

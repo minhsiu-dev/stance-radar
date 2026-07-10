@@ -75,9 +75,13 @@ def _parse_stance(item: dict) -> StanceResult:
         raise AnalysisError(f"malformed stance: {item!r}") from exc
     if not ticker or stance not in VALID_STANCES:
         raise AnalysisError(f"invalid stance values: {item!r}")
+    is_conditional = item.get("is_conditional")
+    if not isinstance(is_conditional, bool):
+        is_conditional = None
     return StanceResult(
         ticker, stance, summary,
         confidence=_parse_enum_field(item, "confidence", VALID_CONFIDENCE),
+        is_conditional=is_conditional,
     )
 
 
@@ -92,8 +96,14 @@ def _fill_missing_stances(
         top = counts.most_common()
         # majority vote; tie → neutral
         stance = top[0][0] if len(top) == 1 or top[0][1] > top[1][1] else "neutral"
+        # conditional only if EVERY mention backing the chosen stance is conditional
+        backing = [m for m in ticker_mentions if m.stance == stance]
+        is_conditional = bool(backing) and all(
+            m.is_conditional is True for m in backing
+        )
         filled.append(StanceResult(
-            ticker=ticker, stance=stance, summary=ticker_mentions[0].reasoning
+            ticker=ticker, stance=stance, summary=ticker_mentions[0].reasoning,
+            is_conditional=is_conditional,
         ))
     return tuple(filled)
 
@@ -247,6 +257,7 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
         ),),
         stances=(StanceResult(
             "AAPL", "buy", "財報強勁,整體看多 AAPL", confidence="high",
+            is_conditional=False,
         ),),
     ),
     "alpha_vid_2": AnalysisResult(
@@ -256,6 +267,7 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
         ),),
         stances=(StanceResult(
             "NVDA", "sell", "估值偏高,看空 NVDA", confidence="medium",
+            is_conditional=False,
         ),),
     ),
     "alpha_vid_1": AnalysisResult.empty(),
@@ -267,6 +279,7 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
         ),),
         stances=(StanceResult(
             "TSLA", "neutral", "交車數據中性,觀望 TSLA", confidence="low",
+            is_conditional=False,
         ),),
     ),
     "beta_vid_2": AnalysisResult(
@@ -282,8 +295,14 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
             ),
         ),
         stances=(
-            StanceResult("AAPL", "buy", "持續加碼,看多 AAPL", confidence="high"),
-            StanceResult("NVDA", "neutral", "等回檔,觀望 NVDA", confidence="medium"),
+            StanceResult(
+                "AAPL", "buy", "持續加碼,看多 AAPL", confidence="high",
+                is_conditional=False,
+            ),
+            StanceResult(
+                "NVDA", "neutral", "等回檔,觀望 NVDA", confidence="medium",
+                is_conditional=True,
+            ),
         ),
     ),
 }
