@@ -315,6 +315,7 @@ export interface FlipItem {
   ticker: string;
   direction: "bullish" | "bearish";
   is_reversal: boolean;
+  is_conditional: boolean;
   prev: FlipPoint;
   curr: FlipPoint;
 }
