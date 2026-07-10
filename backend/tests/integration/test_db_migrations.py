@@ -61,3 +61,36 @@ async def test_video_stances_is_conditional_backfilled_from_mentions(engine, ses
         nvda = await s.get(VideoStance, ("v", "NVDA"))
         assert amd.is_conditional is True
         assert nvda.is_conditional is None
+
+
+async def test_backfill_stays_null_when_a_matching_stance_mention_is_firm(engine, sessionmaker):
+    from datetime import datetime, timezone
+
+    from app.models import (
+        Channel, Mention, Stance, Video, VideoStance, VideoStatus,
+    )
+
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch2", title="c", thumbnail_url="", uploads_playlist_id="UU2"))
+        s.add(Video(
+            id="v2", channel_id="ch2", title="t",
+            published_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            thumbnail_url="", duration_seconds=60, status=VideoStatus.analyzed,
+        ))
+        # two sell mentions for the same (video, ticker): one conditional, one firm
+        s.add(Mention(
+            video_id="v2", ticker="AMD", start_seconds=1.0, quote="q",
+            stance=Stance.sell, reasoning="r", is_conditional=True,
+        ))
+        s.add(Mention(
+            video_id="v2", ticker="AMD", start_seconds=2.0, quote="q",
+            stance=Stance.sell, reasoning="r", is_conditional=False,
+        ))
+        s.add(VideoStance(video_id="v2", ticker="AMD", stance=Stance.sell, summary="s"))
+        await s.commit()
+
+    await run_startup_migrations(engine)
+
+    async with sessionmaker() as s:
+        vs = await s.get(VideoStance, ("v2", "AMD"))
+        assert vs.is_conditional is None  # a firm matching-stance mention blocks the backfill

@@ -96,3 +96,15 @@ def test_firm_reversal_still_reversal_and_not_conditional():
     flips = detect_flips([point("buy", 1), point("sell", 5)])
     assert flips[0].is_reversal is True
     assert flips[0].is_conditional is False
+
+
+def test_conditional_prior_stance_does_not_demote_a_real_reversal():
+    # the reversal gate keys on curr only: a conditional PRIOR stance must NOT
+    # suppress a firm current buy<->sell reversal.
+    flips = detect_flips([
+        point("buy", 1, is_conditional=True),
+        point("sell", 5),
+    ])
+    assert len(flips) == 1
+    assert flips[0].is_reversal is True
+    assert flips[0].is_conditional is False
