@@ -1,7 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { CommandSearch } from "@/components/command-search";
-import { AdminLockButton } from "@/components/admin-lock-button";
 import { SettingsMenu } from "@/components/settings-menu";
 import { SiteFooter } from "@/components/site-footer";
 import { MobileNav } from "@/components/mobile-nav";
@@ -34,7 +33,6 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <CommandSearch />
-            <AdminLockButton />
             <SettingsMenu />
           </div>
         </nav>
