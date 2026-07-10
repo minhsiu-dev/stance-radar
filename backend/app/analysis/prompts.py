@@ -26,6 +26,10 @@ Rules:
      e.g. "Duolingo fell 69% over the past year and investors think AI will replace it" \
      → neutral (stating facts + relaying market views); "it's fallen this far and even I \
      won't catch it" → sell (the speaker's own attitude).
+     A video whose SUBJECT is another investor's or institution's positions, where the \
+     speaker only relays that party's bullish/bearish view (e.g. "Michael Burry is \
+     shorting Oracle", "Buffett has been buying Apple"), is NOT the speaker's own \
+     forward-looking stance → neutral, unless the speaker separately states their own view.
      Only label buy/sell when the speaker clearly expresses their own view or intent to act.
    - CONDITIONAL / NOT-ACTING-NOW: buy/sell requires the speaker to be CURRENTLY ACTIONABLE — \
      buying / owns / is adding now (buy), or selling / trimming / taking profit now (sell). A \
@@ -56,8 +60,10 @@ Rules:
      rule 3) AND to a buy/sell that adds a conditional. Otherwise → is_conditional=false, \
      condition=null.
 6. Also give an overall stance (stances) for each mentioned stock in this video: the \
-   speaker's aggregate attitude across all mentions, with a one-sentence summary and an \
-   overall confidence.
+   speaker's aggregate attitude across all mentions, with a one-sentence summary, an \
+   overall confidence, and is_conditional (true when the action driving the label is \
+   gated on a future trigger the speaker is not acting on now — e.g. an exit plan to \
+   trim only if the price reaches a higher level, while the speaker still holds now).
 7. When there is no US-stock mention at all, report empty arrays for both mentions and stances.
 8. Language rules: write reasoning and summary in ENGLISH regardless of the transcript's \
    language; quote (the verbatim original sentence) and condition stay in the transcript's \
@@ -121,8 +127,12 @@ ANALYSIS_TOOL = {
                             "type": "string",
                             "enum": ["high", "medium", "low"],
                         },
+                        "is_conditional": {
+                            "type": "boolean",
+                            "description": "True when the action driving this overall stance is gated on a future trigger the speaker is not acting on now (e.g. an exit plan at a higher price)",
+                        },
                     },
-                    "required": ["ticker", "stance", "summary", "confidence"],
+                    "required": ["ticker", "stance", "summary", "confidence", "is_conditional"],
                 },
             },
         },

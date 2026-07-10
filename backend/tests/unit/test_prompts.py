@@ -36,3 +36,14 @@ def test_user_prompt_embeds_title_and_timestamped_lines():
     assert "AAPL 財報解讀" in prompt
     assert "[12.5] 蘋果很強" in prompt
     assert "[60.0] 輝達觀望" in prompt
+
+
+def test_tool_schema_requires_overall_is_conditional():
+    stance_item = ANALYSIS_TOOL["input_schema"]["properties"]["stances"]["items"]
+    assert "is_conditional" in stance_item["properties"]
+    assert "is_conditional" in stance_item["required"]
+
+
+def test_system_prompt_treats_relayed_third_party_view_as_neutral():
+    assert "another investor" in SYSTEM_PROMPT
+    assert "Burry" in SYSTEM_PROMPT  # concrete example anchoring the rule
