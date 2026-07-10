@@ -52,6 +52,8 @@ async def _load_stance_points(
             video_id=video.id,
             video_title=video.title,
             published_at=video.published_at,
+            confidence=stance.confidence,
+            is_conditional=stance.is_conditional,
         )
         for stance, video, channel in rows
     ]
@@ -96,6 +98,7 @@ async def stance_flips(
                 "ticker": f.ticker,
                 "direction": f.direction,
                 "is_reversal": f.is_reversal,
+                "is_conditional": f.is_conditional,
                 "prev": _point_to_dict(f.prev),
                 "curr": _point_to_dict(f.curr),
             }

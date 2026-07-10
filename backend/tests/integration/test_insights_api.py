@@ -96,6 +96,53 @@ async def test_flips_reversals_only_excludes_neutral_flips(api, sessionmaker):
     assert rev[0]["is_reversal"] is True
 
 
+async def _seed_conditional_and_noise(sessionmaker) -> None:
+    """ch1: AMD buy→sell(conditional) = flip but NOT a reversal.
+    ch1: MSFT buy→neutral(low) = passing-mention noise, NOT a flip."""
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch1", title="c", thumbnail_url="", uploads_playlist_id="UU1"))
+        rows = (
+            ("v_m1", 20, "AMD", Stance.buy, None, None),
+            ("v_m2", 2, "AMD", Stance.sell, "high", True),      # conditional exit plan
+            ("v_s1", 20, "MSFT", Stance.buy, "high", None),
+            ("v_s2", 2, "MSFT", Stance.neutral, "low", None),   # passing mention
+        )
+        for vid, day_offset, ticker, stance, conf, cond in rows:
+            s.add(Video(
+                id=vid, channel_id="ch1", title=f"title {vid}",
+                published_at=now - timedelta(days=day_offset),
+                thumbnail_url="", duration_seconds=60, status=VideoStatus.analyzed,
+            ))
+            s.add(VideoStance(
+                video_id=vid, ticker=ticker, stance=stance, summary="s",
+                confidence=conf, is_conditional=cond,
+            ))
+        await s.commit()
+
+
+async def test_conditional_flip_is_not_a_reversal(api, sessionmaker):
+    _, client = api
+    await _seed_conditional_and_noise(sessionmaker)
+    items = (await client.get("/api/insights/flips?days=30")).json()["data"]["items"]
+    amd = [i for i in items if i["ticker"] == "AMD"]
+    assert len(amd) == 1
+    assert amd[0]["is_reversal"] is False
+    assert amd[0]["is_conditional"] is True
+    # reversals_only must now exclude the conditional AMD "sell"
+    rev = (await client.get(
+        "/api/insights/flips?days=30&reversals_only=true"
+    )).json()["data"]["items"]
+    assert all(i["ticker"] != "AMD" for i in rev)
+
+
+async def test_passing_mention_neutral_is_not_a_flip(api, sessionmaker):
+    _, client = api
+    await _seed_conditional_and_noise(sessionmaker)
+    items = (await client.get("/api/insights/flips?days=30")).json()["data"]["items"]
+    assert all(i["ticker"] != "MSFT" for i in items)  # buy→neutral(low) filtered out
+
+
 async def test_scorecard_unknown_channel_404(api):
     _, client = api
     resp = await client.get("/api/channels/nope/scorecard")
