@@ -19,6 +19,8 @@ class StancePoint:
     video_id: str
     video_title: str
     published_at: datetime
+    confidence: str | None = None
+    is_conditional: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -30,13 +32,24 @@ class Flip:
     prev: StancePoint
     curr: StancePoint
     direction: str  # bullish | bearish
-    is_reversal: bool  # buy <-> sell
+    is_reversal: bool  # firm buy <-> sell (excludes conditional)
+    is_conditional: bool  # curr is a conditional/planned stance -> weaker than a firm reversal
+
+
+def _is_noise(point: StancePoint) -> bool:
+    """A stock merely name-dropped (neutral + low conviction) isn't a real stance datapoint."""
+    return point.stance == "neutral" and point.confidence == "low"
 
 
 def detect_flips(points: list[StancePoint]) -> list[Flip]:
-    """points must contain the full history (detection needs the previous point); returns all flips, newest first."""
+    """points must contain the full history (detection needs the previous point); returns all flips, newest first.
+
+    Passing-mention noise (neutral + low confidence) is dropped before pairing, so it neither
+    manufactures flips nor splits a genuine buy<->sell reversal.
+    """
     ordered = sorted(
-        points, key=lambda p: (p.channel_id, p.ticker, p.published_at, p.video_id)
+        (p for p in points if not _is_noise(p)),
+        key=lambda p: (p.channel_id, p.ticker, p.published_at, p.video_id),
     )
     flips: list[Flip] = []
     prev: StancePoint | None = None
@@ -59,7 +72,11 @@ def detect_flips(points: list[StancePoint]) -> list[Flip]:
                     if _RANK[point.stance] > _RANK[prev.stance]
                     else "bearish"
                 ),
-                is_reversal={prev.stance, point.stance} == {"buy", "sell"},
+                is_reversal=(
+                    {prev.stance, point.stance} == {"buy", "sell"}
+                    and not point.is_conditional
+                ),
+                is_conditional=bool(point.is_conditional),
             ))
         prev = point
     flips.sort(key=lambda f: f.curr.published_at, reverse=True)
