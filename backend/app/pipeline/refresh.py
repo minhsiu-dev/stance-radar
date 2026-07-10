@@ -329,6 +329,7 @@ class RefreshRunner:
                         video_id=video_id, ticker=s.ticker,
                         stance=Stance(s.stance), summary=s.summary,
                         confidence=s.confidence,
+                        is_conditional=s.is_conditional,
                     ))
             video.dropped_tickers = sorted(dropped) or None
             video.transcript_language = transcript.language

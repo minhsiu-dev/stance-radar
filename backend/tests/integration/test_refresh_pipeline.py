@@ -284,3 +284,31 @@ async def test_refresh_pipeline_populates_mention_context(session, sessionmaker)
     assert aapl.excerpt == "今天來看蘋果的財報 蘋果這季財報很強,我會買 以上是今天的內容"
     assert aapl.context_before is None
     assert aapl.context_after is None
+
+
+async def test_conditional_overall_stance_is_persisted(session, sessionmaker):
+    await seed_channels(session)
+
+    class ConditionalLLM(FakeLLMClient):
+        async def analyze(self, *, video_id, video_title, transcript):
+            if video_id == "alpha_vid_3":
+                return AnalysisResult(
+                    mentions=(MentionResult(
+                        "NVDA", 1.0, "exit plan at 625", "sell", "will trim at 625+",
+                        is_conditional=True, condition="at 625+",
+                    ),),
+                    stances=(StanceResult(
+                        "NVDA", "sell", "exit plan", confidence="high",
+                        is_conditional=True,
+                    ),),
+                )
+            return AnalysisResult.empty()
+
+    runner = make_runner(sessionmaker, llm=ConditionalLLM())
+    await run_job(runner, JobKind.discover)
+    await select_all_for_analysis(sessionmaker)
+    await run_job(runner, JobKind.analyze)
+
+    vs = await session.get(VideoStance, ("alpha_vid_3", "NVDA"))
+    assert vs is not None
+    assert vs.is_conditional is True
