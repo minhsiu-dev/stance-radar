@@ -27,6 +27,18 @@ _STATEMENTS = (
     "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS condition TEXT",
     "ALTER TABLE mentions ADD COLUMN IF NOT EXISTS excerpt TEXT",
     "ALTER TABLE video_stances ADD COLUMN IF NOT EXISTS confidence VARCHAR(8)",
+    "ALTER TABLE video_stances ADD COLUMN IF NOT EXISTS is_conditional BOOLEAN",
+    # Backfill overall-stance conditionality from mentions so already-analyzed conditional
+    # calls (e.g. an exit-plan sell) are corrected without re-analysis. Idempotent: only
+    # fills NULLs; sets TRUE when every matching-stance mention for the (video, ticker) is conditional.
+    "UPDATE video_stances vs SET is_conditional = TRUE"
+    " WHERE vs.is_conditional IS NULL"
+    "   AND EXISTS (SELECT 1 FROM mentions m"
+    "               WHERE m.video_id = vs.video_id AND m.ticker = vs.ticker"
+    "                 AND m.stance = vs.stance AND m.is_conditional IS TRUE)"
+    "   AND NOT EXISTS (SELECT 1 FROM mentions m"
+    "               WHERE m.video_id = vs.video_id AND m.ticker = vs.ticker"
+    "                 AND m.stance = vs.stance AND m.is_conditional IS NOT TRUE)",
     # Portfolio feature removed: drop its tables + enum (no-op on fresh DBs)
     "DROP TABLE IF EXISTS portfolio_transactions",
     "DROP TABLE IF EXISTS portfolio_cash",

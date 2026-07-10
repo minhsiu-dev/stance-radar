@@ -137,6 +137,7 @@ class VideoStance(Base):
     stance: Mapped[Stance] = mapped_column(_enum(Stance, "stance"))
     summary: Mapped[str] = mapped_column(Text)
     confidence: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    is_conditional: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     video: Mapped[Video] = relationship(back_populates="stances")
 
