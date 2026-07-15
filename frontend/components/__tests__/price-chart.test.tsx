@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -269,5 +269,29 @@ describe("stance histogram pane", () => {
     renderChart();
     await waitFor(() => expect(addSeriesSpy).toHaveBeenCalled());
     expect(createSeriesMarkers).not.toHaveBeenCalled();
+  });
+
+  it("shows a tooltip with per-stance counts when the crosshair is over a day with data", async () => {
+    mockApiFetch.mockImplementation(makeStanceFetcher());
+    renderChart();
+    await waitFor(() =>
+      expect(addSeriesSpy).toHaveBeenCalledWith({ kind: "histogram" }, expect.anything(), 1),
+    );
+    const cb = crosshairMoveSpy.mock.calls.at(-1)![0];
+
+    act(() => cb({ time: "2026-06-08", point: { x: 40, y: 10 } }));
+    const tip = screen.getByTestId("stance-tooltip");
+    expect(tip.style.display).toBe("block");
+    expect(tip).toHaveTextContent("2026-06-08");
+    expect(tip).toHaveTextContent("Buy 1");
+    expect(tip).toHaveTextContent("Neutral 0");
+    expect(tip).toHaveTextContent("Sell 1");
+
+    // day without data (or leaving the chart) hides it
+    act(() => cb({ time: "2026-06-09", point: { x: 60, y: 10 } }));
+    expect(tip.style.display).toBe("none");
+    act(() => cb({ time: "2026-06-08", point: { x: 40, y: 10 } }));
+    act(() => cb({ time: undefined, point: undefined }));
+    expect(tip.style.display).toBe("none");
   });
 });

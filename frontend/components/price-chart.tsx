@@ -49,8 +49,10 @@ export function PriceChart({
   channelFilter?: string;
 }) {
   const tErr = useTranslations("Errors");
+  const tStance = useTranslations("Stock.stance");
   const [range, setRange] = useState<RangeKey>("6m");
   const containerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const stanceSeriesRef = useRef<{
@@ -161,6 +163,24 @@ export function PriceChart({
       if (hits?.length && onSelectVideo) onSelectVideo(hits[0].id);
     });
 
+    chart.subscribeCrosshairMove((param) => {
+      const tip = tooltipRef.current;
+      if (!tip) return;
+      const time = param.time;
+      const p = typeof time === "string" ? histByTimeRef.current.get(time) : undefined;
+      if (!p || !param.point) {
+        tip.style.display = "none";
+        return;
+      }
+      tip.textContent = `${p.time} · ${tStance("buy")} ${p.buy} · ${tStance("neutral")} ${p.neutral} · ${tStance("sell")} ${p.sell}`;
+      tip.style.display = "block";
+      const left = Math.min(
+        Math.max(param.point.x + 12, 0),
+        Math.max(el.clientWidth - tip.offsetWidth - 8, 0),
+      );
+      tip.style.left = `${left}px`;
+    });
+
     chartRef.current = chart;
     seriesRef.current = series;
 
@@ -179,7 +199,7 @@ export function PriceChart({
       seriesRef.current = null;
       stanceSeriesRef.current = null;
     };
-  }, [candles, hasAnyStances, onSelectVideo, range, height]);
+  }, [candles, hasAnyStances, onSelectVideo, range, height, tStance]);
 
   // Recompute the stance histogram + lookup maps when data or filters change —
   // without rebuilding the chart (preserves zoom).
@@ -269,7 +289,19 @@ export function PriceChart({
         </p>
       )}
       {isLoading && <Skeleton style={{ height }} className="w-full" />}
-      <div ref={containerRef} style={{ height }} className="w-full transition-[height] duration-200" />
+      <div className="relative">
+        <div
+          ref={containerRef}
+          style={{ height }}
+          className="w-full transition-[height] duration-200"
+        />
+        <div
+          ref={tooltipRef}
+          data-testid="stance-tooltip"
+          style={{ display: "none", top: 8 }}
+          className="pointer-events-none absolute z-10 rounded border bg-background/95 px-2 py-1 text-xs text-muted-foreground shadow-sm"
+        />
+      </div>
     </div>
   );
 }
