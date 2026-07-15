@@ -17,6 +17,14 @@ const STANCE_MARKER: Record<
   neutral: { position: "aboveBar", color: "#a1a1aa", shape: "circle" },
 };
 
+/** Shared stance hex palette (sky-500 / zinc-400 / orange-500). Keep in sync
+ *  with StanceMiniBar's tailwind classes and StanceTrendChart's COLORS. */
+export const STANCE_COLORS: Record<StanceValue, string> = {
+  buy: "#0ea5e9",
+  neutral: "#a1a1aa",
+  sell: "#f97316",
+};
+
 /** Snap publish date to "the same day or the next trading day"; returns null if before the chart range, snaps to the last bar if after it. */
 export function snapToTradingDay(
   publishedAt: string,
@@ -65,5 +73,59 @@ export function filterStances(
     (s) =>
       (stanceFilter === "all" || s.stance === stanceFilter) &&
       (channelFilter === "all" || s.channel_id === channelFilter),
+  );
+}
+
+export interface VideoDay {
+  time: string; // trading day (YYYY-MM-DD)
+  id: string; // video_id
+}
+
+export interface StanceHistogramPoint {
+  time: string; // trading day (YYYY-MM-DD)
+  buy: number;
+  neutral: number;
+  sell: number;
+}
+
+function tradingDays(candles: CandleDto[]): string[] {
+  return candles
+    .map((c) => c.time)
+    .filter((t): t is string => typeof t === "string");
+}
+
+/** Video↔trading-day pairs for the chart's click/hover lookup maps. */
+export function buildVideoDays(
+  stances: StanceRow[],
+  candles: CandleDto[],
+): VideoDay[] {
+  const days = tradingDays(candles);
+  if (days.length === 0) return [];
+  const out: VideoDay[] = [];
+  for (const row of stances) {
+    const time = snapToTradingDay(row.published_at, days);
+    if (time == null) continue;
+    out.push({ time, id: row.video_id });
+  }
+  return out.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+}
+
+/** Per-day stance counts for the stacked histogram pane. */
+export function buildStanceHistogram(
+  stances: StanceRow[],
+  candles: CandleDto[],
+): StanceHistogramPoint[] {
+  const days = tradingDays(candles);
+  if (days.length === 0) return [];
+  const byDay = new Map<string, StanceHistogramPoint>();
+  for (const row of stances) {
+    const time = snapToTradingDay(row.published_at, days);
+    if (time == null) continue;
+    const p = byDay.get(time) ?? { time, buy: 0, neutral: 0, sell: 0 };
+    p[row.stance] += 1;
+    byDay.set(time, p);
+  }
+  return [...byDay.values()].sort((a, b) =>
+    a.time < b.time ? -1 : a.time > b.time ? 1 : 0,
   );
 }

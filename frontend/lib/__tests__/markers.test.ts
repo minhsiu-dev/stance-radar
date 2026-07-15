@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildMarkers, filterStances, snapToTradingDay } from "@/lib/markers";
+import {
+  buildMarkers, buildStanceHistogram, buildVideoDays,
+  filterStances, snapToTradingDay, STANCE_COLORS,
+} from "@/lib/markers";
 import type { CandleDto, StanceRow } from "@/lib/types";
 
 const DAYS = ["2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09"]; // Thu Fri Mon Tue
@@ -92,5 +95,62 @@ describe("filterStances", () => {
   });
   it("returns [] when nothing matches", () => {
     expect(filterStances(rows, "buy", "cB")).toEqual([]);
+  });
+});
+
+describe("STANCE_COLORS", () => {
+  it("pins the shared stance palette (sky-500 / zinc-400 / orange-500)", () => {
+    expect(STANCE_COLORS).toEqual({
+      buy: "#0ea5e9",
+      neutral: "#a1a1aa",
+      sell: "#f97316",
+    });
+  });
+});
+
+describe("buildVideoDays", () => {
+  it("maps stances to video/day pairs sorted by time, skipping out-of-range", () => {
+    const candles = DAYS.map(candle);
+    const days = buildVideoDays(
+      [
+        stance("v2", "2026-06-08T00:00:00+00:00", "sell"),
+        stance("v1", "2026-06-04T00:00:00+00:00", "buy"),
+        stance("v3", "2026-06-01T00:00:00+00:00", "neutral"), // before range → skipped
+      ],
+      candles,
+    );
+    expect(days).toEqual([
+      { time: "2026-06-04", id: "v1" },
+      { time: "2026-06-08", id: "v2" },
+    ]);
+  });
+
+  it("returns [] for intraday (numeric-time) candles", () => {
+    const intraday = [{ time: 1750000000 as unknown as string, open: 1, high: 2, low: 0.5, close: 1.5, volume: 100 }];
+    expect(buildVideoDays([stance("v1", "2026-06-04T00:00:00+00:00", "buy")], intraday as CandleDto[])).toEqual([]);
+  });
+});
+
+describe("buildStanceHistogram", () => {
+  it("groups snapped days and counts per stance, sorted by time", () => {
+    const candles = DAYS.map(candle);
+    const hist = buildStanceHistogram(
+      [
+        stance("v1", "2026-06-04T00:00:00+00:00", "buy"),
+        stance("v2", "2026-06-06T00:00:00+00:00", "buy"),     // Sat → snaps to 06-08
+        stance("v3", "2026-06-08T00:00:00+00:00", "sell"),
+        stance("v4", "2026-06-08T00:00:00+00:00", "neutral"),
+        stance("v5", "2026-06-01T00:00:00+00:00", "sell"),    // before range → skipped
+      ],
+      candles,
+    );
+    expect(hist).toEqual([
+      { time: "2026-06-04", buy: 1, neutral: 0, sell: 0 },
+      { time: "2026-06-08", buy: 1, neutral: 1, sell: 1 },
+    ]);
+  });
+
+  it("returns [] when candles are empty", () => {
+    expect(buildStanceHistogram([stance("v1", "2026-06-04T00:00:00+00:00", "buy")], [])).toEqual([]);
   });
 });
