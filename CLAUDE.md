@@ -102,6 +102,12 @@ docker cp shooter:/shots/. /tmp/shots/      # then Read /tmp/shots/*.png
   `getComputedStyle(el).boxShadow` beats eyeballing faint 1px lines (this is how a `ring-1`
   outset overflowing a sticky element was confirmed). Mobile: `deviceScaleFactor: 3` + a `clip`
   makes thin borders legible; tabs/data load after the ~4s wait.
+- **Headless Chromium in the shooter does NOT paint lightweight-charts canvases** (screenshots
+  show an empty chart area): run `docker exec -w /app shooter xvfb-run -a node shot.js` with
+  `chromium.launch({ headless: false })` instead. Canvas pixels can be read back via
+  `getContext("2d").getImageData(...)` in `page.evaluate` (same-origin) — handy for asserting
+  exact series colors. Theme is not OS-driven (`enableSystem={false}`): to shoot dark mode, set
+  `localStorage["stance-radar-theme"]="dark"` via `page.addInitScript` before `goto`.
 - Disk: the playwright image is ~1.5 GB and this env is disk-constrained — `docker rm -f shooter`
   when done, and `docker rmi mcr.microsoft.com/playwright:v${VER}-noble` if space is tight.
   Frequent `frontend` rebuilds also pile up dangling images; `docker image prune -f` reclaims
