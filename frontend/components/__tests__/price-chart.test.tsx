@@ -141,6 +141,14 @@ describe("PriceChart", () => {
     expect(pct.className).toMatch(/emerald/);
   });
 
+  it("defaults to the 3M range", async () => {
+    mockApiFetch.mockImplementation(makeFetcher([100, 110]));
+    renderChart();
+    const btn3m = await screen.findByRole("button", { name: "3M" });
+    expect(btn3m.className).toMatch(/bg-primary/);
+    expect(screen.getByRole("button", { name: "6M" }).className).not.toMatch(/bg-primary/);
+  });
+
   it("adds a volume histogram series", async () => {
     mockApiFetch.mockImplementation(makeFetcher([100, 110]));
     render(

@@ -50,7 +50,7 @@ export function PriceChart({
 }) {
   const tErr = useTranslations("Errors");
   const tStance = useTranslations("Stock.stance");
-  const [range, setRange] = useState<RangeKey>("6m");
+  const [range, setRange] = useState<RangeKey>("3m");
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
