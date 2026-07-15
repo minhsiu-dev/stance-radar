@@ -8,6 +8,7 @@ const setCrosshairSpy = vi.hoisted(() => vi.fn());
 const clearCrosshairSpy = vi.hoisted(() => vi.fn());
 const paneSetHeightSpy = vi.hoisted(() => vi.fn());
 const crosshairMoveSpy = vi.hoisted(() => vi.fn());
+const createChartSpy = vi.hoisted(() => vi.fn());
 const createdSeries = vi.hoisted(
   () =>
     [] as Array<{ setData: Mock; priceScale: () => { applyOptions: Mock } }>,
@@ -33,7 +34,7 @@ vi.mock("lightweight-charts", () => {
     remove: vi.fn(),
   };
   return {
-    createChart: () => chart,
+    createChart: (...args: unknown[]) => { createChartSpy(...args); return chart; },
     createSeriesMarkers: vi.fn(() => ({ setMarkers: vi.fn() })),
     CandlestickSeries: { kind: "candlestick" },
     HistogramSeries: { kind: "histogram" },
@@ -108,6 +109,7 @@ beforeEach(() => {
   addSeriesSpy.mockClear();
   paneSetHeightSpy.mockClear();
   crosshairMoveSpy.mockClear();
+  createChartSpy.mockClear();
   createdSeries.length = 0;
 });
 
@@ -301,5 +303,14 @@ describe("stance histogram pane", () => {
     act(() => cb({ time: "2026-06-08", point: { x: 40, y: 10 } }));
     act(() => cb({ time: undefined, point: undefined }));
     expect(tip.style.display).toBe("none");
+  });
+
+  it("disables hoveredSeriesOnTop so hover never reorders the stacked series", async () => {
+    mockApiFetch.mockImplementation(makeStanceFetcher());
+    renderChart();
+    await waitFor(() => expect(createChartSpy).toHaveBeenCalled());
+    expect(createChartSpy.mock.calls.at(-1)![1]).toMatchObject({
+      hoveredSeriesOnTop: false,
+    });
   });
 });

@@ -92,6 +92,10 @@ export function PriceChart({
         vertLines: { color: "#27272a" },
         horzLines: { color: "#27272a" },
       },
+      // The stance pane's stacked bars rely on fixed painter's order (total →
+      // buy+neutral → buy); hoveredSeriesOnTop would lift the hovered cumulative
+      // series above the rest and repaint the whole bar in one color on hover.
+      hoveredSeriesOnTop: false,
     });
     const series = chart.addSeries(CandlestickSeries, {
       upColor: "#22c55e",
