@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_market, get_price_store, get_session
 from app.envelope import fail, ok
+from app.insights.scorecard import PriceSeries, _to_series
 from app.market.client import RANGE_TO_FETCH, MarketClient, StockNotFound
 from app.market.store import PriceStore
 from app.models import Channel, Mention, Video, VideoStance
@@ -324,7 +325,11 @@ def _majority_stance(mentions: list[Mention]) -> str:
 
 
 @router.get("/{ticker}/mentions")
-async def stock_mentions(ticker: str, session: AsyncSession = Depends(get_session)):
+async def stock_mentions(
+    ticker: str,
+    session: AsyncSession = Depends(get_session),
+    store: PriceStore = Depends(get_price_store),
+):
     """One row per video: stance is the video's overall stance, timestamps list each mention."""
     rows = (await session.execute(
         select(Mention, Video, Channel, VideoStance)
@@ -341,8 +346,10 @@ async def stock_mentions(ticker: str, session: AsyncSession = Depends(get_sessio
 
     grouped: dict[str, dict] = {}
     video_mentions: dict[str, list[Mention]] = {}
+    pub_dates: dict[str, date] = {}
     for mention, video, channel, video_stance in rows:
         if video.id not in grouped:
+            pub_dates[video.id] = video.published_at.date()
             grouped[video.id] = {
                 "video_id": video.id,
                 "video_title": video.title,
@@ -374,6 +381,20 @@ async def stock_mentions(ticker: str, session: AsyncSession = Depends(get_sessio
                 f"&t={int(mention.start_seconds)}s"
             ),
         })
+
+    # entry = closing price on the first trading day on/after the publish date,
+    # the same definition the scorecard uses
+    series: PriceSeries | None = None
+    if pub_dates:
+        t = ticker.upper()
+        series = _to_series(
+            (await store.get_daily([t], min(pub_dates.values()))).get(t, [])
+        )
+    for vid, row in grouped.items():
+        hit = series.close_on_or_after(pub_dates[vid]) if series else None
+        row["entry_date"] = hit[0].isoformat() if hit else None
+        row["entry_price"] = hit[1] if hit else None
+
     # Older data may lack a VideoStance -> backfill via majority vote over individual mentions
     result = [
         row if row["stance"] is not None

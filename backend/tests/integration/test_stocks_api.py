@@ -121,6 +121,48 @@ async def test_stock_mentions_one_row_per_video_with_multiple_timestamps(api, se
     assert row["channel_thumbnail"] == "http://x/a.jpg"
 
 
+async def test_stock_mentions_include_entry_price(api):
+    import math
+    from datetime import datetime, timedelta
+
+    app, client = await seed(api)
+    data = (await client.get("/api/stocks/AAPL/mentions")).json()["data"]
+    assert len(data) == 2
+    base = float(100 + sum(map(ord, "AAPL")) % 150)
+    for row in data:
+        # entry = first trading day on/after the publish date (fake bars are Mon-Fri)
+        d = datetime.fromisoformat(row["published_at"]).date()
+        while d.weekday() >= 5:
+            d += timedelta(days=1)
+        assert row["entry_date"] == d.isoformat()
+        assert row["entry_price"] == pytest.approx(
+            round(base + 10 * math.sin(d.toordinal() / 10), 2)
+        )
+
+
+async def test_stock_mentions_entry_price_null_without_price_data(api, sessionmaker):
+    from datetime import datetime, timedelta, timezone
+    from app.models import Channel, Mention, Stance, Video, VideoStatus
+
+    app, client = api
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch_np", title="ch_np", thumbnail_url="",
+                      uploads_playlist_id="UU_np"))
+        s.add(Video(
+            id="v_noprice", channel_id="ch_np", title="np",
+            published_at=datetime.now(timezone.utc) - timedelta(days=3),
+            thumbnail_url="", duration_seconds=60, status=VideoStatus.analyzed,
+        ))
+        # AMD is unknown to FakeMarketClient -> no price bars -> entry stays null
+        s.add(Mention(video_id="v_noprice", ticker="AMD", start_seconds=1.0,
+                      quote="q", stance=Stance.buy, reasoning="r"))
+        await s.commit()
+
+    data = (await client.get("/api/stocks/AMD/mentions")).json()["data"]
+    assert data[0]["entry_price"] is None
+    assert data[0]["entry_date"] is None
+
+
 async def test_search_returns_results(api):
     app, client = api
     resp = await client.get("/api/stocks/search?q=apple")
