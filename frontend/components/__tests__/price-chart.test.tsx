@@ -313,4 +313,29 @@ describe("stance histogram pane", () => {
       hoveredSeriesOnTop: false,
     });
   });
+
+  it("keeps the pane when filters narrow to zero (blank series, no chart rebuild)", async () => {
+    mockApiFetch.mockImplementation(makeStanceFetcher());
+    const cache = new Map();
+    const Harness = ({ stanceFilter = "all" }: { stanceFilter?: "all" | "neutral" }) => (
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ provider: () => cache }}>
+          <PriceChart ticker="NVDA" stanceFilter={stanceFilter} />
+        </SWRConfig>
+      </NextIntlClientProvider>
+    );
+    const { rerender } = render(<Harness />);
+    await waitFor(() =>
+      expect(addSeriesSpy).toHaveBeenCalledWith({ kind: "histogram" }, expect.anything(), 1),
+    );
+    const chartBuilds = createChartSpy.mock.calls.length;
+    const [total, buyNeutral, buy] = createdSeries.slice(-3);
+
+    // fetcher's only neutral stance is out of chart range → filter leaves zero rows
+    rerender(<Harness stanceFilter="neutral" />);
+    await waitFor(() => expect(buy.setData).toHaveBeenLastCalledWith([]));
+    expect(total.setData).toHaveBeenLastCalledWith([]);
+    expect(buyNeutral.setData).toHaveBeenLastCalledWith([]);
+    expect(createChartSpy.mock.calls.length).toBe(chartBuilds); // pane not torn down
+  });
 });

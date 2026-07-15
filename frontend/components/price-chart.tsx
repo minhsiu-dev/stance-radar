@@ -199,6 +199,7 @@ export function PriceChart({
     return () => {
       resizeObserver.disconnect();
       chart.remove();
+      if (tooltipRef.current) tooltipRef.current.style.display = "none";
       chartRef.current = null;
       seriesRef.current = null;
       stanceSeriesRef.current = null;

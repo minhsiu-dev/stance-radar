@@ -116,4 +116,11 @@ describe("buildStanceHistogram", () => {
   it("returns [] when candles are empty", () => {
     expect(buildStanceHistogram([stance("v1", "2026-06-04T00:00:00+00:00", "buy")], [])).toEqual([]);
   });
+
+  it("returns [] for intraday (numeric-time) candles", () => {
+    const intraday = [{ time: 1750000000 as unknown as string, open: 1, high: 2, low: 0.5, close: 1.5, volume: 100 }];
+    expect(
+      buildStanceHistogram([stance("v1", "2026-06-04T00:00:00+00:00", "buy")], intraday as CandleDto[]),
+    ).toEqual([]);
+  });
 });
