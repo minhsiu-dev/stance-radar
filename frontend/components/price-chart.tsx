@@ -6,11 +6,9 @@ import {
   CandlestickSeries,
   ColorType,
   createChart,
-  createSeriesMarkers,
   HistogramSeries,
   type IChartApi,
   type ISeriesApi,
-  type ISeriesMarkersPluginApi,
   type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
@@ -19,13 +17,21 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
-import { buildMarkers, filterStances, type ChartMarker } from "@/lib/markers";
+import {
+  buildStanceHistogram,
+  buildVideoDays,
+  filterStances,
+  STANCE_COLORS,
+  type StanceHistogramPoint,
+  type VideoDay,
+} from "@/lib/markers";
 import type { CandleDto, StanceRow, StanceValue } from "@/lib/types";
 
 const RANGES = ["1d", "5d", "1m", "3m", "6m", "ytd", "1y", "3y", "5y"] as const;
 type RangeKey = (typeof RANGES)[number];
 
 const INTRADAY: ReadonlySet<RangeKey> = new Set(["1d", "5d"]);
+const STANCE_PANE_HEIGHT = 64;
 
 export function PriceChart({
   ticker,
@@ -47,9 +53,14 @@ export function PriceChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const markersApiRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
-  const markersByTimeRef = useRef<Map<string | number, ChartMarker[]>>(new Map());
-  const markersByVideoId = useRef<Map<string, ChartMarker>>(new Map());
+  const stanceSeriesRef = useRef<{
+    total: ISeriesApi<"Histogram">;
+    buyNeutral: ISeriesApi<"Histogram">;
+    buy: ISeriesApi<"Histogram">;
+  } | null>(null);
+  const videosByTimeRef = useRef<Map<string | number, VideoDay[]>>(new Map());
+  const videoDayById = useRef<Map<string, VideoDay>>(new Map());
+  const histByTimeRef = useRef<Map<string, StanceHistogramPoint>>(new Map());
   const candleByTime = useRef<Map<string | number, CandleDto>>(new Map());
 
   const { data: candles, error, isLoading } = useSWR<CandleDto[]>(
@@ -60,6 +71,7 @@ export function PriceChart({
     `/api/stocks/${ticker}/stances`,
     apiFetch,
   );
+  const hasAnyStances = (stances?.length ?? 0) > 0;
 
   // Create the chart once per (candles, range). Markers are managed by a
   // separate effect so changing a filter never rebuilds the chart (preserves zoom).
@@ -111,7 +123,28 @@ export function PriceChart({
       })),
     );
 
-    markersApiRef.current = createSeriesMarkers(series, []);
+    if (hasAnyStances && !INTRADAY.has(range)) {
+      const mkStance = (color: string) =>
+        chart.addSeries(
+          HistogramSeries,
+          {
+            color,
+            priceFormat: { type: "price", precision: 0, minMove: 1 },
+            lastValueVisible: false,
+            priceLineVisible: false,
+          },
+          1,
+        );
+      // Stacked via cumulative values: series added later draw on top, so the
+      // tallest bar (total, sell-colored) goes in first and the shortest (buy)
+      // covers the bottom → reads as buy/neutral/sell bottom-up.
+      const total = mkStance(STANCE_COLORS.sell);
+      const buyNeutral = mkStance(STANCE_COLORS.neutral);
+      const buy = mkStance(STANCE_COLORS.buy);
+      total.priceScale().applyOptions({ scaleMargins: { top: 0.15, bottom: 0 } });
+      chart.panes()[1]?.setHeight(STANCE_PANE_HEIGHT);
+      stanceSeriesRef.current = { total, buyNeutral, buy };
+    }
     chart.timeScale().fitContent();
     chart.timeScale().applyOptions({
       timeVisible: INTRADAY.has(range),
@@ -124,7 +157,7 @@ export function PriceChart({
 
     chart.subscribeClick((param) => {
       const time = param.time as string | number | undefined;
-      const hits = time != null ? markersByTimeRef.current.get(time) : undefined;
+      const hits = time != null ? videosByTimeRef.current.get(time) : undefined;
       if (hits?.length && onSelectVideo) onSelectVideo(hits[0].id);
     });
 
@@ -144,29 +177,39 @@ export function PriceChart({
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
-      markersApiRef.current = null;
+      stanceSeriesRef.current = null;
     };
-  }, [candles, onSelectVideo, range, height]);
+  }, [candles, hasAnyStances, onSelectVideo, range, height]);
 
-  // Recompute markers when the data or the filters change — without rebuilding
-  // the chart. Also refresh the click/hover lookup maps.
+  // Recompute the stance histogram + lookup maps when data or filters change —
+  // without rebuilding the chart (preserves zoom).
   // NOTE: must stay declared AFTER the chart-creation effect above — React flushes
-  // effects in declaration order, so markersApiRef.current is set before this runs.
+  // effects in declaration order, so stanceSeriesRef.current is set before this runs.
   useEffect(() => {
-    const markers = buildMarkers(
-      filterStances(stances ?? [], stanceFilter, channelFilter),
-      candles ?? [],
-    );
-    markersApiRef.current?.setMarkers(markers);
+    const filtered = filterStances(stances ?? [], stanceFilter, channelFilter);
+    const videoDays = buildVideoDays(filtered, candles ?? []);
 
-    const byTime = new Map<string | number, ChartMarker[]>();
-    const byVideo = new Map<string, ChartMarker>();
-    for (const m of markers) {
-      byTime.set(m.time, [...(byTime.get(m.time) ?? []), m]);
-      byVideo.set(m.id, m);
+    const byTime = new Map<string | number, VideoDay[]>();
+    const byVideo = new Map<string, VideoDay>();
+    for (const v of videoDays) {
+      byTime.set(v.time, [...(byTime.get(v.time) ?? []), v]);
+      byVideo.set(v.id, v);
     }
-    markersByTimeRef.current = byTime;
-    markersByVideoId.current = byVideo;
+    videosByTimeRef.current = byTime;
+    videoDayById.current = byVideo;
+
+    const hist = buildStanceHistogram(filtered, candles ?? []);
+    histByTimeRef.current = new Map(hist.map((p) => [p.time, p]));
+    const s = stanceSeriesRef.current;
+    if (s) {
+      s.total.setData(
+        hist.map((p) => ({ time: p.time as Time, value: p.buy + p.neutral + p.sell })),
+      );
+      s.buyNeutral.setData(
+        hist.map((p) => ({ time: p.time as Time, value: p.buy + p.neutral })),
+      );
+      s.buy.setData(hist.map((p) => ({ time: p.time as Time, value: p.buy })));
+    }
   }, [candles, stances, stanceFilter, channelFilter]);
 
   useEffect(() => {
@@ -174,7 +217,7 @@ export function PriceChart({
     const series = seriesRef.current;
     if (!chart || !series) return;
     const hit = hoveredVideoId
-      ? markersByVideoId.current.get(hoveredVideoId)
+      ? videoDayById.current.get(hoveredVideoId)
       : undefined;
     const candle = hit ? candleByTime.current.get(hit.time) : undefined;
     // No row hovered, or the hovered video has no marker in the current range

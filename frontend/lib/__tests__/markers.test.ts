@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildMarkers, buildStanceHistogram, buildVideoDays,
+  buildStanceHistogram, buildVideoDays,
   filterStances, snapToTradingDay, STANCE_COLORS,
 } from "@/lib/markers";
 import type { CandleDto, StanceRow } from "@/lib/types";
@@ -31,43 +31,6 @@ describe("snapToTradingDay", () => {
   });
   it("returns null before chart range (marker not shown)", () => {
     expect(snapToTradingDay("2026-06-01T10:00:00+00:00", DAYS)).toBeNull();
-  });
-});
-
-describe("buildMarkers", () => {
-  it("maps stances to styled markers sorted by time", () => {
-    const candles = DAYS.map(candle);
-    const markers = buildMarkers(
-      [
-        stance("v2", "2026-06-08T00:00:00+00:00", "sell"),
-        stance("v1", "2026-06-04T00:00:00+00:00", "buy"),
-        stance("v3", "2026-06-01T00:00:00+00:00", "neutral"), // out of range → skipped
-      ],
-      candles,
-    );
-    expect(markers.map((m) => m.id)).toEqual(["v1", "v2"]);
-    expect(markers[0]).toMatchObject({
-      time: "2026-06-04", position: "belowBar", shape: "arrowUp",
-    });
-    expect(markers[1]).toMatchObject({
-      time: "2026-06-08", position: "aboveBar", shape: "arrowDown",
-    });
-  });
-});
-
-describe("marker palette", () => {
-  const candles = DAYS.map(candle);
-
-  it("buy is sky-500", () => {
-    expect(buildMarkers([stance("v-buy", "2026-06-04T00:00:00+00:00", "buy")], candles)[0].color).toBe("#0ea5e9");
-  });
-
-  it("sell is orange-500", () => {
-    expect(buildMarkers([stance("v-sell", "2026-06-04T00:00:00+00:00", "sell")], candles)[0].color).toBe("#f97316");
-  });
-
-  it("neutral is zinc-400", () => {
-    expect(buildMarkers([stance("v-neutral", "2026-06-04T00:00:00+00:00", "neutral")], candles)[0].color).toBe("#a1a1aa");
   });
 });
 
