@@ -753,3 +753,49 @@ async def test_stock_earnings_degrades_to_empty_on_market_failure(api, monkeypat
     resp = await client.get("/api/stocks/AAPL/earnings")
     assert resp.status_code == 200
     assert resp.json()["data"] == {"past": [], "next": None}
+
+
+async def test_sparklines_batch_returns_daily_closes(api):
+    app, client = api
+    resp = await client.get("/api/stocks/sparklines?tickers=AAPL,NVDA&days=30")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert set(data.keys()) == {"AAPL", "NVDA"}
+    assert len(data["AAPL"]) > 0
+    assert set(data["AAPL"][0].keys()) == {"date", "close"}
+    dates = [p["date"] for p in data["AAPL"]]
+    assert dates == sorted(dates)
+
+
+async def test_sparklines_unknown_ticker_gets_empty_series(api):
+    app, client = api
+    # AMD is unknown to FakeMarketClient -> no bars -> empty list, not an error
+    data = (await client.get(
+        "/api/stocks/sparklines?tickers=AAPL,AMD&days=30"
+    )).json()["data"]
+    assert len(data["AAPL"]) > 0
+    assert data["AMD"] == []
+
+
+async def test_sparklines_survive_price_layer_failure(api):
+    app, client = api
+
+    async def boom(tickers, start):
+        raise RuntimeError("yfinance down")
+
+    app.state.price_store.get_daily = boom
+    resp = await client.get("/api/stocks/sparklines?tickers=AAPL,NVDA")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == {"AAPL": [], "NVDA": []}
+
+
+async def test_sparklines_validation(api):
+    app, client = api
+    assert (await client.get("/api/stocks/sparklines?tickers=,")).status_code == 422
+    too_many = ",".join(f"T{i}" for i in range(51))
+    assert (await client.get(
+        f"/api/stocks/sparklines?tickers={too_many}"
+    )).status_code == 422
+    assert (await client.get(
+        "/api/stocks/sparklines?tickers=AAPL&days=0"
+    )).status_code == 422

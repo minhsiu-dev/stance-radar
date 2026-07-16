@@ -169,6 +169,39 @@ async def stocks_trending(
     return ok([_trending_item(t, e, now, span) for t, e in fresh[offset:offset + limit]])
 
 
+_SPARKLINE_MAX_TICKERS = 50
+
+
+# NOTE: must be declared before the /{ticker} routes below, or "sparklines"
+# would be captured as a ticker.
+@router.get("/sparklines")
+async def stock_sparklines(
+    tickers: str = Query(..., description="comma-separated tickers"),
+    days: int = Query(90, ge=1, le=365),
+    store: PriceStore = Depends(get_price_store),
+):
+    """Batch daily closes for the trending cards' price sparklines. Price data
+    is decorative here: any market-layer failure degrades to empty series
+    (cards render without a line), never an error."""
+    symbols = sorted({t.strip().upper() for t in tickers.split(",") if t.strip()})
+    if not symbols:
+        return fail("tickers must be non-empty", status_code=422)
+    if len(symbols) > _SPARKLINE_MAX_TICKERS:
+        return fail(
+            f"at most {_SPARKLINE_MAX_TICKERS} tickers per request", status_code=422
+        )
+    start = datetime.now(timezone.utc).date() - timedelta(days=days)
+    try:
+        daily = await store.get_daily(symbols, start)
+    except Exception:
+        logger.exception("sparklines fetch failed for %s", symbols)
+        return ok({t: [] for t in symbols})
+    return ok({
+        t: [{"date": c.time, "close": c.close} for c in candles]
+        for t, candles in daily.items()
+    })
+
+
 @router.get("/{ticker}")
 async def stock_summary(ticker: str, market: MarketClient = Depends(get_market)):
     try:
