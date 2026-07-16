@@ -11,6 +11,8 @@ dependencies = [
     "httpx>=0.27",
     "youtube-transcript-api>=1.0,<2",
     "yfinance>=0.2.50",
+    # yfinance's get_earnings_dates() scrapes via pandas read_html, which needs lxml at runtime
+    "lxml>=5",
 ]
 
 [project.optional-dependencies]
