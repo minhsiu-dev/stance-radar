@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.channels import channel_ticker_stance_mix
 from app.api.deps import get_price_store, get_session
 from app.envelope import fail, ok
-from app.insights.flips import StancePoint, detect_flips
 from app.insights.channel_perf_sql import score_channel_calls_lean
 from app.insights.scorecard import (
     SCORECARD_BENCHMARK,
@@ -28,83 +27,6 @@ _EMPTY_PERF = {
     s: {"win_rate": None, "avg_alpha": None, "avg_return": None, "n": 0, "pending": 0}
     for s in ("all", "buy", "sell")
 }
-
-
-async def _load_stance_points(
-    session: AsyncSession, channel_id: str | None = None
-) -> list[StancePoint]:
-    query = (
-        select(VideoStance, Video, Channel)
-        .join(Video, VideoStance.video_id == Video.id)
-        .join(Channel, Video.channel_id == Channel.id)
-    )
-    if channel_id is not None:
-        query = query.where(Channel.id == channel_id)
-    rows = (await session.execute(query)).all()
-    return [
-        StancePoint(
-            channel_id=channel.id,
-            channel_title=channel.title,
-            channel_thumbnail=channel.thumbnail_url,
-            ticker=stance.ticker,
-            stance=stance.stance.value,
-            summary=stance.summary,
-            video_id=video.id,
-            video_title=video.title,
-            published_at=video.published_at,
-            confidence=stance.confidence,
-            is_conditional=stance.is_conditional,
-        )
-        for stance, video, channel in rows
-    ]
-
-
-def _point_to_dict(point: StancePoint) -> dict:
-    return {
-        "video_id": point.video_id,
-        "video_title": point.video_title,
-        "stance": point.stance,
-        "summary": point.summary,
-        "published_at": point.published_at.isoformat(),
-    }
-
-
-@router.get("/insights/flips")
-async def stance_flips(
-    days: int = Query(30, ge=1, le=365),
-    limit: int = Query(20, ge=1, le=100),
-    reversals_only: bool = Query(False),
-    session: AsyncSession = Depends(get_session),
-):
-    """Stance flips that occurred within the last N days (detection needs full history; the filter only looks at curr's time).
-
-    When reversals_only=True, keep only buy<->sell reversals (excluding moves in/out of neutral). The filter runs
-    before limit; otherwise limit would cut first and miss older reversals.
-    """
-    points = await _load_stance_points(session)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    flips = [
-        f for f in detect_flips(points)
-        if f.curr.published_at >= cutoff
-        and (not reversals_only or f.is_reversal)
-    ][:limit]
-    return ok({
-        "window_days": days,
-        "items": [
-            {
-                "channel_id": f.channel_id,
-                "channel_title": f.channel_title,
-                "channel_thumbnail": f.channel_thumbnail,
-                "ticker": f.ticker,
-                "direction": f.direction,
-                "is_reversal": f.is_reversal,
-                "is_conditional": f.is_conditional,
-                "prev": _point_to_dict(f.prev),
-                "curr": _point_to_dict(f.curr),
-            }
-            for f in flips
-        ],
-    })
 
 
 async def _channel_calls(
