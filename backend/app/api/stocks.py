@@ -331,6 +331,7 @@ async def stock_mentions(
     store: PriceStore = Depends(get_price_store),
 ):
     """One row per video: stance is the video's overall stance, timestamps list each mention."""
+    t = ticker.upper()
     rows = (await session.execute(
         select(Mention, Video, Channel, VideoStance)
         .join(Video, Mention.video_id == Video.id)
@@ -340,7 +341,7 @@ async def stock_mentions(
             (VideoStance.video_id == Mention.video_id)
             & (VideoStance.ticker == Mention.ticker),
         )
-        .where(Mention.ticker == ticker.upper())
+        .where(Mention.ticker == t)
         .order_by(Video.published_at.desc(), Mention.start_seconds.asc())
     )).all()
 
@@ -383,13 +384,21 @@ async def stock_mentions(
         })
 
     # entry = closing price on the first trading day on/after the publish date,
-    # the same definition the scorecard uses
+    # the same definition the scorecard uses. Price lookup is best-effort: this
+    # endpoint is otherwise pure DB, so a market-layer failure (e.g. yfinance
+    # down) must not 500 the whole mentions table -- just serve null entries.
     series: PriceSeries | None = None
     if pub_dates:
-        t = ticker.upper()
-        series = _to_series(
-            (await store.get_daily([t], min(pub_dates.values()))).get(t, [])
-        )
+        try:
+            series = _to_series(
+                (await store.get_daily([t], min(pub_dates.values()))).get(t, [])
+            )
+        except Exception:
+            series = None
+            logger.warning(
+                "price lookup failed for %s, mentions served without entry prices",
+                t, exc_info=True,
+            )
     for vid, row in grouped.items():
         hit = series.close_on_or_after(pub_dates[vid]) if series else None
         row["entry_date"] = hit[0].isoformat() if hit else None

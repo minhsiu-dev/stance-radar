@@ -163,6 +163,19 @@ async def test_stock_mentions_entry_price_null_without_price_data(api, sessionma
     assert data[0]["entry_date"] is None
 
 
+async def test_stock_mentions_survive_price_layer_failure(api):
+    app, client = await seed(api)
+
+    async def boom(tickers, start):
+        raise RuntimeError("yfinance down")
+
+    app.state.price_store.get_daily = boom
+    data = (await client.get("/api/stocks/AAPL/mentions")).json()["data"]
+    assert len(data) == 2
+    assert all(r["entry_price"] is None and r["entry_date"] is None for r in data)
+    assert all(r["stance"] is not None for r in data)
+
+
 async def test_search_returns_results(api):
     app, client = api
     resp = await client.get("/api/stocks/search?q=apple")
