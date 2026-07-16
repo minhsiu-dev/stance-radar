@@ -576,8 +576,7 @@ class FakeMarketClient:
         # ETFs have no earnings; unknown tickers degrade to empty (decorative data).
         if ticker not in self.KNOWN or ticker in _FAKE_ETF_TICKERS:
             return _EMPTY_EARNINGS
-        today = date.today()
-        return EarningsDates(
-            past=[today - timedelta(days=n) for n in (303, 212, 121, 30)],
-            next_date=today + timedelta(days=30),
-        )
+        # anchored to _FAKE_END_DATE so markers land on fake candles regardless of the real date
+        past = [_FAKE_END_DATE - timedelta(days=n) for n in (303, 212, 121, 30)]
+        next_date = date.today() + timedelta(days=30)
+        return EarningsDates(past=past, next_date=next_date)

@@ -324,7 +324,9 @@ async def test_yfinance_earnings_parses_past_and_next_from_index(monkeypatch):
             return pd.DataFrame(
                 {"EPS Estimate": [1.0, 1.1, 1.2]},
                 index=pd.DatetimeIndex(
-                    ["2026-01-30", "2026-04-24", "2026-08-28"], tz="America/New_York"
+                    # far past/future so the past/next split can never flip within
+                    # a human lifetime (this is compared against the real clock)
+                    ["1999-01-30", "1999-04-24", "2126-08-28"], tz="America/New_York"
                 ),
             )
 
@@ -332,8 +334,8 @@ async def test_yfinance_earnings_parses_past_and_next_from_index(monkeypatch):
 
     monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
     result = YFinanceMarketClient()._fetch_earnings("AAPL")
-    assert result.past == [date(2026, 1, 30), date(2026, 4, 24)]
-    assert result.next_date == date(2026, 8, 28)
+    assert result.past == [date(1999, 1, 30), date(1999, 4, 24)]
+    assert result.next_date == date(2126, 8, 28)
 
 
 async def test_yfinance_earnings_degrades_to_empty_on_bad_index_entry(monkeypatch):
@@ -449,13 +451,17 @@ def test_split_earnings_dates_without_future_has_no_next():
 async def test_fake_earnings_quarterly_for_stocks_empty_for_etfs_and_unknown():
     from datetime import timedelta
 
+    from app.market.client import _FAKE_END_DATE
+
     client = FakeMarketClient()
     aapl = await client.get_earnings("AAPL")
     assert len(aapl.past) == 4
     assert aapl.past == sorted(aapl.past)
-    assert aapl.next_date is not None and aapl.next_date > aapl.past[-1]
-    # most recent past earnings lands inside the default 3M chart range
-    assert date.today() - aapl.past[-1] <= timedelta(days=31)
+    # past earnings are anchored to the fake candle clock, not the real date
+    assert aapl.past[-1] == _FAKE_END_DATE - timedelta(days=30)
+    assert aapl.past[0] == _FAKE_END_DATE - timedelta(days=303)
+    # next earnings badge stays in the future relative to the real viewer
+    assert aapl.next_date is not None and aapl.next_date > date.today()
 
     for ticker in ("VOO", "QQQ", "VT", "SPY", "ZZZZ"):
         result = await client.get_earnings(ticker)
