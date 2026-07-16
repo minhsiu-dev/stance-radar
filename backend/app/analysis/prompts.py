@@ -68,6 +68,11 @@ Rules:
 8. Language rules: write reasoning and summary in ENGLISH regardless of the transcript's \
    language; quote (the verbatim original sentence) and condition stay in the transcript's \
    ORIGINAL language — do not translate them.
+9. Also report tldr: 3-5 bullet points (English, per rule 8) summarizing the WHOLE \
+   video's key takeaways — main investment theses, macro or sector views, and important \
+   non-stock content. Do not merely restate the per-stock stances. Rule 7 does NOT \
+   apply to tldr: even when the video mentions no US stock at all, still report the \
+   TL;DR bullets (e.g. a purely macro video).
 """
 
 ANALYSIS_TOOL = {
@@ -135,8 +140,13 @@ ANALYSIS_TOOL = {
                     "required": ["ticker", "stance", "summary", "confidence", "is_conditional"],
                 },
             },
+            "tldr": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "3-5 English bullet points summarizing the whole video's key takeaways (theses, macro/sector views); required even when no US stock is mentioned",
+            },
         },
-        "required": ["mentions", "stances"],
+        "required": ["mentions", "stances", "tldr"],
     },
 }
 

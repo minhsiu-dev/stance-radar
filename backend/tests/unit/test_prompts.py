@@ -47,3 +47,17 @@ def test_tool_schema_requires_overall_is_conditional():
 def test_system_prompt_treats_relayed_third_party_view_as_neutral():
     assert "another investor" in SYSTEM_PROMPT
     assert "Burry" in SYSTEM_PROMPT  # concrete example anchoring the rule
+
+
+def test_tool_schema_includes_top_level_tldr():
+    schema = ANALYSIS_TOOL["input_schema"]
+    assert schema["properties"]["tldr"]["type"] == "array"
+    assert schema["properties"]["tldr"]["items"] == {"type": "string"}
+    assert "tldr" in schema["required"]
+
+
+def test_system_prompt_requires_tldr_even_without_mentions():
+    # The rule must survive prompt edits: TL;DR bullets, in English, and produced
+    # even for videos with no US-stock mention (rule 7 must not swallow it).
+    assert "TL;DR" in SYSTEM_PROMPT
+    assert "no US stock" in SYSTEM_PROMPT

@@ -242,3 +242,40 @@ def test_fill_missing_stance_not_conditional_when_a_backing_mention_is_firm():
         "stances": [],
     })
     assert result.stances[0].is_conditional is False
+
+
+# ---- tldr (whole-video takeaways) ----
+
+
+def test_parse_payload_tldr_happy_path():
+    result = parse_analysis_payload({
+        "mentions": [], "stances": [],
+        "tldr": ["Expects two more Fed cuts", "Rotating into small caps"],
+    })
+    assert result.tldr == ("Expects two more Fed cuts", "Rotating into small caps")
+
+
+def test_parse_payload_tldr_missing_or_malformed_is_none():
+    # Lenient like the other newer fields: never fail the whole analysis over tldr.
+    assert parse_analysis_payload({"mentions": [], "stances": []}).tldr is None
+    assert parse_analysis_payload(
+        {"mentions": [], "stances": [], "tldr": "not a list"}
+    ).tldr is None
+    assert parse_analysis_payload(
+        {"mentions": [], "stances": [], "tldr": [42, "", "   "]}
+    ).tldr is None
+
+
+def test_parse_payload_tldr_keeps_only_nonempty_strings():
+    result = parse_analysis_payload(
+        {"mentions": [], "stances": [], "tldr": ["keep me", 42, ""]}
+    )
+    assert result.tldr == ("keep me",)
+
+
+def test_fake_results_include_tldr():
+    from app.analysis.llm import _FAKE_RESULTS
+
+    for vid in ("alpha_vid_3", "alpha_vid_2", "beta_vid_3", "beta_vid_2"):
+        assert _FAKE_RESULTS[vid].tldr, vid
+    assert AnalysisResult.empty().tldr is None

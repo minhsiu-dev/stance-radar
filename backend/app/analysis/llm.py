@@ -108,6 +108,15 @@ def _fill_missing_stances(
     return tuple(filled)
 
 
+def _parse_tldr(payload: dict) -> tuple[str, ...] | None:
+    """Lenient like _parse_enum_field: a missing/malformed tldr must not fail the analysis."""
+    value = payload.get("tldr")
+    if not isinstance(value, list):
+        return None
+    items = tuple(s.strip() for s in value if isinstance(s, str) and s.strip())
+    return items or None
+
+
 def _strip_code_fences(text: str) -> str:
     """Some models wrap JSON in ```json ... ``` fences despite the instruction not to."""
     stripped = text.strip()
@@ -127,7 +136,9 @@ def parse_analysis_payload(payload: dict) -> AnalysisResult:
     mentions = tuple(_parse_mention(m) for m in payload.get("mentions", []))
     stances = tuple(_parse_stance(s) for s in payload.get("stances", []))
     return AnalysisResult(
-        mentions=mentions, stances=_fill_missing_stances(mentions, stances)
+        mentions=mentions,
+        stances=_fill_missing_stances(mentions, stances),
+        tldr=_parse_tldr(payload),
     )
 
 
@@ -259,6 +270,11 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
             "AAPL", "buy", "財報強勁,整體看多 AAPL", confidence="high",
             is_conditional=False,
         ),),
+        tldr=(
+            "Apple's quarter beat expectations across the board",
+            "Speaker is adding to AAPL on earnings strength",
+            "Sees services margin as the key driver ahead",
+        ),
     ),
     "alpha_vid_2": AnalysisResult(
         mentions=(MentionResult(
@@ -269,6 +285,10 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
             "NVDA", "sell", "估值偏高,看空 NVDA", confidence="medium",
             is_conditional=False,
         ),),
+        tldr=(
+            "NVDA valuation looks stretched after the run-up",
+            "Speaker is taking profits rather than adding here",
+        ),
     ),
     "alpha_vid_1": AnalysisResult.empty(),
     "beta_vid_3": AnalysisResult(
@@ -281,6 +301,10 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
             "TSLA", "neutral", "交車數據中性,觀望 TSLA", confidence="low",
             is_conditional=False,
         ),),
+        tldr=(
+            "Tesla delivery numbers came in roughly as expected",
+            "No directional call — staying on the sidelines for now",
+        ),
     ),
     "beta_vid_2": AnalysisResult(
         mentions=(
@@ -303,6 +327,11 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
                 "NVDA", "neutral", "等回檔,觀望 NVDA", confidence="medium",
                 is_conditional=True,
             ),
+        ),
+        tldr=(
+            "Keeps adding to AAPL as a core long-term holding",
+            "Waiting for an NVDA pullback before entering",
+            "Overall cautious tone on chasing momentum here",
         ),
     ),
 }

@@ -31,6 +31,7 @@ class StanceResult:
 class AnalysisResult:
     mentions: tuple[MentionResult, ...]
     stances: tuple[StanceResult, ...]
+    tldr: tuple[str, ...] | None = None
 
     @staticmethod
     def empty() -> "AnalysisResult":
