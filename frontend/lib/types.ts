@@ -307,30 +307,6 @@ export interface AppSettings {
   auto_refresh_minutes: number;
 }
 
-export interface FlipPoint {
-  video_id: string;
-  video_title: string;
-  stance: StanceValue;
-  summary: string;
-  published_at: string;
-}
-
-export interface FlipItem {
-  channel_id: string;
-  channel_title: string;
-  channel_thumbnail: string;
-  ticker: string;
-  direction: "bullish" | "bearish";
-  is_reversal: boolean;
-  is_conditional: boolean;
-  prev: FlipPoint;
-  curr: FlipPoint;
-}
-
-export interface FlipsResponse {
-  window_days: number;
-  items: FlipItem[];
-}
 
 export interface ScorecardHorizonStats {
   count: number;

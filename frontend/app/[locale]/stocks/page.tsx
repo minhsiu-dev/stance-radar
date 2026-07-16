@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { StanceFlips } from "@/components/stance-flips";
 import { TrendingStocksPage } from "@/components/trending-stocks-page";
 
 export async function generateMetadata({
@@ -18,7 +17,6 @@ export default async function StocksIndexPage() {
   return (
     <div className="space-y-8">
       <h1 className="sr-only">{t("trending")}</h1>
-      <StanceFlips />
       <TrendingStocksPage />
     </div>
   );
