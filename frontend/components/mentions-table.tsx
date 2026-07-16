@@ -26,8 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, formatSeconds } from "@/lib/format";
-import type { MentionRow, StanceValue } from "@/lib/types";
+import { Info } from "lucide-react";
+import { formatDate, formatNumber, formatPercent, formatSeconds } from "@/lib/format";
+import type { MentionRow, StanceValue, StockSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ChannelAvatar } from "@/components/channel-avatar";
 
@@ -53,6 +54,8 @@ export function MentionsTable({
   const { data, error, isLoading } = useSWR<MentionRow[]>(
     `/api/stocks/${ticker}/mentions`,
   );
+  const { data: summary } = useSWR<StockSummary>(`/api/stocks/${ticker}`);
+  const currentPrice = summary?.price ?? null;
   const bodyRef = useRef<HTMLTableSectionElement>(null);
 
   const channels = useMemo(
@@ -141,7 +144,7 @@ export function MentionsTable({
           <TableRow>
             <TableHead>{t("columns.date")}</TableHead>
             <TableHead>{t("columns.channel")}</TableHead>
-            <TableHead>{t("columns.quote")}</TableHead>
+            <TableHead>{t("columns.price")}</TableHead>
             <TableHead>{t("columns.stance")}</TableHead>
           </TableRow>
         </TableHeader>
@@ -169,73 +172,101 @@ export function MentionsTable({
                   />
                 </Link>
               </TableCell>
-              <TableCell className="max-w-80">
-                <HoverCard>
-                  <HoverCardTrigger
-                    delay={150}
-                    render={
-                      <span className="line-clamp-2 cursor-help">
-                        {m.mentions[0]?.quote}
-                        {m.mentions.length > 1 && (
-                          <span className="ml-1 text-xs text-muted-foreground">
-                            +{m.mentions.length - 1}
-                          </span>
+              <TableCell
+                className="whitespace-nowrap font-mono text-sm tabular-nums"
+                title={m.entry_date ?? undefined}
+              >
+                {m.entry_price == null ? (
+                  "—"
+                ) : (
+                  <>
+                    ${formatNumber(m.entry_price)}
+                    {currentPrice != null && m.entry_price > 0 && (
+                      <span
+                        className={cn(
+                          "ml-1.5",
+                          currentPrice >= m.entry_price
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-rose-600 dark:text-rose-400",
                         )}
+                      >
+                        {formatPercent((currentPrice / m.entry_price - 1) * 100)}
                       </span>
-                    }
-                  />
-                  <HoverCardContent className="max-h-96 w-[min(480px,90vw)] space-y-4 overflow-y-auto text-sm leading-relaxed">
-                    {m.mentions.map((d) => (
-                      <div key={d.start_seconds}>
-                        <p className="mb-1 flex flex-wrap items-center gap-1.5 font-mono text-xs text-muted-foreground">
-                          {formatSeconds(d.start_seconds)}
-                          <StanceBadge
-                            stance={d.stance}
-                            confidence={d.confidence}
-                          />
-                          {d.time_horizon && d.time_horizon !== "unspecified" && (
-                            <span className="rounded border px-1 py-0.5 text-[10px] uppercase">
-                              {t(`horizon.${d.time_horizon}`)}
-                            </span>
-                          )}
-                        </p>
-                        {d.is_conditional && d.condition && (
-                          <p className="mb-2 text-xs text-amber-600 dark:text-amber-400">
-                            {t("conditional", { condition: d.condition })}
-                          </p>
-                        )}
-                        {d.excerpt ? (
-                          // New format: the raw transcript text near the mention (a single continuous passage)
-                          <p>{d.excerpt}</p>
-                        ) : (
-                          // Old format: mechanically extracted surrounding context + quote
-                          <>
-                            {d.context_before && (
-                              <p className="mb-2 text-muted-foreground">
-                                {d.context_before}
-                              </p>
-                            )}
-                            <p className="font-medium">{d.quote}</p>
-                            {d.context_after && (
-                              <p className="mt-2 text-muted-foreground">
-                                {d.context_after}
-                              </p>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </HoverCardContent>
-                </HoverCard>
+                    )}
+                  </>
+                )}
               </TableCell>
               <TableCell>
-                <Link
-                  href={`/videos/${m.video_id}?ticker=${ticker}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-block transition-opacity hover:opacity-80"
-                >
-                  <StanceBadge stance={m.stance} confidence={m.confidence} />
-                </Link>
+                <span className="inline-flex items-center gap-1.5">
+                  <Link
+                    href={`/videos/${m.video_id}?ticker=${ticker}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-block transition-opacity hover:opacity-80"
+                  >
+                    <StanceBadge stance={m.stance} confidence={m.confidence} />
+                  </Link>
+                  <HoverCard>
+                    <HoverCardTrigger
+                      delay={150}
+                      render={
+                        <button
+                          type="button"
+                          aria-label={t("quoteInfo")}
+                          className="inline-flex cursor-help items-center gap-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <Info className="size-3.5" />
+                          {m.mentions.length > 1 && (
+                            <span className="text-[10px] tabular-nums">
+                              {m.mentions.length}
+                            </span>
+                          )}
+                        </button>
+                      }
+                    />
+                    <HoverCardContent className="max-h-96 w-[min(480px,90vw)] space-y-4 overflow-y-auto text-sm leading-relaxed">
+                      {m.mentions.map((d) => (
+                        <div key={d.start_seconds}>
+                          <p className="mb-1 flex flex-wrap items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                            {formatSeconds(d.start_seconds)}
+                            <StanceBadge
+                              stance={d.stance}
+                              confidence={d.confidence}
+                            />
+                            {d.time_horizon && d.time_horizon !== "unspecified" && (
+                              <span className="rounded border px-1 py-0.5 text-[10px] uppercase">
+                                {t(`horizon.${d.time_horizon}`)}
+                              </span>
+                            )}
+                          </p>
+                          {d.is_conditional && d.condition && (
+                            <p className="mb-2 text-xs text-amber-600 dark:text-amber-400">
+                              {t("conditional", { condition: d.condition })}
+                            </p>
+                          )}
+                          {d.excerpt ? (
+                            // New format: the raw transcript text near the mention (a single continuous passage)
+                            <p>{d.excerpt}</p>
+                          ) : (
+                            // Old format: mechanically extracted surrounding context + quote
+                            <>
+                              {d.context_before && (
+                                <p className="mb-2 text-muted-foreground">
+                                  {d.context_before}
+                                </p>
+                              )}
+                              <p className="font-medium">{d.quote}</p>
+                              {d.context_after && (
+                                <p className="mt-2 text-muted-foreground">
+                                  {d.context_after}
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </HoverCardContent>
+                  </HoverCard>
+                </span>
               </TableCell>
             </TableRow>
           ))}

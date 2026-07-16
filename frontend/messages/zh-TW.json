@@ -323,7 +323,7 @@
     "columns": {
       "date": "日期",
       "channel": "頻道",
-      "quote": "原句",
+      "price": "當時價格",
       "stance": "立場"
     },
     "filter": {
@@ -336,7 +336,8 @@
     "empty": "尚無此股票的提及紀錄。",
     "loadError": "提及讀取失敗:{message}",
     "horizon": { "short": "短線", "long": "長線" },
-    "conditional": "條件單:{condition}"
+    "conditional": "條件單:{condition}",
+    "quoteInfo": "顯示原句"
   },
   "Scorecard": {
     "title": "最新提及",

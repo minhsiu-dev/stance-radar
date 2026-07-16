@@ -323,7 +323,7 @@
     "columns": {
       "date": "Date",
       "channel": "Channel",
-      "quote": "Quote",
+      "price": "Price then",
       "stance": "Stance"
     },
     "filter": {
@@ -336,7 +336,8 @@
     "empty": "No mentions recorded for this stock yet.",
     "loadError": "Failed to load mentions: {message}",
     "horizon": { "short": "Short-term", "long": "Long-term" },
-    "conditional": "Conditional: {condition}"
+    "conditional": "Conditional: {condition}",
+    "quoteInfo": "Show quotes"
   },
   "Scorecard": {
     "title": "Latest mentions",

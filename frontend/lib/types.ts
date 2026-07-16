@@ -156,6 +156,8 @@ export interface MentionRow {
   summary: string | null;
   confidence: ConfidenceValue | null;
   youtube_url: string;
+  entry_price: number | null;
+  entry_date: string | null;
   mentions: MentionDetail[];
 }
 
