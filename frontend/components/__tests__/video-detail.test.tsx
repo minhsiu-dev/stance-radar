@@ -29,6 +29,7 @@ const messages = {
     callPerformance: "Call performance",
     byStock: "By stock",
     quotesByTime: "Quotes",
+    tldrHeading: "TL;DR",
   },
   Stock: {
     stance: { buy: "Buy", neutral: "Neutral", sell: "Sell" },
@@ -93,5 +94,22 @@ describe("VideoDetail", () => {
     // by-stock tab is default -> its card summary renders; scorecard tab is not active
     expect(await screen.findByText("Bullish")).toBeInTheDocument();
     expect(screen.queryByTestId("video-scorecard-mock")).toBeNull();
+  });
+
+  it("renders the TL;DR card above the tabs when tldr is present", async () => {
+    const data = {
+      ...DATA,
+      video: { ...DATA.video, tldr: ["Fed cuts expected", "Rotating into small caps"] },
+    };
+    wrap(() => Promise.resolve(data));
+    expect(await screen.findByText("TL;DR")).toBeInTheDocument();
+    expect(screen.getByText("Fed cuts expected")).toBeInTheDocument();
+    expect(screen.getByText("Rotating into small caps")).toBeInTheDocument();
+  });
+
+  it("hides the TL;DR card when tldr is null or empty", async () => {
+    wrap(() => Promise.resolve({ ...DATA, video: { ...DATA.video, tldr: null } }));
+    expect(await screen.findByText("My Video")).toBeInTheDocument();
+    expect(screen.queryByText("TL;DR")).not.toBeInTheDocument();
   });
 });

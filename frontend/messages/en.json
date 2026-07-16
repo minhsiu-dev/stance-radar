@@ -316,7 +316,8 @@
     "reanalyze": "Re-analyze",
     "reanalyzing": "Re-analyzing…",
     "reanalyzeFailed": "Re-analysis failed",
-    "callPerformance": "Call performance"
+    "callPerformance": "Call performance",
+    "tldrHeading": "TL;DR"
   },
   "Mentions": {
     "title": "All mentions",

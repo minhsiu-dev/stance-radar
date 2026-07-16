@@ -81,37 +81,48 @@ export function VideoDetail({ videoId }: { videoId: string }) {
         </div>
       </div>
 
-      {/* tabs: 標的績效 / 依股票的提及 / 原句 */}
-      <Tabs
-        defaultValue={initialTicker ? "byStock" : "scorecard"}
-        className="mt-6 lg:mt-0"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2 lg:sticky lg:top-14 lg:z-[5] lg:bg-background lg:py-2 lg:-mx-0.5 lg:px-0.5">
-          <TabsList>
-            <TabsTrigger value="scorecard">{t("callPerformance")}</TabsTrigger>
-            <TabsTrigger value="byStock">{t("byStock")}</TabsTrigger>
-            <TabsTrigger value="quotes">{t("quotesByTime")}</TabsTrigger>
-          </TabsList>
-          <ReanalyzeButton videoId={data.video.id} onDone={() => mutate()} />
-        </div>
-        <TabsContent value="scorecard">
-          <VideoScorecard videoId={data.video.id} channelId={data.video.channel.id} />
-        </TabsContent>
-        <TabsContent value="byStock">
-          <MentionsByStock
-            groups={data.groups}
-            initialTicker={initialTicker}
-            channelId={data.video.channel.id}
-          />
-        </TabsContent>
-        <TabsContent value="quotes">
-          <MentionsQuotes
-            groups={data.groups}
-            channelId={data.video.channel.id}
-            onSeek={(s) => playerRef.current?.seekTo(s)}
-          />
-        </TabsContent>
-      </Tabs>
+      {/* right column: TL;DR (when present) + tabs */}
+      <div className="mt-6 space-y-4 lg:mt-0">
+        {data.video.tldr && data.video.tldr.length > 0 && (
+          <section className="rounded-lg border bg-muted/30 p-4">
+            <h2 className="mb-2 text-sm font-semibold text-muted-foreground">
+              {t("tldrHeading")}
+            </h2>
+            <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed">
+              {data.video.tldr.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+        <Tabs defaultValue={initialTicker ? "byStock" : "scorecard"}>
+          <div className="flex flex-wrap items-center justify-between gap-2 lg:sticky lg:top-14 lg:z-[5] lg:bg-background lg:py-2 lg:-mx-0.5 lg:px-0.5">
+            <TabsList>
+              <TabsTrigger value="scorecard">{t("callPerformance")}</TabsTrigger>
+              <TabsTrigger value="byStock">{t("byStock")}</TabsTrigger>
+              <TabsTrigger value="quotes">{t("quotesByTime")}</TabsTrigger>
+            </TabsList>
+            <ReanalyzeButton videoId={data.video.id} onDone={() => mutate()} />
+          </div>
+          <TabsContent value="scorecard">
+            <VideoScorecard videoId={data.video.id} channelId={data.video.channel.id} />
+          </TabsContent>
+          <TabsContent value="byStock">
+            <MentionsByStock
+              groups={data.groups}
+              initialTicker={initialTicker}
+              channelId={data.video.channel.id}
+            />
+          </TabsContent>
+          <TabsContent value="quotes">
+            <MentionsQuotes
+              groups={data.groups}
+              channelId={data.video.channel.id}
+              onSeek={(s) => playerRef.current?.seekTo(s)}
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

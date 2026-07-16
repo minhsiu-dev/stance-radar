@@ -426,6 +426,7 @@ export interface VideoDetailResponse {
     published_at: string;
     duration_seconds: number | null;
     status: VideoStatus;
+    tldr?: string[] | null;
   };
   groups: VideoDetailGroup[];
 }

@@ -316,7 +316,8 @@
     "reanalyze": "重新分析",
     "reanalyzing": "重新分析中…",
     "reanalyzeFailed": "重新分析失敗",
-    "callPerformance": "標的績效"
+    "callPerformance": "標的績效",
+    "tldrHeading": "重點摘要"
   },
   "Mentions": {
     "title": "逐筆提及",
