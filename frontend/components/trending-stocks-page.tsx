@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
 import {
@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StockCard } from "@/components/stock-card";
+import { maxBucketTotal } from "@/lib/stance-buckets";
+import { useSparklines } from "@/lib/use-sparklines";
 import type { TrendingStock } from "@/lib/types";
 
 const WINDOWS = [
@@ -66,6 +68,12 @@ export function TrendingStocksPage() {
   }, [fresh, count, segment, setSize]);
 
   const items = (pages ?? []).flat();
+  const yMax = maxBucketTotal(items);
+  const tickerPages = useMemo(
+    () => (pages ?? []).map((p) => p.map((s) => s.ticker)),
+    [pages],
+  );
+  const sparklines = useSparklines(tickerPages, count);
   const lastPage = pages?.[pages.length - 1];
   const hasMore = !!lastPage && lastPage.length === PAGE_SIZE;
 
@@ -105,7 +113,9 @@ export function TrendingStocksPage() {
       ) : items.length > 0 ? (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((s) => <StockCard key={s.ticker} s={s} />)}
+            {items.map((s) => (
+              <StockCard key={s.ticker} s={s} yMax={yMax} closes={sparklines[s.ticker]} />
+            ))}
           </div>
           {hasMore && <div ref={sentinelRef} data-testid="trending-load-more" className="h-4" />}
         </>

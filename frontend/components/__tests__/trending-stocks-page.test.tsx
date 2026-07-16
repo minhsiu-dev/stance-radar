@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -18,6 +18,7 @@ const messages = {
     empty: "No stocks",
   },
   Dashboard: { recentStocks: { channelCount: "{count} channels" } },
+  Stock: { stance: { buy: "Buy", neutral: "Neutral", sell: "Sell", new: "New", repeat: "Repeat" } },
 };
 
 function zone(n: number) {
@@ -88,6 +89,28 @@ describe("TrendingStocksPage", () => {
     await screen.findAllByTestId("recent-stock-card");
     expect(screen.getAllByTestId("recent-stock-card")).toHaveLength(8);
     expect(screen.queryByTestId("trending-load-more")).toBeNull(); // short page -> end
+  });
+
+  it("fetches batched sparklines for loaded tickers and overlays the price line", async () => {
+    const BUCKET = {
+      start: "2026-06-01T00:00:00+00:00", end: "2026-06-08T00:00:00+00:00",
+      granularity: "week",
+      buy_new: 2, buy_repeat: 0, neutral_new: 0, neutral_repeat: 0, sell_new: 0, sell_repeat: 0,
+    };
+    const fetcher = vi.fn().mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/stocks/sparklines")) {
+        return { NVDA: [{ date: "2026-06-02", close: 100 }, { date: "2026-06-05", close: 105 }] };
+      }
+      return [{ ...STOCK, buckets: [BUCKET] }];
+    });
+    const { container } = wrap(fetcher);
+    await screen.findByTestId("recent-stock-card");
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="price-overlay-line"]')).toBeInTheDocument();
+    });
+    const sparkUrl = fetcher.mock.calls.map(([u]: string[]) => u).find((u) => u.includes("/sparklines"));
+    expect(sparkUrl).toContain("tickers=NVDA");
+    expect(sparkUrl).toContain("days=90"); // count window default
   });
 });
 

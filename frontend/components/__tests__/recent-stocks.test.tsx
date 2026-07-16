@@ -16,9 +16,10 @@ const messages = {
       viewAll: "View all",
     },
   },
+  Stock: { stance: { buy: "Buy", neutral: "Neutral", sell: "Sell", new: "New", repeat: "Repeat" } },
 };
 
-function wrap(fetcher: () => Promise<unknown>) {
+function wrap(fetcher: (url: string) => Promise<unknown>) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <SWRConfig value={{ fetcher, provider: () => new Map() }}>
@@ -77,5 +78,28 @@ describe("RecentStocks", () => {
     await waitFor(() => {
       expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("days=7"))).toBe(true);
     });
+  });
+
+  it("fetches batched sparklines for its cards and overlays the price line", async () => {
+    const BUCKET = {
+      start: "2026-06-01T00:00:00+00:00", end: "2026-06-08T00:00:00+00:00",
+      granularity: "week",
+      buy_new: 2, buy_repeat: 0, neutral_new: 0, neutral_repeat: 0, sell_new: 0, sell_repeat: 0,
+    };
+    const withBuckets = STOCKS.map((s) => ({ ...s, buckets: [BUCKET] }));
+    const fetcher = vi.fn().mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/stocks/sparklines")) {
+        return { NVDA: [{ date: "2026-06-02", close: 100 }, { date: "2026-06-05", close: 105 }] };
+      }
+      return withBuckets;
+    });
+    const { container } = wrap(fetcher);
+    await screen.findAllByTestId("recent-stock-card");
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="price-overlay-line"]')).toBeInTheDocument();
+    });
+    const sparkUrl = fetcher.mock.calls.map(([u]: string[]) => u).find((u) => u.includes("/sparklines"));
+    expect(sparkUrl).toContain("tickers=NVDA,AAPL");
+    expect(sparkUrl).toContain("days=90"); // default freshness window
   });
 });

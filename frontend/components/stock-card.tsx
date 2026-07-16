@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { ChannelAvatar } from "@/components/channel-avatar";
 import { StanceMiniBar, ZONES } from "@/components/stance-mini-bar";
 import { StanceTrendChart } from "@/components/stance-trend-chart";
-import type { TrendingStock, StanceZone } from "@/lib/types";
+import type { TrendingStock, StanceZone, SparklinePoint } from "@/lib/types";
 
 function AvatarGroup({ zone, color }: { zone: StanceZone; color: string }) {
   if (zone.count === 0) return null;
@@ -26,7 +26,15 @@ function AvatarGroup({ zone, color }: { zone: StanceZone; color: string }) {
   );
 }
 
-export function StockCard({ s }: { s: TrendingStock }) {
+export function StockCard({
+  s,
+  yMax,
+  closes,
+}: {
+  s: TrendingStock;
+  yMax?: number;
+  closes?: SparklinePoint[];
+}) {
   const t = useTranslations("Dashboard.recentStocks");
   return (
     <Link
@@ -47,7 +55,7 @@ export function StockCard({ s }: { s: TrendingStock }) {
           <AvatarGroup key={key} zone={s.stances[key]} color={color} />
         ))}
       </div>
-      <StanceTrendChart buckets={s.buckets} />
+      <StanceTrendChart buckets={s.buckets} yMax={yMax} closes={closes} />
     </Link>
   );
 }

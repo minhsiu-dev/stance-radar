@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { StockCard } from "@/components/stock-card";
+import { maxBucketTotal } from "@/lib/stance-buckets";
+import { useSparklines } from "@/lib/use-sparklines";
 import type { TrendingStock } from "@/lib/types";
 
 const PERIODS = [
@@ -23,6 +25,12 @@ export function RecentStocks() {
   const { data, isLoading } = useSWR<TrendingStock[]>(
     `/api/stocks/trending?limit=6&days=${days}`,
   );
+  const yMax = data ? maxBucketTotal(data) : undefined;
+  const tickerPages = useMemo(
+    () => (data && data.length > 0 ? [data.map((s) => s.ticker)] : []),
+    [data],
+  );
+  const sparklines = useSparklines(tickerPages, days);
 
   // No data even in the widest window (3M) → treat as no discussion yet and hide the whole section
   if (!isLoading && days === WIDEST_DAYS && (!data || data.length === 0)) {
@@ -69,7 +77,7 @@ export function RecentStocks() {
       ) : data && data.length > 0 ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.map((s) => (
-            <StockCard key={s.ticker} s={s} />
+            <StockCard key={s.ticker} s={s} yMax={yMax} closes={sparklines[s.ticker]} />
           ))}
         </div>
       ) : (
