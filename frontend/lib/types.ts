@@ -125,6 +125,14 @@ export interface CandleDto {
   volume: number;
 }
 
+export interface SparklinePoint {
+  date: string; // "YYYY-MM-DD"
+  close: number;
+}
+
+// GET /api/stocks/sparklines response: ticker -> ascending daily closes
+export type SparklinesResponse = Record<string, SparklinePoint[]>;
+
 export interface StanceRow {
   video_id: string;
   video_title: string;
@@ -306,7 +314,6 @@ export interface ChannelVideosResponse {
 export interface AppSettings {
   auto_refresh_minutes: number;
 }
-
 
 export interface ScorecardHorizonStats {
   count: number;
