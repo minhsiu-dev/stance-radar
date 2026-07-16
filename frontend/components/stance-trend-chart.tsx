@@ -8,6 +8,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { bucketTotal } from "@/lib/stance-buckets";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { StanceBucket } from "@/lib/types";
@@ -27,14 +28,7 @@ export function StanceTrendChart({
   className?: string;
 }) {
   const t = useTranslations("Stock.stance");
-  const total = buckets.reduce(
-    (sum, b) =>
-      sum +
-      b.buy_new + b.buy_repeat +
-      b.neutral_new + b.neutral_repeat +
-      b.sell_new + b.sell_repeat,
-    0,
-  );
+  const total = buckets.reduce((sum, b) => sum + bucketTotal(b), 0);
   if (total === 0) return null;
 
   const config: ChartConfig = {
