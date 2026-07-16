@@ -212,6 +212,20 @@ async def stock_analyst(ticker: str, market: MarketClient = Depends(get_market))
     return ok(asdict(data))
 
 
+@router.get("/{ticker}/earnings")
+async def stock_earnings(ticker: str, market: MarketClient = Depends(get_market)):
+    # Earnings dates decorate the chart; any failure degrades to empty data, never an error.
+    try:
+        data = await market.get_earnings(ticker.upper())
+    except Exception:
+        logger.exception("earnings fetch failed for %s", ticker)
+        return ok({"past": [], "next": None})
+    return ok({
+        "past": [d.isoformat() for d in data.past],
+        "next": data.next_date.isoformat() if data.next_date else None,
+    })
+
+
 @router.get("/{ticker}/candles")
 async def stock_candles(
     ticker: str,

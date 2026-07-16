@@ -725,3 +725,31 @@ async def test_trending_filters_by_channel_count(api, sessionmaker):
         "/api/stocks/trending?min_channels=2&max_channels=3&limit=1&offset=2"
     )).json()["data"]
     assert page2 == []
+
+
+async def test_stock_earnings_for_stock_and_empty_for_etf(api):
+    app, client = api
+    resp = await client.get("/api/stocks/AAPL/earnings")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert len(data["past"]) == 4
+    assert data["past"] == sorted(data["past"])
+    assert all(len(d) == 10 for d in data["past"])  # YYYY-MM-DD strings
+    assert data["next"] is not None
+
+    resp = await client.get("/api/stocks/VOO/earnings")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == {"past": [], "next": None}
+
+
+async def test_stock_earnings_degrades_to_empty_on_market_failure(api, monkeypatch):
+    from app.market.client import FakeMarketClient
+
+    async def boom(self, ticker):
+        raise RuntimeError("yfinance down")
+
+    monkeypatch.setattr(FakeMarketClient, "get_earnings", boom)
+    app, client = api
+    resp = await client.get("/api/stocks/AAPL/earnings")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == {"past": [], "next": None}
