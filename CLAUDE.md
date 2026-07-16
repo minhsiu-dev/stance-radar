@@ -27,18 +27,19 @@ cd /workspace
 docker compose build api && docker compose up -d api
 docker exec -w /srv \
   -e TEST_DATABASE_URL=postgresql+asyncpg://stance:stance@db:5432/stance_radar_test \
-  workspace-api-1 sh -c 'unset BACKFILL_LIMIT ADMIN_COOKIE_SECURE && python -m pytest tests/ -q --no-cov'
+  workspace-api-1 sh -c 'unset BACKFILL_LIMIT ANALYSIS_CONCURRENCY AUTO_REFRESH_MINUTES SHORTS_MAX_SECONDS ADMIN_SESSION_MINUTES ADMIN_COOKIE_SECURE ADMIN_PASSWORD CLAUDE_MODEL CLAUDE_BIN && python -m pytest tests/ -q --no-cov'
 ```
 
 You can replace `tests/` with a single file or path to run only that part.
 
 Things to note:
 
-- **Do not leave `BACKFILL_LIMIT` in `.env`**: `.env` is pulled into the container
-  environment by compose, and `tests/unit/test_config.py::test_defaults` asserts
-  the default value `backfill_limit == 30`, so having this variable in the
-  environment makes that test fail. The `unset BACKFILL_LIMIT` in the command
-  above is exactly for this reason.
+- **Any Settings-backed var in `.env` breaks `test_config.py::test_defaults`**:
+  `.env` is pulled into the container environment by compose, and that test
+  asserts every default value (e.g. `backfill_limit == 30`), so ANY overridden
+  setting left in the environment makes it fail. The long `unset` list in the
+  command above covers everything `.env` sets today — when you add a var to
+  `.env`, add it to the list too.
 - **`ADMIN_COOKIE_SECURE=true` in `.env` breaks admin-gated tests**: it makes the
   `sr_admin` cookie `Secure`, which httpx silently drops over the plain-http ASGI
   test transport, so every test that seeds channels via `POST /api/channels` gets
