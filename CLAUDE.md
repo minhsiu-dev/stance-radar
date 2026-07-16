@@ -27,7 +27,7 @@ cd /workspace
 docker compose build api && docker compose up -d api
 docker exec -w /srv \
   -e TEST_DATABASE_URL=postgresql+asyncpg://stance:stance@db:5432/stance_radar_test \
-  workspace-api-1 sh -c 'unset BACKFILL_LIMIT && python -m pytest tests/ -q --no-cov'
+  workspace-api-1 sh -c 'unset BACKFILL_LIMIT ADMIN_COOKIE_SECURE && python -m pytest tests/ -q --no-cov'
 ```
 
 You can replace `tests/` with a single file or path to run only that part.
@@ -39,6 +39,11 @@ Things to note:
   the default value `backfill_limit == 30`, so having this variable in the
   environment makes that test fail. The `unset BACKFILL_LIMIT` in the command
   above is exactly for this reason.
+- **`ADMIN_COOKIE_SECURE=true` in `.env` breaks admin-gated tests**: it makes the
+  `sr_admin` cookie `Secure`, which httpx silently drops over the plain-http ASGI
+  test transport, so every test that seeds channels via `POST /api/channels` gets
+  a 401 (~6 failures in `test_stocks_api.py` alone). Hence `unset
+  ADMIN_COOKIE_SECURE` in the command above.
 - **Known flake**: `tests/integration/test_refresh_api.py::test_trigger_refresh_and_poll_until_done`
   occasionally fails when running the whole suite due to ordering effects, but
   passes when run on its own (pre-existing, not a new bug).
