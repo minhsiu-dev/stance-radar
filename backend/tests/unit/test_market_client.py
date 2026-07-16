@@ -311,6 +311,55 @@ async def test_yfinance_analyst_parses_info_and_recommendations(monkeypatch):
     }
 
 
+async def test_yfinance_earnings_parses_past_and_next_from_index(monkeypatch):
+    import pandas as pd
+
+    from app.market.client import YFinanceMarketClient
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            pass
+
+        def get_earnings_dates(self, limit):
+            return pd.DataFrame(
+                {"EPS Estimate": [1.0, 1.1, 1.2]},
+                index=pd.DatetimeIndex(
+                    ["2026-01-30", "2026-04-24", "2026-08-28"], tz="America/New_York"
+                ),
+            )
+
+    import yfinance
+
+    monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
+    result = YFinanceMarketClient()._fetch_earnings("AAPL")
+    assert result.past == [date(2026, 1, 30), date(2026, 4, 24)]
+    assert result.next_date == date(2026, 8, 28)
+
+
+async def test_yfinance_earnings_degrades_to_empty_on_bad_index_entry(monkeypatch):
+    import pandas as pd
+
+    from app.market.client import YFinanceMarketClient, _EMPTY_EARNINGS
+
+    class _NoDate:
+        """Stands in for an index entry that doesn't behave like a Timestamp."""
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            pass
+
+        def get_earnings_dates(self, limit):
+            df = pd.DataFrame({"EPS Estimate": [1.0]}, index=[0])
+            df.index = [_NoDate()]
+            return df
+
+    import yfinance
+
+    monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
+    result = YFinanceMarketClient()._fetch_earnings("AAPL")
+    assert result == _EMPTY_EARNINGS
+
+
 import pytest
 from app.market.client import YFinanceMarketClient, StockSummary
 from app.net.proxy import ProxyRotator

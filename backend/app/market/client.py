@@ -407,13 +407,13 @@ class YFinanceMarketClient:
 
         try:
             df = yf.Ticker(ticker).get_earnings_dates(limit=24)  # ~5y of quarters + upcoming
+            if df is None or df.empty:
+                return _EMPTY_EARNINGS
+            today = datetime.now(timezone.utc).date()
+            return split_earnings_dates((ts.date() for ts in df.index), today)
         except Exception:
             logger.warning("earnings dates fetch failed for %s", ticker, exc_info=True)
             return _EMPTY_EARNINGS
-        if df is None or df.empty:
-            return _EMPTY_EARNINGS
-        today = datetime.now(timezone.utc).date()
-        return split_earnings_dates((ts.date() for ts in df.index), today)
 
 
 _RANGE_TO_DAYS = {"1m": 22, "3m": 65, "6m": 130, "ytd": 110, "1y": 260, "3y": 780, "5y": 1300}
