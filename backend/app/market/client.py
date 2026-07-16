@@ -2,7 +2,7 @@ import asyncio
 import logging
 import math
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Protocol
 
 from app.market.cache import TTLCache
@@ -92,6 +92,23 @@ _EMPTY_ANALYST = AnalystData(
 )
 
 
+@dataclass(frozen=True)
+class EarningsDates:
+    past: list[date]  # ascending, deduped
+    next_date: date | None
+
+
+_EMPTY_EARNINGS = EarningsDates(past=[], next_date=None)
+
+
+def split_earnings_dates(dates, today: date) -> EarningsDates:
+    """Split raw (possibly duplicated, unordered) earnings dates around today."""
+    uniq = sorted(set(dates))
+    past = [d for d in uniq if d <= today]
+    future = [d for d in uniq if d > today]
+    return EarningsDates(past=past, next_date=future[0] if future else None)
+
+
 class MarketClient(Protocol):
     async def get_summary(self, ticker: str) -> StockSummary: ...
     async def get_candles(self, ticker: str, range_key: str) -> list[Candle]: ...
@@ -104,6 +121,7 @@ class MarketClient(Protocol):
         self, tickers: list[str], start: date, end: date
     ) -> dict[str, list[Candle]]: ...
     async def get_analyst(self, ticker: str) -> AnalystData: ...
+    async def get_earnings(self, ticker: str) -> EarningsDates: ...
 
 
 class YFinanceMarketClient:
@@ -119,6 +137,7 @@ class YFinanceMarketClient:
         self._search_cache = TTLCache(ttl_seconds=300)      # 5 minutes
         self._financials_cache = TTLCache(ttl_seconds=86400) # 24 hours; financials change only once a quarter
         self._analyst_cache = TTLCache(ttl_seconds=86400)  # 24 hours
+        self._earnings_cache = TTLCache(ttl_seconds=43200)  # 12 hours; earnings dates rarely move
 
     async def _call(self, fn, *args):
         if not self._proxy_url:
@@ -375,10 +394,32 @@ class YFinanceMarketClient:
             logger.warning("analyst fetch failed for %s", ticker, exc_info=True)
             return _EMPTY_ANALYST
 
+    async def get_earnings(self, ticker: str) -> EarningsDates:
+        cached = self._earnings_cache.get(ticker)
+        if cached is not None:
+            return cached
+        data = await self._call(self._fetch_earnings, ticker)
+        self._earnings_cache.set(ticker, data)
+        return data
+
+    def _fetch_earnings(self, ticker: str) -> EarningsDates:
+        import yfinance as yf
+
+        try:
+            df = yf.Ticker(ticker).get_earnings_dates(limit=24)  # ~5y of quarters + upcoming
+        except Exception:
+            logger.warning("earnings dates fetch failed for %s", ticker, exc_info=True)
+            return _EMPTY_EARNINGS
+        if df is None or df.empty:
+            return _EMPTY_EARNINGS
+        today = datetime.now(timezone.utc).date()
+        return split_earnings_dates((ts.date() for ts in df.index), today)
+
 
 _RANGE_TO_DAYS = {"1m": 22, "3m": 65, "6m": 130, "ytd": 110, "1y": 260, "3y": 780, "5y": 1300}
 _FAKE_END_DATE = date(2026, 6, 10)
 _FAKE_END_EPOCH = 1_780_000_000  # arbitrary deterministic epoch for fake intraday
+_FAKE_ETF_TICKERS = frozenset({"VOO", "QQQ", "VT", "SPY"})
 
 
 class FakeMarketClient:
@@ -529,4 +570,14 @@ class FakeMarketClient:
             recommendations={
                 "strongBuy": 8, "buy": 10, "hold": 5, "sell": 2, "strongSell": 1,
             },
+        )
+
+    async def get_earnings(self, ticker: str) -> EarningsDates:
+        # ETFs have no earnings; unknown tickers degrade to empty (decorative data).
+        if ticker not in self.KNOWN or ticker in _FAKE_ETF_TICKERS:
+            return _EMPTY_EARNINGS
+        today = date.today()
+        return EarningsDates(
+            past=[today - timedelta(days=n) for n in (303, 212, 121, 30)],
+            next_date=today + timedelta(days=30),
         )

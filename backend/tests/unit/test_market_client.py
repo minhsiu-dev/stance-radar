@@ -369,3 +369,45 @@ async def test_market_sets_yfinance_proxy(monkeypatch):
     monkeypatch.setattr("yfinance.set_config", lambda **kw: captured.update(kw))
     YFinanceMarketClient(proxy_url="http://proxy:8888")
     assert captured.get("proxy") == "http://proxy:8888"
+
+
+# ---- earnings dates ----
+
+
+def test_split_earnings_dates_sorts_dedupes_and_picks_next():
+    from app.market.client import split_earnings_dates
+
+    today = date(2026, 7, 16)
+    result = split_earnings_dates(
+        [
+            date(2026, 8, 28), date(2026, 4, 24), date(2026, 4, 24),
+            date(2026, 1, 30), date(2026, 11, 20),
+        ],
+        today,
+    )
+    assert result.past == [date(2026, 1, 30), date(2026, 4, 24)]
+    assert result.next_date == date(2026, 8, 28)
+
+
+def test_split_earnings_dates_without_future_has_no_next():
+    from app.market.client import split_earnings_dates
+
+    result = split_earnings_dates([date(2026, 1, 30)], date(2026, 7, 16))
+    assert result.past == [date(2026, 1, 30)]
+    assert result.next_date is None
+
+
+async def test_fake_earnings_quarterly_for_stocks_empty_for_etfs_and_unknown():
+    from datetime import timedelta
+
+    client = FakeMarketClient()
+    aapl = await client.get_earnings("AAPL")
+    assert len(aapl.past) == 4
+    assert aapl.past == sorted(aapl.past)
+    assert aapl.next_date is not None and aapl.next_date > aapl.past[-1]
+    # most recent past earnings lands inside the default 3M chart range
+    assert date.today() - aapl.past[-1] <= timedelta(days=31)
+
+    for ticker in ("VOO", "QQQ", "VT", "SPY", "ZZZZ"):
+        result = await client.get_earnings(ticker)
+        assert result.past == [] and result.next_date is None
