@@ -177,6 +177,7 @@ async def video_detail(
             "published_at": video.published_at.isoformat(),
             "duration_seconds": video.duration_seconds,
             "status": video.status.value,
+            "tldr": video.tldr,
         },
         "groups": ordered,
     })

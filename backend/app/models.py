@@ -85,6 +85,8 @@ class Video(Base):
     transcript_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Full fetched transcript (segments + language) so re-analysis runs offline; null until first stored
     transcript: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Whole-video TL;DR bullets from the LLM (English); NULL for videos analyzed before this field existed
+    tldr: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Tickers reported by the LLM but dropped because they failed ticker validation (lets the user know something was skipped)
     dropped_tickers: Mapped[list | None] = mapped_column(JSONB, nullable=True)

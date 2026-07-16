@@ -332,6 +332,7 @@ class RefreshRunner:
                         is_conditional=s.is_conditional,
                     ))
             video.dropped_tickers = sorted(dropped) or None
+            video.tldr = list(result.tldr) if result.tldr else None
             video.transcript_language = transcript.language
             video.status = VideoStatus.analyzed
             video.error_message = None
