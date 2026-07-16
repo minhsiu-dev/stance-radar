@@ -111,6 +111,11 @@ export interface StockSummary {
   dividend_yield: number | null;
 }
 
+export interface EarningsDto {
+  past: string[]; // "YYYY-MM-DD", ascending
+  next: string | null;
+}
+
 export interface CandleDto {
   time: string | number; // "YYYY-MM-DD" daily, Unix seconds (UTC) intraday
   open: number;

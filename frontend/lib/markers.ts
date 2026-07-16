@@ -96,3 +96,24 @@ export function buildStanceHistogram(
     a.time < b.time ? -1 : a.time > b.time ? 1 : 0,
   );
 }
+
+const MAX_EARNINGS_SNAP_DAYS = 5;
+
+/** Chart times for past-earnings "E" markers: snap each date to the same or next
+ *  trading day; drop dates outside the loaded range, clamped backwards to the last
+ *  bar, or more than 5 calendar days from the bar they'd land on. */
+export function buildEarningsMarkerTimes(
+  past: string[],
+  candles: CandleDto[],
+): string[] {
+  const days = tradingDays(candles);
+  if (days.length === 0) return [];
+  const out = new Set<string>();
+  for (const date of past) {
+    const snapped = snapToTradingDay(date, days);
+    if (snapped == null || snapped < date) continue;
+    if ((Date.parse(snapped) - Date.parse(date)) / 86_400_000 > MAX_EARNINGS_SNAP_DAYS) continue;
+    out.add(snapped);
+  }
+  return [...out].sort();
+}

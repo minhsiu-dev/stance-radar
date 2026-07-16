@@ -9,6 +9,7 @@ const clearCrosshairSpy = vi.hoisted(() => vi.fn());
 const paneSetHeightSpy = vi.hoisted(() => vi.fn());
 const crosshairMoveSpy = vi.hoisted(() => vi.fn());
 const createChartSpy = vi.hoisted(() => vi.fn());
+const setMarkersSpy = vi.hoisted(() => vi.fn());
 const createdSeries = vi.hoisted(
   () =>
     [] as Array<{ setData: Mock; priceScale: () => { applyOptions: Mock } }>,
@@ -35,7 +36,7 @@ vi.mock("lightweight-charts", () => {
   };
   return {
     createChart: (...args: unknown[]) => { createChartSpy(...args); return chart; },
-    createSeriesMarkers: vi.fn(() => ({ setMarkers: vi.fn() })),
+    createSeriesMarkers: vi.fn(() => ({ setMarkers: setMarkersSpy })),
     CandlestickSeries: { kind: "candlestick" },
     HistogramSeries: { kind: "histogram" },
     ColorType: { Solid: "solid" },
@@ -50,7 +51,10 @@ import { PriceChart } from "@/components/price-chart";
 
 const messages = {
   Errors: { candlesLoad: "Error: {message}" },
-  Stock: { stance: { buy: "Buy", sell: "Sell", neutral: "Neutral" } },
+  Stock: {
+    stance: { buy: "Buy", sell: "Sell", neutral: "Neutral" },
+    chart: { nextEarnings: "Next earnings {date}" },
+  },
 };
 
 function makeFetcher(candleClose: number[]) {
@@ -110,6 +114,7 @@ beforeEach(() => {
   paneSetHeightSpy.mockClear();
   crosshairMoveSpy.mockClear();
   createChartSpy.mockClear();
+  setMarkersSpy.mockClear();
   createdSeries.length = 0;
 });
 
@@ -274,11 +279,12 @@ describe("stance histogram pane", () => {
     expect(addSeriesSpy.mock.calls.every((c) => c[2] !== 1)).toBe(true);
   });
 
-  it("no longer renders series markers on the candlesticks", async () => {
-    mockApiFetch.mockImplementation(makeStanceFetcher());
+  it("uses series markers only for earnings, not for stance data", async () => {
+    mockApiFetch.mockImplementation(makeStanceFetcher()); // no /earnings mock → past: []
     renderChart();
     await waitFor(() => expect(addSeriesSpy).toHaveBeenCalled());
-    expect(createSeriesMarkers).not.toHaveBeenCalled();
+    expect(createSeriesMarkers).toHaveBeenCalled();
+    expect(setMarkersSpy).toHaveBeenLastCalledWith([]);
   });
 
   it("shows a tooltip with per-stance counts when the crosshair is over a day with data", async () => {
@@ -337,5 +343,59 @@ describe("stance histogram pane", () => {
     expect(total.setData).toHaveBeenLastCalledWith([]);
     expect(buyNeutral.setData).toHaveBeenLastCalledWith([]);
     expect(createChartSpy.mock.calls.length).toBe(chartBuilds); // pane not torn down
+  });
+});
+
+describe("earnings markers + badge", () => {
+  it("shows the next-earnings badge and sets E markers from /earnings", async () => {
+    mockApiFetch.mockImplementation((url: string) => {
+      if (url.includes("candles")) {
+        return Promise.resolve(
+          ["2026-06-05", "2026-06-08", "2026-06-09"].map((time, i) => ({
+            time, open: 10, high: 12, low: 9, close: 10 + i, volume: 1,
+          })),
+        );
+      }
+      if (url.includes("earnings")) {
+        return Promise.resolve({ past: ["2026-06-06"], next: "2026-08-28" });
+      }
+      return Promise.resolve([]);
+    });
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ provider: () => new Map() }}>
+          <PriceChart ticker="AAPL" />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
+    expect(await screen.findByText("Next earnings 8/28")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(setMarkersSpy).toHaveBeenCalledWith([
+        expect.objectContaining({ time: "2026-06-08", text: "E", position: "belowBar" }),
+      ]),
+    );
+  });
+
+  it("hides the badge when next is null", async () => {
+    mockApiFetch.mockImplementation((url: string) => {
+      if (url.includes("candles")) {
+        return Promise.resolve([
+          { time: "2026-06-08", open: 10, high: 12, low: 9, close: 11, volume: 1 },
+        ]);
+      }
+      if (url.includes("earnings")) {
+        return Promise.resolve({ past: [], next: null });
+      }
+      return Promise.resolve([]);
+    });
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ provider: () => new Map() }}>
+          <PriceChart ticker="AAPL" />
+        </SWRConfig>
+      </NextIntlClientProvider>,
+    );
+    await waitFor(() => expect(createChartSpy).toHaveBeenCalled());
+    expect(screen.queryByText(/Next earnings/)).not.toBeInTheDocument();
   });
 });

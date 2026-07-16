@@ -6,9 +6,11 @@ import {
   CandlestickSeries,
   ColorType,
   createChart,
+  createSeriesMarkers,
   HistogramSeries,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
@@ -18,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import {
+  buildEarningsMarkerTimes,
   buildStanceHistogram,
   buildVideoDays,
   filterStances,
@@ -25,7 +28,7 @@ import {
   type StanceHistogramPoint,
   type VideoDay,
 } from "@/lib/markers";
-import type { CandleDto, StanceRow, StanceValue } from "@/lib/types";
+import type { CandleDto, EarningsDto, StanceRow, StanceValue } from "@/lib/types";
 
 const RANGES = ["1d", "5d", "1m", "3m", "6m", "ytd", "1y", "3y", "5y"] as const;
 type RangeKey = (typeof RANGES)[number];
@@ -50,6 +53,7 @@ export function PriceChart({
 }) {
   const tErr = useTranslations("Errors");
   const tStance = useTranslations("Stock.stance");
+  const tChart = useTranslations("Stock.chart");
   const [range, setRange] = useState<RangeKey>("3m");
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -60,6 +64,7 @@ export function PriceChart({
     buyNeutral: ISeriesApi<"Histogram">;
     buy: ISeriesApi<"Histogram">;
   } | null>(null);
+  const earningsMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const videosByTimeRef = useRef<Map<string | number, VideoDay[]>>(new Map());
   const videoDayById = useRef<Map<string, VideoDay>>(new Map());
   const histByTimeRef = useRef<Map<string, StanceHistogramPoint>>(new Map());
@@ -71,6 +76,10 @@ export function PriceChart({
   );
   const { data: stances } = useSWR<StanceRow[]>(
     `/api/stocks/${ticker}/stances`,
+    apiFetch,
+  );
+  const { data: earnings } = useSWR<EarningsDto>(
+    `/api/stocks/${ticker}/earnings`,
     apiFetch,
   );
   const hasAnyStances = (stances?.length ?? 0) > 0;
@@ -113,6 +122,7 @@ export function PriceChart({
         close: c.close,
       })),
     );
+    earningsMarkersRef.current = createSeriesMarkers(series, []);
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
@@ -203,6 +213,7 @@ export function PriceChart({
       chartRef.current = null;
       seriesRef.current = null;
       stanceSeriesRef.current = null;
+      earningsMarkersRef.current = null;
     };
   }, [candles, hasAnyStances, onSelectVideo, range, height, tStance]);
 
@@ -236,6 +247,28 @@ export function PriceChart({
       s.buy.setData(hist.map((p) => ({ time: p.time as Time, value: p.buy })));
     }
   }, [candles, stances, stanceFilter, channelFilter]);
+
+  // Earnings "E" markers: daily ranges only; recomputed without rebuilding the chart.
+  // NOTE: must stay declared AFTER the chart-creation effect above — React flushes
+  // effects in declaration order, so earningsMarkersRef.current is set before this runs.
+  useEffect(() => {
+    const api = earningsMarkersRef.current;
+    if (!api) return;
+    const times =
+      !INTRADAY.has(range) && earnings?.past?.length
+        ? buildEarningsMarkerTimes(earnings.past, candles ?? [])
+        : [];
+    api.setMarkers(
+      times.map((time) => ({
+        time: time as Time,
+        position: "belowBar" as const,
+        color: "#a1a1aa",
+        shape: "square" as const,
+        size: 0, // hide the shape, keep the "E" text
+        text: "E",
+      })),
+    );
+  }, [candles, earnings, range]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -285,6 +318,13 @@ export function PriceChart({
           >
             {delta >= 0 ? "+" : ""}
             {(delta * 100).toFixed(2)}%
+          </span>
+        )}
+        {earnings?.next && (
+          <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
+            {tChart("nextEarnings", {
+              date: `${Number(earnings.next.slice(5, 7))}/${Number(earnings.next.slice(8, 10))}`,
+            })}
           </span>
         )}
       </div>

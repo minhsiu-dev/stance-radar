@@ -301,7 +301,8 @@
       "pretaxIncome": "稅前淨利",
       "netIncome": "淨利"
     },
-    "stance": { "buy": "Buy", "sell": "Sell", "neutral": "Neutral", "new": "New", "repeat": "Repeat" }
+    "stance": { "buy": "Buy", "sell": "Sell", "neutral": "Neutral", "new": "New", "repeat": "Repeat" },
+    "chart": { "nextEarnings": "下次財報 {date}" }
   },
   "VideoDetail": {
     "loadError": "影片載入失敗:{message}",

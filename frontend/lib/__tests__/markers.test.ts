@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildStanceHistogram, buildVideoDays,
+  buildEarningsMarkerTimes, buildStanceHistogram, buildVideoDays,
   filterStances, snapToTradingDay, STANCE_COLORS,
 } from "@/lib/markers";
 import type { CandleDto, StanceRow } from "@/lib/types";
@@ -122,5 +122,30 @@ describe("buildStanceHistogram", () => {
     expect(
       buildStanceHistogram([stance("v1", "2026-06-04T00:00:00+00:00", "buy")], intraday as CandleDto[]),
     ).toEqual([]);
+  });
+});
+
+describe("buildEarningsMarkerTimes", () => {
+  // trading days: Fri 06-05, Mon 06-08, Tue 06-09
+  const candles = ["2026-06-05", "2026-06-08", "2026-06-09"].map((time, i) => ({
+    time, open: 1, high: 2, low: 0, close: 1 + i, volume: 1,
+  }));
+
+  it("keeps exact-match days and snaps weekend dates to the next bar", () => {
+    expect(
+      buildEarningsMarkerTimes(["2026-06-05", "2026-06-06"], candles),
+    ).toEqual(["2026-06-05", "2026-06-08"]);
+  });
+
+  it("dedupes dates that snap to the same bar", () => {
+    expect(
+      buildEarningsMarkerTimes(["2026-06-06", "2026-06-07"], candles),
+    ).toEqual(["2026-06-08"]);
+  });
+
+  it("drops dates before the range, after the last bar, or too far from any bar", () => {
+    expect(buildEarningsMarkerTimes(["2026-06-01"], candles)).toEqual([]); // before range
+    expect(buildEarningsMarkerTimes(["2026-06-10"], candles)).toEqual([]); // after last bar
+    expect(buildEarningsMarkerTimes(["2026-06-05"], [])).toEqual([]); // no candles
   });
 });
