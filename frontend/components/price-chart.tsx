@@ -268,7 +268,13 @@ export function PriceChart({
         text: "E",
       })),
     );
-  }, [candles, earnings, range]);
+    // hasAnyStances/onSelectVideo/height/tStance mirror the chart-creation effect's
+    // deps above: that effect recreates the chart (and reseeds the markers plugin
+    // with []) whenever any of those change, so this effect must rerun on the same
+    // triggers to recompute markers after every rebuild — otherwise already-loaded
+    // markers go stale until range/ticker changes. setMarkers is idempotent and
+    // cheap, so the extra recomputes on unrelated dep changes are harmless.
+  }, [candles, earnings, range, hasAnyStances, onSelectVideo, height, tStance]);
 
   useEffect(() => {
     const chart = chartRef.current;

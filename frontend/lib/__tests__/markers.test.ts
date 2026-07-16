@@ -147,5 +147,16 @@ describe("buildEarningsMarkerTimes", () => {
     expect(buildEarningsMarkerTimes(["2026-06-01"], candles)).toEqual([]); // before range
     expect(buildEarningsMarkerTimes(["2026-06-10"], candles)).toEqual([]); // after last bar
     expect(buildEarningsMarkerTimes(["2026-06-05"], [])).toEqual([]); // no candles
+
+    // gap fixture: two trading days two weeks apart, so a mid-gap date can
+    // forward-snap more than MAX_EARNINGS_SNAP_DAYS (5) ahead — the `candles`
+    // fixture above is only 4 days wide and can never reach this branch (its
+    // "after last bar" case above clamps *backward* to the last bar, snapped <
+    // date, never forward past the 5-day threshold).
+    const gapCandles = ["2026-06-05", "2026-06-19"].map((time, i) => ({
+      time, open: 1, high: 2, low: 0, close: 1 + i, volume: 1,
+    }));
+    expect(buildEarningsMarkerTimes(["2026-06-10"], gapCandles)).toEqual([]); // snaps 9d forward → too far
+    expect(buildEarningsMarkerTimes(["2026-06-16"], gapCandles)).toEqual(["2026-06-19"]); // 3d forward → kept
   });
 });

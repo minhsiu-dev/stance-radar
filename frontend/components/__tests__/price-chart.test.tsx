@@ -398,4 +398,66 @@ describe("earnings markers + badge", () => {
     await waitFor(() => expect(createChartSpy).toHaveBeenCalled());
     expect(screen.queryByText(/Next earnings/)).not.toBeInTheDocument();
   });
+
+  it("keeps earnings markers after a chart rebuild triggered by stances resolving late (regression)", async () => {
+    // Mirrors the "cumulative stacking data" comment above: SWR's three fetches
+    // (candles/stances/earnings) land in an unpredictable order. Here candles +
+    // earnings resolve immediately but stances resolves late with a row, so the
+    // chart-creation effect reruns (hasAnyStances flips false→true) — the
+    // already-set earnings markers must NOT be left wiped ([]) after that rebuild.
+    let resolveStances: (rows: unknown[]) => void = () => {};
+    const stancesPromise = new Promise<unknown[]>((resolve) => {
+      resolveStances = resolve;
+    });
+    mockApiFetch.mockImplementation((url: string) => {
+      if (url.includes("candles")) {
+        return Promise.resolve(
+          ["2026-06-05", "2026-06-08", "2026-06-09"].map((time, i) => ({
+            time, open: 10, high: 12, low: 9, close: 10 + i, volume: 1,
+          })),
+        );
+      }
+      if (url.includes("earnings")) {
+        return Promise.resolve({ past: ["2026-06-06"], next: "2026-08-28" });
+      }
+      if (url.includes("stances")) return stancesPromise;
+      return Promise.resolve([]);
+    });
+
+    renderChart();
+
+    // first chart build: earnings markers set while stances is still pending
+    await waitFor(() =>
+      expect(setMarkersSpy).toHaveBeenCalledWith([
+        expect.objectContaining({ time: "2026-06-08", text: "E" }),
+      ]),
+    );
+    const buildsBeforeStances = createChartSpy.mock.calls.length;
+    const marksBeforeStances = setMarkersSpy.mock.calls.length;
+
+    // stances resolves late with a row → hasAnyStances flips false→true → rebuild.
+    // The chart-creation effect reseeds the markers plugin with `[]` (via
+    // createSeriesMarkers, not tracked by setMarkersSpy) on every rebuild, so the
+    // only way the visible markers come back is if the earnings-markers effect
+    // itself reruns and calls setMarkers() again — i.e. setMarkersSpy's call
+    // count must increase after the rebuild, not just its last recorded value
+    // (which would look fine even if stale, since it was never overwritten).
+    await act(async () => {
+      resolveStances([
+        { video_id: "vBuy", video_title: "b", channel_id: "c", channel_title: "C",
+          published_at: "2026-06-08T00:00:00Z", stance: "buy", summary: "s", confidence: null },
+      ]);
+    });
+    await waitFor(() =>
+      expect(createChartSpy.mock.calls.length).toBeGreaterThan(buildsBeforeStances),
+    );
+    await waitFor(() =>
+      expect(setMarkersSpy.mock.calls.length).toBeGreaterThan(marksBeforeStances),
+    );
+
+    // and the recomputed value must be the non-empty earnings markers, not []
+    expect(setMarkersSpy.mock.calls.at(-1)![0]).toEqual([
+      expect.objectContaining({ time: "2026-06-08", text: "E" }),
+    ]);
+  });
 });
