@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
-import { StanceTrendChart, overlayPoints } from "@/components/stance-trend-chart";
+import { StanceTrendChart, priceLinePoints } from "@/components/stance-trend-chart";
 import type { SparklinePoint, StanceBucket } from "@/lib/types";
 
 const messages = {
@@ -47,7 +47,7 @@ const SPARK_BUCKETS = [
   B({ sell_new: 1, start: "2026-06-08T00:00:00+00:00", end: "2026-06-15T00:00:00+00:00" }),
 ];
 
-describe("price overlay", () => {
+describe("price line row", () => {
   const closes = [
     { date: "2026-05-25", close: 90 },  // before the bucket window -> dropped
     { date: "2026-06-03", close: 100 },
@@ -57,7 +57,7 @@ describe("price overlay", () => {
 
   it("renders a polyline clipped to the bucket window", () => {
     const { container } = wrap(SPARK_BUCKETS, { closes });
-    const line = container.querySelector('[data-testid="price-overlay-line"]');
+    const line = container.querySelector('[data-testid="price-line"]');
     expect(line).toBeInTheDocument();
     const xs = (line!.getAttribute("points") ?? "")
       .split(" ")
@@ -77,29 +77,39 @@ describe("price overlay", () => {
       ],
     });
     expect(
-      container.querySelector('[data-testid="price-overlay-line"]')!.getAttribute("stroke"),
+      container.querySelector('[data-testid="price-line"]')!.getAttribute("stroke"),
     ).toBe("#ef4444");
   });
 
-  it("renders no line with fewer than 2 in-window closes", () => {
+  it("reserves an empty row with fewer than 2 in-window closes", () => {
     const { container } = wrap(SPARK_BUCKETS, {
       closes: [{ date: "2026-05-25", close: 90 }, { date: "2026-06-03", close: 100 }],
     });
-    expect(container.querySelector('[data-testid="price-overlay-line"]')).toBeNull();
+    expect(container.querySelector('[data-testid="price-line"]')).toBeNull();
+    // row still reserved so card heights stay uniform
+    expect(container.querySelector('[data-testid="price-line-empty"]')).toBeInTheDocument();
   });
 
-  it("renders no line without closes and keeps the bars", () => {
+  it("renders no price row at all without a closes prop and keeps the bars", () => {
     const { container } = wrap(SPARK_BUCKETS);
-    expect(container.querySelector('[data-testid="price-overlay-line"]')).toBeNull();
+    expect(container.querySelector('[data-testid="price-line"]')).toBeNull();
+    expect(container.querySelector('[data-testid="price-line-empty"]')).toBeNull();
     expect(container.querySelector('[data-slot="chart"]')).toBeInTheDocument();
+  });
+
+  it("renders the line and the bars as siblings, not overlapping layers", () => {
+    const { container } = wrap(SPARK_BUCKETS, { closes });
+    const line = container.querySelector('[data-testid="price-line"]');
+    // the polyline's svg sits outside the chart container (in-flow row above the bars)
+    expect(line!.closest('[data-slot="chart"]')).toBeNull();
   });
 });
 
-describe("overlayPoints", () => {
+describe("priceLinePoints", () => {
   const buckets = SPARK_BUCKETS;
 
   it("maps closes onto the bucket window by end-of-day fraction", () => {
-    const r = overlayPoints(buckets, [
+    const r = priceLinePoints(buckets, [
       { date: "2026-06-03", close: 100 },
       { date: "2026-06-10", close: 110 },
     ]);
@@ -111,7 +121,7 @@ describe("overlayPoints", () => {
   });
 
   it("returns null for empty buckets or <2 visible closes", () => {
-    expect(overlayPoints([], [{ date: "2026-06-03", close: 1 }, { date: "2026-06-04", close: 2 }])).toBeNull();
-    expect(overlayPoints(buckets, [{ date: "2026-06-03", close: 1 }])).toBeNull();
+    expect(priceLinePoints([], [{ date: "2026-06-03", close: 1 }, { date: "2026-06-04", close: 2 }])).toBeNull();
+    expect(priceLinePoints(buckets, [{ date: "2026-06-03", close: 1 }])).toBeNull();
   });
 });

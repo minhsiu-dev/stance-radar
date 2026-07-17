@@ -96,7 +96,7 @@ describe("RecentStocks", () => {
     const { container } = wrap(fetcher);
     await screen.findAllByTestId("recent-stock-card");
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="price-overlay-line"]')).toBeInTheDocument();
+      expect(container.querySelector('[data-testid="price-line"]')).toBeInTheDocument();
     });
     const sparkUrl = fetcher.mock.calls.map(([u]: string[]) => u).find((u) => u.includes("/sparklines"));
     expect(sparkUrl).toContain("tickers=NVDA,AAPL");

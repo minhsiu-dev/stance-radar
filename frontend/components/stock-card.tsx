@@ -55,7 +55,8 @@ export function StockCard({
           <AvatarGroup key={key} zone={s.stances[key]} color={color} />
         ))}
       </div>
-      <StanceTrendChart buckets={s.buckets} yMax={yMax} closes={closes} />
+      {/* always pass an array so the chart reserves the price row (uniform card heights) */}
+      <StanceTrendChart buckets={s.buckets} yMax={yMax} closes={closes ?? []} />
     </Link>
   );
 }

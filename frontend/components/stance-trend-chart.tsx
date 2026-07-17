@@ -20,24 +20,25 @@ const COLORS = { buy: "#0ea5e9", neutral: "#a1a1aa", sell: "#f97316" } as const;
 // look *brighter* in dark mode, inverting the meaning.
 const REPEAT_OPACITY = 0.4;
 
-// Price overlay geometry (viewBox units; rendered with preserveAspectRatio="none").
-const OVERLAY_W = 100;
-const OVERLAY_H = 32;
-const OVERLAY_PAD = 3; // keep peak/trough strokes off the edges (no clipping)
+// Price line row geometry (viewBox units; rendered with preserveAspectRatio="none").
+const LINE_W = 100;
+const LINE_H = 32;
+const LINE_PAD = 3; // keep peak/trough strokes off the edges (no clipping)
 const DAY_MS = 86_400_000;
 // Direction colors shared with the benchmark Sparkline component.
 const UP_COLOR = "#10b981";
 const DOWN_COLOR = "#ef4444";
 
-// Map daily closes onto the bucket timeline. x = the close's end-of-day
-// position within [buckets[0].start, last bucket end] — linear calendar time,
-// which matches recharts' equal-width band slots because buckets are
-// equal-length calendar spans. y = min-max normalized. Closes are clipped to
-// the bucket window: the backend fetches nominal `days`, but n buckets only
-// cover n*size days (a 30d window is 4 weekly buckets = 28 days), so
-// out-of-window points would otherwise shift the whole line; the trailing
-// close (today, still inside the last bucket) clamps to the right edge.
-export function overlayPoints(
+// Map daily closes onto the bucket timeline, so the price row above the bars
+// shares their time axis. x = the close's end-of-day position within
+// [buckets[0].start, last bucket end] — linear calendar time, which matches
+// recharts' equal-width band slots because buckets are equal-length calendar
+// spans. y = min-max normalized. Closes are clipped to the bucket window: the
+// backend fetches nominal `days`, but n buckets only cover n*size days (a 30d
+// window is 4 weekly buckets = 28 days), so out-of-window points would
+// otherwise shift the whole line; the trailing close (today, still inside the
+// last bucket) clamps to the right edge.
+export function priceLinePoints(
   buckets: StanceBucket[],
   closes: SparklinePoint[],
 ): { points: string; up: boolean } | null {
@@ -55,8 +56,8 @@ export function overlayPoints(
   const span = hi - lo || 1;
   const points = pts
     .map((p) => {
-      const x = ((p.t - start) / (end - start)) * OVERLAY_W;
-      const y = OVERLAY_PAD + (1 - (p.close - lo) / span) * (OVERLAY_H - 2 * OVERLAY_PAD);
+      const x = ((p.t - start) / (end - start)) * LINE_W;
+      const y = LINE_PAD + (1 - (p.close - lo) / span) * (LINE_H - 2 * LINE_PAD);
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(" ");
@@ -79,7 +80,7 @@ export function StanceTrendChart({
   const total = buckets.reduce((sum, b) => sum + bucketTotal(b), 0);
   if (total === 0) return null;
 
-  const overlay = closes && closes.length > 0 ? overlayPoints(buckets, closes) : null;
+  const line = closes ? priceLinePoints(buckets, closes) : null;
 
   const config: ChartConfig = {
     buy_new: { label: `${t("buy")} · ${t("new")}`, color: COLORS.buy },
@@ -91,8 +92,30 @@ export function StanceTrendChart({
   };
 
   return (
-    <div className={cn("relative h-16 w-full", className)}>
-      <ChartContainer config={config} className="h-full w-full">
+    <div className={cn("w-full", className)}>
+      {closes !== undefined &&
+        (line ? (
+          <svg
+            viewBox={`0 0 ${LINE_W} ${LINE_H}`}
+            preserveAspectRatio="none"
+            className="h-8 w-full"
+            aria-hidden
+          >
+            <polyline
+              data-testid="price-line"
+              points={line.points}
+              fill="none"
+              stroke={line.up ? UP_COLOR : DOWN_COLOR}
+              strokeWidth={1.5}
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+        ) : (
+          // reserve the row while prices load / when a ticker has none, so
+          // cards in the same grid keep uniform heights (no pop-in shift)
+          <div data-testid="price-line-empty" className="h-8" aria-hidden />
+        ))}
+      <ChartContainer config={config} className="h-16 w-full">
         <BarChart data={buckets} barCategoryGap={2} margin={{ top: 2, bottom: 0, left: 0, right: 0 }}>
           <XAxis dataKey="start" hide />
           {yMax !== undefined && <YAxis hide domain={[0, yMax]} />}
@@ -109,24 +132,6 @@ export function StanceTrendChart({
           <Bar dataKey="sell_repeat" stackId="a" fill="var(--color-sell_repeat)" radius={[2, 2, 0, 0]} fillOpacity={REPEAT_OPACITY} />
         </BarChart>
       </ChartContainer>
-      {overlay && (
-        <svg
-          viewBox={`0 0 ${OVERLAY_W} ${OVERLAY_H}`}
-          preserveAspectRatio="none"
-          className="pointer-events-none absolute inset-0 h-full w-full"
-          aria-hidden
-        >
-          <polyline
-            data-testid="price-overlay-line"
-            points={overlay.points}
-            fill="none"
-            stroke={overlay.up ? UP_COLOR : DOWN_COLOR}
-            strokeWidth={1.5}
-            strokeOpacity={0.8}
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-      )}
     </div>
   );
 }
