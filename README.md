@@ -23,8 +23,6 @@ with its timestamp.
 - **Stance detection** — per-video US-stock mentions and stance (buy / neutral /
   sell) with confidence, time frame, and conditional-order annotations, marked on
   the price chart and listed quote-by-quote with timestamps.
-- **Stance-flip detection** — when a channel's stance on a stock reverses
-  (especially buy ↔ sell), it surfaces in the homepage "Stance flips" section.
 - **Channel scoreboard** — actual price change 7 / 30 / 90 days after each
   buy/sell call, with excess return vs the market; per-channel detail plus a
   cross-channel leaderboard.

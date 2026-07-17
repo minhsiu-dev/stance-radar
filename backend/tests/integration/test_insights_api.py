@@ -5,8 +5,8 @@ from tests.conftest import wait_refresh
 
 
 async def seed_stances(sessionmaker) -> None:
-    """ch1 on AAPL: buy (40 days ago) → sell (2 days ago) = recent reversal.
-    ch1 on NVDA: buy throughout, no flip."""
+    """ch1 on AAPL: buy (40 days ago) then sell (2 days ago).
+    ch1 on NVDA: buy throughout."""
     now = datetime.now(timezone.utc)
     async with sessionmaker() as s:
         s.add(Channel(

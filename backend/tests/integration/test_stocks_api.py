@@ -799,3 +799,12 @@ async def test_sparklines_validation(api):
     assert (await client.get(
         "/api/stocks/sparklines?tickers=AAPL&days=0"
     )).status_code == 422
+
+
+async def test_sparklines_normalize_and_dedupe_tickers(api):
+    app, client = api
+    data = (await client.get(
+        "/api/stocks/sparklines?tickers=aapl,%20AAPL%20,aapl&days=30"
+    )).json()["data"]
+    assert set(data.keys()) == {"AAPL"}
+    assert len(data["AAPL"]) > 0

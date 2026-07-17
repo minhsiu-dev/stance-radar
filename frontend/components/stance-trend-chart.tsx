@@ -60,6 +60,7 @@ export function overlayPoints(
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(" ");
+  // closes are date-ascending (backend orders by date), so first/last give the window direction.
   return { points, up: pts[pts.length - 1].close >= pts[0].close };
 }
 
