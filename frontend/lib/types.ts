@@ -278,6 +278,13 @@ export interface ChannelTickerRow extends ChannelTickerStat {
   perf_incl: Record<PerfFilter, TickerPerfSlice>;
 }
 
+export interface ChannelTickerResponse {
+  items: ChannelTickerRow[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface ChannelRecentVideoItem {
   video_id: string;
   video_title: string;

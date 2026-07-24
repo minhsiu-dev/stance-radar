@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import useSWR from "swr";
+import { useEffect, useRef, useState } from "react";
+import useSWRInfinite from "swr/infinite";
 import { useTranslations } from "next-intl";
 import { Info } from "lucide-react";
 import { Link } from "@/i18n/navigation";
@@ -16,7 +16,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StanceBadge } from "@/components/stance-badge";
 import { alphaColor } from "@/components/channel-leaderboard";
 import { formatDate } from "@/lib/format";
-import type { ChannelTickerRow, PerfFilter, TickerPerfSlice } from "@/lib/types";
+import type {
+  ChannelTickerResponse,
+  ChannelTickerRow,
+  PerfFilter,
+  TickerPerfSlice,
+} from "@/lib/types";
+
+const PAGE_SIZE = 20;
 
 const SEGMENTS = [
   { key: "buy", color: "bg-sky-500" },
@@ -24,16 +31,7 @@ const SEGMENTS = [
   { key: "sell", color: "bg-orange-500" },
 ] as const;
 
-type PerfKey = "win_rate" | "avg_return" | "avg_alpha" | "n";
-type SortKey = "ticker" | "videos" | PerfKey;
 type WindowMode = "matured" | "incl";
-
-function numCmp(a: number | null, b: number | null, dir: "asc" | "desc"): number {
-  if (a == null && b == null) return 0;
-  if (a == null) return 1;
-  if (b == null) return -1;
-  return dir === "asc" ? a - b : b - a;
-}
 
 function signed(v: number | null): string {
   if (v == null) return "—";
@@ -45,42 +43,40 @@ export function ChannelTickerTable({ channelId }: { channelId: string }) {
   const tDetail = useTranslations("ChannelDetail");
   const tPerf = useTranslations("ChannelDetail.performance");
   const tStance = useTranslations("Stock.stance");
-  const { data, error } = useSWR<ChannelTickerRow[]>(
-    `/api/channels/${channelId}/tickers`,
-  );
+
+  const getKey = (pageIndex: number, previous: ChannelTickerResponse | null) => {
+    if (previous && previous.items.length < PAGE_SIZE) return null;
+    return `/api/channels/${channelId}/tickers?page=${pageIndex + 1}&page_size=${PAGE_SIZE}`;
+  };
+  const { data, error, setSize, isValidating } =
+    useSWRInfinite<ChannelTickerResponse>(getKey, { revalidateFirstPage: false });
+
   const [filter, setFilter] = useState<PerfFilter>("all");
   const [windowMode, setWindowMode] = useState<WindowMode>("matured");
-  const [sortKey, setSortKey] = useState<SortKey>("videos");
-  const [dir, setDir] = useState<"asc" | "desc">("desc");
 
   const sliceOf = (r: ChannelTickerRow): TickerPerfSlice =>
     (windowMode === "incl" ? r.perf_incl : r.perf)[filter];
 
-  const sorted = useMemo(() => {
-    const list = [...(data ?? [])];
-    list.sort((a, b) => {
-      let primary: number;
-      if (sortKey === "ticker") {
-        primary = (dir === "asc" ? 1 : -1) * a.ticker.localeCompare(b.ticker);
-      } else if (sortKey === "videos") {
-        primary = numCmp(a.videos, b.videos, dir);
-      } else {
-        primary = numCmp(sliceOf(a)[sortKey], sliceOf(b)[sortKey], dir);
-      }
-      return primary !== 0 ? primary : a.ticker.localeCompare(b.ticker);
-    });
-    return list;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, sortKey, dir, filter, windowMode]);
+  const pages = data ?? [];
+  const items = pages.flatMap((p) => p.items);
+  const total = pages[0]?.total ?? 0;
+  const hasMore = items.length < total;
 
-  function toggleSort(key: SortKey) {
-    if (key === sortKey) {
-      setDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setDir(key === "ticker" ? "asc" : "desc");
-    }
-  }
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isValidating && hasMore) {
+          setSize((s) => s + 1);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [setSize, isValidating, hasMore]);
 
   if (error) {
     return (
@@ -93,7 +89,7 @@ export function ChannelTickerTable({ channelId }: { channelId: string }) {
     return <Skeleton className="h-48 w-full" />;
   }
 
-  const columns: { key: SortKey; label: string }[] = [
+  const columns: { key: string; label: string }[] = [
     { key: "ticker", label: t("ticker") },
     { key: "videos", label: t("mentions") },
     { key: "win_rate", label: t("winRate") },
@@ -166,125 +162,126 @@ export function ChannelTickerTable({ channelId }: { channelId: string }) {
         </div>
       </CardHeader>
       <CardContent>
-        {data.length === 0 ? (
+        {items.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("empty")}</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs text-muted-foreground">
-                  {columns.map((c, i) => (
-                    <th
-                      key={c.key}
-                      className={`py-1.5 ${i === 0 ? "pr-3 text-left" : "pl-3 text-right"}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleSort(c.key)}
-                        className="inline-flex items-center gap-1 hover:text-foreground"
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-muted-foreground">
+                    {columns.map((c, i) => (
+                      <th
+                        key={c.key}
+                        className={`py-1.5 ${i === 0 ? "pr-3 text-left" : "pl-3 text-right"}`}
                       >
                         {c.label}
-                        {sortKey === c.key && (
-                          <span aria-hidden>{dir === "asc" ? "▲" : "▼"}</span>
-                        )}
-                      </button>
+                      </th>
+                    ))}
+                    <th className="hidden w-[24%] py-1.5 pl-3 text-left sm:table-cell">
+                      {t("distribution")}
                     </th>
-                  ))}
-                  <th className="hidden w-[24%] py-1.5 pl-3 text-left sm:table-cell">
-                    {t("distribution")}
-                  </th>
-                  <th className="py-1.5 pl-3 text-left">{t("latest")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((row) => {
-                  const total = row.buy + row.neutral + row.sell;
-                  const p: TickerPerfSlice = sliceOf(row);
-                  return (
-                    <tr
-                      key={row.ticker}
-                      data-testid={`ticker-row-${row.ticker}`}
-                      data-ticker={row.ticker}
-                      className="border-b last:border-0"
-                    >
-                      <td className="py-2 pr-3">
-                        <Link
-                          href={`/stocks/${row.ticker}?channel=${channelId}`}
-                          className="font-medium hover:underline"
-                        >
-                          {row.ticker}
-                        </Link>
-                      </td>
-                      <td className="py-2 pl-3 text-right tabular-nums text-muted-foreground">
-                        {t("videoCount", { count: row.videos })}
-                      </td>
-                      <td className="py-2 pl-3 text-right tabular-nums">
-                        {p.win_rate == null ? "—" : `${p.win_rate}%`}
-                      </td>
-                      <td className={`py-2 pl-3 text-right tabular-nums ${alphaColor(p.avg_return)}`}>
-                        {signed(p.avg_return)}
-                      </td>
-                      <td className={`py-2 pl-3 text-right tabular-nums ${alphaColor(p.avg_alpha)}`}>
-                        {signed(p.avg_alpha)}
-                      </td>
-                      <td className="py-2 pl-3 text-right tabular-nums text-muted-foreground">
-                        {p.n === 0 && p.pending === 0 ? (
-                          "—"
-                        ) : (
-                          <>
-                            {p.n > 0 ? p.n : null}
-                            {p.pending > 0 && (
-                              <span className="text-[11px] text-muted-foreground/70">
-                                {p.n > 0 ? " " : ""}
-                                {`+${p.pending} ${t("pending")}`}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </td>
-                      <td className="hidden py-2 pl-3 sm:table-cell">
-                        {total > 0 && (
-                          <div
-                            data-testid={`stance-bar-${row.ticker}`}
-                            className="flex h-2.5 overflow-hidden rounded"
+                    <th className="py-1.5 pl-3 text-left">{t("latest")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((row) => {
+                    const total = row.buy + row.neutral + row.sell;
+                    const p: TickerPerfSlice = sliceOf(row);
+                    return (
+                      <tr
+                        key={row.ticker}
+                        data-testid={`ticker-row-${row.ticker}`}
+                        data-ticker={row.ticker}
+                        className="border-b last:border-0"
+                      >
+                        <td className="py-2 pr-3">
+                          <Link
+                            href={`/stocks/${row.ticker}?channel=${channelId}`}
+                            className="font-medium hover:underline"
                           >
-                            {SEGMENTS.map((s) => {
-                              const v = row[s.key];
-                              if (v === 0) return null;
-                              return (
-                                <div
-                                  key={s.key}
-                                  className={s.color}
-                                  style={{ width: `${(v / total) * 100}%` }}
-                                  title={`${tStance(s.key)}: ${v}`}
-                                />
-                              );
-                            })}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-2 pl-3">
-                        {row.latest_stance && (
-                          <span className="inline-flex items-center gap-1.5">
-                            <StanceBadge
-                              stance={row.latest_stance}
-                              ticker={row.ticker}
-                              confidence={null}
-                            />
-                            {row.latest_date && (
-                              <span className="text-xs text-muted-foreground">
-                                {formatDate(row.latest_date)}
-                              </span>
-                            )}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                            {row.ticker}
+                          </Link>
+                        </td>
+                        <td className="py-2 pl-3 text-right tabular-nums text-muted-foreground">
+                          {t("videoCount", { count: row.videos })}
+                        </td>
+                        <td className="py-2 pl-3 text-right tabular-nums">
+                          {p.win_rate == null ? "—" : `${p.win_rate}%`}
+                        </td>
+                        <td className={`py-2 pl-3 text-right tabular-nums ${alphaColor(p.avg_return)}`}>
+                          {signed(p.avg_return)}
+                        </td>
+                        <td className={`py-2 pl-3 text-right tabular-nums ${alphaColor(p.avg_alpha)}`}>
+                          {signed(p.avg_alpha)}
+                        </td>
+                        <td className="py-2 pl-3 text-right tabular-nums text-muted-foreground">
+                          {p.n === 0 && p.pending === 0 ? (
+                            "—"
+                          ) : (
+                            <>
+                              {p.n > 0 ? p.n : null}
+                              {p.pending > 0 && (
+                                <span className="text-[11px] text-muted-foreground/70">
+                                  {p.n > 0 ? " " : ""}
+                                  {`+${p.pending} ${t("pending")}`}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        <td className="hidden py-2 pl-3 sm:table-cell">
+                          {total > 0 && (
+                            <div
+                              data-testid={`stance-bar-${row.ticker}`}
+                              className="flex h-2.5 overflow-hidden rounded"
+                            >
+                              {SEGMENTS.map((s) => {
+                                const v = row[s.key];
+                                if (v === 0) return null;
+                                return (
+                                  <div
+                                    key={s.key}
+                                    className={s.color}
+                                    style={{ width: `${(v / total) * 100}%` }}
+                                    title={`${tStance(s.key)}: ${v}`}
+                                  />
+                                );
+                              })}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2 pl-3">
+                          {row.latest_stance && (
+                            <span className="inline-flex items-center gap-1.5">
+                              <StanceBadge
+                                stance={row.latest_stance}
+                                ticker={row.ticker}
+                                confidence={null}
+                              />
+                              {row.latest_date && (
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDate(row.latest_date)}
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {hasMore && (
+              <div
+                ref={sentinelRef}
+                data-testid="ticker-table-sentinel"
+                aria-hidden
+                className="h-1"
+              />
+            )}
+          </>
         )}
       </CardContent>
     </Card>
