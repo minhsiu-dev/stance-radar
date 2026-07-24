@@ -114,6 +114,23 @@ async def _channel_call_tickers(session: AsyncSession, channel_id: str) -> list[
     )).scalars().all())
 
 
+async def _page_call_ticker_earliest(
+    session: AsyncSession, channel_id: str, tickers: list[str]
+) -> dict[str, datetime]:
+    """min(published_at) per directional-call ticker, restricted to `tickers`."""
+    rows = (await session.execute(
+        select(VideoStance.ticker, func.min(Video.published_at))
+        .join(Video, VideoStance.video_id == Video.id)
+        .where(
+            Video.channel_id == channel_id,
+            VideoStance.stance != Stance.neutral,
+            VideoStance.ticker.in_(tickers),
+        )
+        .group_by(VideoStance.ticker)
+    )).all()
+    return {ticker: earliest for ticker, earliest in rows}
+
+
 @router.get("/channels/{channel_id}/scorecard")
 async def channel_scorecard(
     channel_id: str,
@@ -159,42 +176,51 @@ async def channel_performance(
 @router.get("/channels/{channel_id}/tickers")
 async def channel_tickers(
     channel_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
     store: PriceStore = Depends(get_price_store),
 ):
-    """個股戰績: every ticker the channel covers (uncapped), stance mix left-joined
-    to reversal-aware stance-adjusted performance vs VOO (each call scored to its
-    reversal date, or to today if still open; calls <90d old are pending). Ensures
-    price coverage with a lean ensure_daily (network only for cold tickers), then
-    runs the indexed per-ticker SQL aggregation."""
+    """個股戰績: every ticker the channel covers, paginated & sorted by latest-stance
+    date (desc; ticker asc tiebreak). Stance mix left-joined to reversal-aware
+    stance-adjusted performance vs VOO (each call scored to its reversal date, or to
+    today if still open; calls <90d old are pending). ensure_daily is scoped to only
+    this page's directional tickers (network only for cold ones), so the number of
+    yfinance calls per request stays bounded by page_size regardless of how many
+    tickers the channel has ever covered."""
     channel = await session.get(Channel, channel_id)
     if channel is None:
         return fail(f"Channel {channel_id} not found", status_code=404)
 
     mix = await channel_ticker_stance_mix(session, channel_id)
-    # Earliest directional-call date -> coverage spans every call's entry.
-    earliest = (await session.execute(
-        select(func.min(Video.published_at))
-        .join(VideoStance, VideoStance.video_id == Video.id)
-        .where(Video.channel_id == channel_id, VideoStance.stance != Stance.neutral)
-    )).scalar_one_or_none()
+    mix.sort(key=lambda r: r["ticker"])
+    mix.sort(key=lambda r: r["latest_date"], reverse=True)
+    total = len(mix)
+    start = (page - 1) * page_size
+    page_rows = mix[start : start + page_size]
+
     perf: dict[str, dict] = {}
     perf_incl: dict[str, dict] = {}
-    if earliest is not None:
-        call_tickers = await _channel_call_tickers(session, channel_id)
-        await store.ensure_daily(sorted(set(call_tickers) | {"VOO"}), earliest.date())
+    earliest_by_ticker = await _page_call_ticker_earliest(
+        session, channel_id, [row["ticker"] for row in page_rows]
+    )
+    if earliest_by_ticker:
+        await store.ensure_daily(
+            sorted(set(earliest_by_ticker) | {"VOO"}),
+            min(earliest_by_ticker.values()).date(),
+        )
         perf = await channel_ticker_performance(session, channel_id)
         perf_incl = await channel_ticker_performance(session, channel_id, mode="incl")
 
-    rows = [
+    items = [
         {
             **row,
             "perf": perf.get(row["ticker"], _EMPTY_PERF),
             "perf_incl": perf_incl.get(row["ticker"], _EMPTY_PERF),
         }
-        for row in mix
+        for row in page_rows
     ]
-    return ok(rows)
+    return ok({"items": items, "total": total, "page": page, "page_size": page_size})
 
 
 @router.get("/channels/{channel_id}/recent")

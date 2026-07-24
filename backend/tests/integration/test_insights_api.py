@@ -185,7 +185,11 @@ async def test_channel_tickers_shape_and_perf(api, sessionmaker):
 
     resp = await client.get("/api/channels/ch1/tickers")
     assert resp.status_code == 200
-    by = {r["ticker"]: r for r in resp.json()["data"]}
+    data = resp.json()["data"]
+    assert data["total"] == 3
+    assert data["page"] == 1
+    assert data["page_size"] == 20
+    by = {r["ticker"]: r for r in data["items"]}
     assert set(by) == {"AAPL", "NVDA", "ZZZZ"}
     assert set(by["AAPL"]["perf"]["all"]) == {"win_rate", "avg_alpha", "avg_return", "n", "pending"}
     # AAPL buy(40d) was reversed by the sell(2d) -> CLOSED -> scored; the sell(2d) is open & <90d -> pending
@@ -205,6 +209,91 @@ async def test_channel_tickers_shape_and_perf(api, sessionmaker):
     assert by["NVDA"]["perf"]["buy"]["pending"] == 2
     assert by["NVDA"]["perf_incl"]["buy"]["n"] == 2
     assert by["NVDA"]["perf_incl"]["buy"]["pending"] == 0
+
+
+async def test_channel_tickers_sorted_by_latest_stance_desc(api, sessionmaker):
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch1", title="頻道一", thumbnail_url="", uploads_playlist_id="UU1"))
+        # BBB and AAA share the same latest calendar day -> tiebreak by ticker asc.
+        # CCC is older -> sorts last.
+        for vid, day_offset, ticker in (
+            ("v1", 1, "BBB"),
+            ("v2", 1, "AAA"),
+            ("v3", 5, "CCC"),
+        ):
+            s.add(Video(
+                id=vid, channel_id="ch1", title=f"title {vid}",
+                published_at=now - timedelta(days=day_offset),
+                thumbnail_url="", duration_seconds=60,
+                status=VideoStatus.analyzed,
+            ))
+            s.add(VideoStance(video_id=vid, ticker=ticker, stance=Stance.buy, summary="s"))
+        await s.commit()
+
+    resp = await client.get("/api/channels/ch1/tickers")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert [r["ticker"] for r in data["items"]] == ["AAA", "BBB", "CCC"]
+    assert data["total"] == 3
+
+
+async def test_channel_tickers_pagination_scopes_price_fetch_to_page(api, sessionmaker, monkeypatch):
+    app, client = api
+    now = datetime.now(timezone.utc)
+    n = 25
+    tickers = [f"T{i:02d}" for i in range(n)]  # T00 oldest .. T24 newest
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch1", title="頻道一", thumbnail_url="", uploads_playlist_id="UU1"))
+        for i, tk in enumerate(tickers):
+            vid = f"v_{tk}"
+            s.add(Video(
+                id=vid, channel_id="ch1", title=f"title {tk}",
+                published_at=now - timedelta(days=n - i),
+                thumbnail_url="", duration_seconds=60,
+                status=VideoStatus.analyzed,
+            ))
+            s.add(VideoStance(video_id=vid, ticker=tk, stance=Stance.buy, summary="s"))
+        await s.commit()
+    sorted_desc = list(reversed(tickers))  # T24 .. T00, newest-first
+
+    calls: list[tuple[list[str], object]] = []
+    orig_get_daily_history = app.state.market.get_daily_history
+
+    async def spy(tks, start, end):
+        calls.append((sorted(tks), start))
+        return await orig_get_daily_history(tks, start, end)
+
+    monkeypatch.setattr(app.state.market, "get_daily_history", spy)
+
+    resp1 = await client.get("/api/channels/ch1/tickers?page=1&page_size=20")
+    assert resp1.status_code == 200
+    data1 = resp1.json()["data"]
+    assert data1["total"] == 25
+    assert data1["page"] == 1
+    assert data1["page_size"] == 20
+    page1_tickers = [r["ticker"] for r in data1["items"]]
+    assert page1_tickers == sorted_desc[:20]
+
+    assert len(calls) == 1
+    page1_call_tickers, page1_start = calls[0]
+    assert set(page1_call_tickers) == set(page1_tickers) | {"VOO"}
+
+    resp2 = await client.get("/api/channels/ch1/tickers?page=2&page_size=20")
+    assert resp2.status_code == 200
+    data2 = resp2.json()["data"]
+    page2_tickers = [r["ticker"] for r in data2["items"]]
+    assert page2_tickers == sorted_desc[20:25]
+    assert data2["total"] == 25
+
+    assert len(calls) == 2
+    page2_call_tickers, page2_start = calls[1]
+    # page 2's price fetch must not touch any ticker already covered by page 1
+    assert set(page2_call_tickers).isdisjoint(page1_tickers)
+    assert set(page2_tickers) <= set(page2_call_tickers)
+    # page 2 holds only older tickers -> its backfill must reach further back in time
+    assert page2_start < page1_start
 
 
 async def test_channel_tickers_unknown_channel_404(api):
