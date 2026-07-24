@@ -239,6 +239,18 @@ async def test_channel_tickers_sorted_by_latest_stance_desc(api, sessionmaker):
     assert data["total"] == 3
 
 
+async def test_channel_tickers_page_past_last_page_returns_empty(api, sessionmaker):
+    _, client = api
+    await seed_stances(sessionmaker)  # AAPL + NVDA -> 2 tickers total, 1 page at page_size=20
+    resp = await client.get("/api/channels/ch1/tickers?page=2&page_size=20")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["items"] == []
+    assert data["total"] == 2
+    assert data["page"] == 2
+    assert data["page_size"] == 20
+
+
 async def test_channel_tickers_pagination_scopes_price_fetch_to_page(api, sessionmaker, monkeypatch):
     app, client = api
     now = datetime.now(timezone.utc)

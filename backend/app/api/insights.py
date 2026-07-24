@@ -194,7 +194,7 @@ async def channel_tickers(
 
     mix = await channel_ticker_stance_mix(session, channel_id)
     mix.sort(key=lambda r: r["ticker"])
-    mix.sort(key=lambda r: r["latest_date"], reverse=True)
+    mix.sort(key=lambda r: r["latest_date"] or "", reverse=True)
     total = len(mix)
     start = (page - 1) * page_size
     page_rows = mix[start : start + page_size]
