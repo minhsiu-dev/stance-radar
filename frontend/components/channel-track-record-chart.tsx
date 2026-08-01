@@ -453,27 +453,36 @@ export function ChannelTrackRecordChart({
         </p>
       </CardHeader>
       <CardContent>
-        {error ? (
-          <p className="text-sm text-red-500">
+        {/* The chart container stays permanently mounted (hidden via CSS,
+         *  never removed from the tree) so a transient revalidation error
+         *  (e.g. SWR's revalidateOnFocus) never unmounts it. If it did, the
+         *  chart-creation effect below (keyed on [data, dark, rankOf], not
+         *  on `error`) would not re-run its cleanup — its `data` reference
+         *  is unchanged when a revalidation merely fails — leaving the
+         *  chart instance attached to a now-detached node while a fresh
+         *  empty container mounts underneath, forever. Same pattern as
+         *  price-chart.tsx: render the error message above the chart
+         *  rather than instead of it. */}
+        {error && (
+          <p className="mb-2 text-sm text-red-500">
             {t("error", { message: error.message })}
           </p>
-        ) : !data ? (
-          <Skeleton className="h-[360px] w-full" />
-        ) : empty ? (
+        )}
+        {!data && !error && <Skeleton className="h-[360px] w-full" />}
+        {empty && (
           <p className="py-12 text-center text-sm text-muted-foreground">
             {t("empty")}
           </p>
-        ) : (
-          <div className="relative">
-            <div ref={containerRef} data-testid="track-record-canvas" />
-            <div
-              ref={tooltipRef}
-              data-testid="track-record-tooltip"
-              style={{ display: "none" }}
-              className="pointer-events-none absolute top-2 z-10 min-w-[9rem] rounded-md border bg-popover/95 px-2 py-1.5 text-[11px] shadow-sm"
-            />
-          </div>
         )}
+        <div className={cn("relative", (!data || empty) && "hidden")}>
+          <div ref={containerRef} data-testid="track-record-canvas" />
+          <div
+            ref={tooltipRef}
+            data-testid="track-record-tooltip"
+            style={{ display: "none" }}
+            className="pointer-events-none absolute top-2 z-10 min-w-[9rem] rounded-md border bg-popover/95 px-2 py-1.5 text-[11px] shadow-sm"
+          />
+        </div>
       </CardContent>
     </Card>
   );

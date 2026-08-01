@@ -55,10 +55,11 @@ vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 let swrKey: string | null = null;
 let swrData: unknown;
+let swrError: Error | undefined;
 vi.mock("swr", () => ({
   default: (key: string) => {
     swrKey = key;
-    return { data: swrData, error: undefined };
+    return { data: swrData, error: swrError };
   },
 }));
 
@@ -133,6 +134,7 @@ describe("ChannelTrackRecordChart", () => {
     appliedOptions.length = 0;
     createdSeries.length = 0;
     swrData = RESPONSE;
+    swrError = undefined;
     swrKey = null;
   });
 
@@ -382,5 +384,36 @@ describe("ChannelTrackRecordChart", () => {
     const tooltip = screen.getByTestId("track-record-tooltip");
     expect(tooltip.textContent).toContain("AAA");
     expect(tooltip.textContent).not.toContain("FFF");
+  });
+
+  it("keeps the chart container mounted (and does not tear down the chart) when a background revalidation errors on an already-loaded chart", () => {
+    const { rerender } = render(<ChannelTrackRecordChart channelId="ch1" />);
+    expect(screen.getByTestId("track-record-canvas")).toBeInTheDocument();
+    removeSpy.mockClear();
+
+    // Simulate SWR's revalidateOnFocus failing: `error` becomes set while
+    // `data` keeps the exact same reference (as SWR does when the request
+    // fails without new data). The old bug rendered `error ? <p> : ... :
+    // <div ref={containerRef}>`, which swaps the container out of the tree
+    // on this transition — but the chart-creation effect's deps ([data,
+    // dark, rankOf]) haven't changed, so its cleanup never runs and the
+    // chart is orphaned on a detached node.
+    swrError = new Error("network blip");
+    rerender(<ChannelTrackRecordChart channelId="ch1" />);
+
+    // The container must still be in the document — never unmounted —
+    // and the error is surfaced ABOVE the still-live chart, not instead of it.
+    expect(screen.getByTestId("track-record-canvas")).toBeInTheDocument();
+    expect(screen.getByText(/error/)).toBeInTheDocument();
+    // Since `data` is unchanged, the chart-creation effect must not have
+    // re-run (no stale chart torn down, no new one created).
+    expect(removeSpy).not.toHaveBeenCalled();
+
+    // Once the revalidation later succeeds again, the container is still
+    // the one the chart was created in — no flash of an empty chart area.
+    swrError = undefined;
+    rerender(<ChannelTrackRecordChart channelId="ch1" />);
+    expect(screen.getByTestId("track-record-canvas")).toBeInTheDocument();
+    expect(removeSpy).not.toHaveBeenCalled();
   });
 });
