@@ -16,6 +16,7 @@ from app.insights.scorecard import (
     summarize_channel_calls,
 )
 from app.insights.ticker_perf import channel_ticker_performance
+from app.insights.track_record import TRACK_RECORD_RANGES, build_track_record
 from app.market.store import PriceStore
 from app.models import Channel, Stance, Video, VideoStance
 
@@ -221,6 +222,25 @@ async def channel_tickers(
         for row in page_rows
     ]
     return ok({"items": items, "total": total, "page": page, "page_size": page_size})
+
+
+@router.get("/channels/{channel_id}/track-record")
+async def channel_track_record(
+    channel_id: str,
+    range_key: str = Query("1y", alias="range"),
+    session: AsyncSession = Depends(get_session),
+    store: PriceStore = Depends(get_price_store),
+):
+    """走勢戰績圖: 前十支(依方向性發言數)股票的日線 + carry-forward 立場區段 +
+    轉折 marker + VOO。neutral 完全忽略——與 /tickers 的 ticker_perf 算法刻意不同。"""
+    channel = await session.get(Channel, channel_id)
+    if channel is None:
+        return fail(f"Channel {channel_id} not found", status_code=404)
+    if range_key not in TRACK_RECORD_RANGES:
+        return fail(
+            f"range must be one of {', '.join(TRACK_RECORD_RANGES)}", status_code=422
+        )
+    return ok(await build_track_record(session, store, channel_id, range_key))
 
 
 @router.get("/channels/{channel_id}/recent")
