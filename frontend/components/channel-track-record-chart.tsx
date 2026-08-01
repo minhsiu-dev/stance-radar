@@ -157,6 +157,11 @@ export function ChannelTrackRecordChart({
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !data || data.tickers.length === 0) return;
+    // Captured now, not read via the ref inside the cleanup below: by the
+    // time cleanup runs, tooltipRef.current may already point at a
+    // different node (or null) than the one this effect's chart was
+    // actually built against.
+    const tooltipEl = tooltipRef.current;
 
     const chart = createChart(el, {
       width: el.clientWidth,
@@ -378,7 +383,7 @@ export function ChannelTrackRecordChart({
       resizeObserver.disconnect();
       chart.remove(); // series are torn down with the chart, so a range change / reload never accumulates them
       chartRef.current = null;
-      if (tooltipRef.current) tooltipRef.current.style.display = "none";
+      if (tooltipEl) tooltipEl.style.display = "none";
       entriesRef.current = new Map();
     };
   }, [data, dark, rankOf]);

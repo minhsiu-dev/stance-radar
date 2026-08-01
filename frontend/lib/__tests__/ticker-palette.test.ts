@@ -6,8 +6,9 @@ import {
   withAlpha,
 } from "@/lib/ticker-palette";
 
-// 站上 stance 語意色（lib/markers.ts 的 STANCE_COLORS）——這張圖的顏色代表股票，
-// 不可與立場色撞色，否則會被讀成 buy/sell。
+// The site's stance-semantic colors (STANCE_COLORS in lib/markers.ts) — this
+// chart's colors represent stocks, and must not collide with a stance color,
+// or they'd be misread as buy/sell.
 const STANCE_HEXES = ["#0ea5e9", "#f97316"];
 
 describe("ticker palette", () => {

@@ -135,13 +135,14 @@ export type SparklinesResponse = Record<string, SparklinePoint[]>;
 
 export type TrackRecordRange = "6m" | "1y" | "all";
 
-/** 未表態 / 推薦中 / 看空中。carry-forward 語意：neutral 發言完全忽略。 */
+/** No call yet / recommending / bearish. Carry-forward semantics: neutral
+ *  commentary is ignored entirely. */
 export type TrackRecordState = "idle" | "buy" | "sell";
 
 export interface TrackRecordRun {
   state: TrackRecordState;
-  from: string; // "YYYY-MM-DD"，首段等於觀察窗起點
-  to: string | null; // null = 一路延續到今天；否則與下一段的 from 同日
+  from: string; // "YYYY-MM-DD"; the first segment equals the window's start
+  to: string | null; // null = continues to today; otherwise same day as the next segment's `from`
 }
 
 export interface TrackRecordMarker {
@@ -153,7 +154,7 @@ export interface TrackRecordMarker {
 
 export interface TrackRecordTicker {
   ticker: string;
-  calls: number; // 全時間的方向性發言次數（排名依據）
+  calls: number; // all-time count of directional calls (ranking basis)
   runs: TrackRecordRun[];
   markers: TrackRecordMarker[];
   closes: SparklinePoint[];

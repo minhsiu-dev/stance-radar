@@ -1,10 +1,6 @@
 from datetime import date
 
-import pytest
-
 from app.insights.track_record import Call, build_runs, rank_tickers
-
-pytestmark = pytest.mark.asyncio
 
 
 def c(ticker: str, stance: str, day: str, vid: str = "v") -> Call:

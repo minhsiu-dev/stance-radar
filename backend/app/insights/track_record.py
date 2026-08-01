@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.market.store import PriceStore
 from app.models import Stance, Video, VideoStance
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ async def load_calls(session: AsyncSession, channel_id: str) -> list[Call]:
 
 
 async def build_track_record(
-    session: AsyncSession, store, channel_id: str, range_key: str
+    session: AsyncSession, store: PriceStore, channel_id: str, range_key: str
 ) -> dict:
     """前十支股票的日線 + 立場區段 + 轉折 marker，外加 benchmark 序列。
 
