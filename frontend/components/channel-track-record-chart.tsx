@@ -8,6 +8,8 @@ import {
   createSeriesMarkers,
   LineSeries,
   LineStyle,
+  PriceScaleMode,
+  type IChartApi,
   type ISeriesApi,
   type Time,
 } from "lightweight-charts";
@@ -59,8 +61,13 @@ export function ChannelTrackRecordChart({
   const [range, setRange] = useState<TrackRecordRange>("1y");
   const [active, setActive] = useState<ReadonlySet<string> | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  // Linear by default. A channel that made one huge call (e.g. +686%) among
+  // several ordinary ones squashes the rest into an unreadable band near
+  // zero on a linear axis; log mode is an escape hatch, not the default.
+  const [logScale, setLogScale] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
   const entriesRef = useRef<Map<string, Entry[]>>(new Map());
   // Mirrors `active` for use inside the chart-creation effect's callbacks
   // (initial series visibility, the crosshair tooltip filter) without making
@@ -71,6 +78,13 @@ export function ChannelTrackRecordChart({
   // always current by the time any later effect or event handler reads it.
   const activeRef = useRef<ReadonlySet<string> | null>(null);
   activeRef.current = active;
+  // Same pattern: seeds the initial price-scale mode on chart creation
+  // without making that effect depend on `logScale` — the scale-mode effect
+  // further down (declared after chart creation, like the visibility/hover
+  // effects) is what actually reacts to the toggle changing, via
+  // applyOptions rather than a rebuild.
+  const logScaleRef = useRef(false);
+  logScaleRef.current = logScale;
   // Same pattern as activeRef above: the parent (ChannelDetail) passes an
   // inline arrow for onEmptyChange, so it gets a fresh identity on every
   // parent render. Reading it through a ref — instead of putting it in the
@@ -159,7 +173,16 @@ export function ChannelTrackRecordChart({
         priceFormatter: (v: number) =>
           `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`,
       },
+      // Seed from the latest `logScale` (via the ref, not a dependency —
+      // same technique as activeRef above); the scale-mode effect further
+      // down takes over from here for subsequent toggle clicks.
+      rightPriceScale: {
+        mode: logScaleRef.current
+          ? PriceScaleMode.Logarithmic
+          : PriceScaleMode.Normal,
+      },
     });
+    chartRef.current = chart;
 
     // Add the benchmark first — later-added series draw on top, and the ten
     // stock lines need to sit above the benchmark line.
@@ -354,6 +377,7 @@ export function ChannelTrackRecordChart({
     return () => {
       resizeObserver.disconnect();
       chart.remove(); // series are torn down with the chart, so a range change / reload never accumulates them
+      chartRef.current = null;
       if (tooltipRef.current) tooltipRef.current.style.display = "none";
       entriesRef.current = new Map();
     };
@@ -374,6 +398,20 @@ export function ChannelTrackRecordChart({
       }
     }
   }, [active]);
+
+  // Price-scale mode. Must be declared AFTER the chart-creation effect —
+  // React flushes effects in declaration order, so chartRef.current is
+  // already populated by the time this runs. Kept as its own effect, keyed
+  // only on `logScale`, so toggling linear/log flips the mode on the
+  // existing price scale (same technique as chip visibility above) instead
+  // of rebuilding the whole chart — which would otherwise discard zoom/pan.
+  // PriceScaleMode.Percentage is never used here (see track-record.ts) —
+  // only Normal/Logarithmic, which don't rebase series against each other.
+  useEffect(() => {
+    chartRef.current?.priceScale("right").applyOptions({
+      mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
+    });
+  }, [logScale]);
 
   // Hover highlighting. Must be declared AFTER the chart-creation effect —
   // React flushes effects in declaration order, so entriesRef.current is
@@ -421,19 +459,43 @@ export function ChannelTrackRecordChart({
       <CardHeader className="space-y-3">
         <div className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">{t("title")}</CardTitle>
-          <div className="flex gap-1">
-            {RANGES.map((r) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1">
+              {RANGES.map((r) => (
+                <Button
+                  key={r}
+                  type="button"
+                  size="sm"
+                  data-testid={`track-range-${r}`}
+                  variant={range === r ? "default" : "outline"}
+                  onClick={() => setRange(r)}
+                >
+                  {t(`range.${r}`)}
+                </Button>
+              ))}
+            </div>
+            <div className="flex gap-1 border-l pl-2">
               <Button
-                key={r}
                 type="button"
                 size="sm"
-                data-testid={`track-range-${r}`}
-                variant={range === r ? "default" : "outline"}
-                onClick={() => setRange(r)}
+                data-testid="track-scale-linear"
+                aria-pressed={!logScale}
+                variant={!logScale ? "default" : "outline"}
+                onClick={() => setLogScale(false)}
               >
-                {t(`range.${r}`)}
+                {t("scale.linear")}
               </Button>
-            ))}
+              <Button
+                type="button"
+                size="sm"
+                data-testid="track-scale-log"
+                aria-pressed={logScale}
+                variant={logScale ? "default" : "outline"}
+                onClick={() => setLogScale(true)}
+              >
+                {t("scale.log")}
+              </Button>
+            </div>
           </div>
         </div>
         {data && data.tickers.length > 0 && (

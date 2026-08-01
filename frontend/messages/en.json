@@ -186,6 +186,7 @@
       "legend": "Solid = recommending · Dotted = bearish · Faded = no call yet",
       "axisNote": "% change since the start of the window",
       "range": { "6m": "6M", "1y": "1Y", "all": "All" },
+      "scale": { "linear": "Linear", "log": "Log" },
       "empty": "This channel has no buy/sell calls yet, so there is nothing to chart.",
       "error": "Could not load the track record: {message}",
       "callCount": "{count} calls",

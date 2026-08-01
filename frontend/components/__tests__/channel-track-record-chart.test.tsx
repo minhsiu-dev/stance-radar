@@ -5,6 +5,8 @@ const addSeriesSpy = vi.hoisted(() => vi.fn());
 const markersSpy = vi.hoisted(() => vi.fn());
 const removeSpy = vi.hoisted(() => vi.fn());
 const crosshairSpy = vi.hoisted(() => vi.fn());
+const createChartSpy = vi.hoisted(() => vi.fn());
+const priceScaleApplyOptionsSpy = vi.hoisted(() => vi.fn());
 const appliedOptions = vi.hoisted(() => [] as unknown[]);
 // Parallel to addSeriesSpy.mock.calls: createdSeries[i] is the object
 // returned from the i-th addSeries(...) call, so a test can grab a specific
@@ -25,12 +27,18 @@ vi.mock("lightweight-charts", () => {
     },
     timeScale: () => ({ fitContent: vi.fn(), applyOptions: vi.fn() }),
     subscribeCrosshairMove: crosshairSpy,
-    priceScale: () => ({ applyOptions: vi.fn() }),
+    // A stable spy (not a fresh vi.fn() per call) so a test can assert on
+    // the price-scale-mode toggle effect, which calls
+    // chart.priceScale("right").applyOptions({ mode }) on every click.
+    priceScale: () => ({ applyOptions: priceScaleApplyOptionsSpy }),
     applyOptions: vi.fn(),
     remove: removeSpy,
   };
   return {
-    createChart: () => chart,
+    createChart: (...args: unknown[]) => {
+      createChartSpy(...args);
+      return chart;
+    },
     // The component calls createSeriesMarkers(series, markers) once, with markers
     // passed in directly rather than via a separate setMarkers call.
     createSeriesMarkers: (...args: unknown[]) => {
@@ -40,6 +48,11 @@ vi.mock("lightweight-charts", () => {
     LineSeries: { kind: "line" },
     LineStyle: { Solid: 0, Dotted: 1, Dashed: 2 },
     ColorType: { Solid: "solid" },
+    // Values mirror the real enum (Normal=0, Logarithmic=1, ...) — the
+    // component must never reference Percentage (see track-record.ts for
+    // why: it would rebase each per-run segment series to 0 at its own
+    // first visible point).
+    PriceScaleMode: { Normal: 0, Logarithmic: 1, Percentage: 2, IndexedTo100: 3 },
   };
 });
 vi.mock("next-intl", () => ({
@@ -131,6 +144,8 @@ describe("ChannelTrackRecordChart", () => {
     markersSpy.mockClear();
     removeSpy.mockClear();
     crosshairSpy.mockClear();
+    createChartSpy.mockClear();
+    priceScaleApplyOptionsSpy.mockClear();
     appliedOptions.length = 0;
     createdSeries.length = 0;
     swrData = RESPONSE;
@@ -458,5 +473,62 @@ describe("ChannelTrackRecordChart", () => {
     const tooltip = screen.getByTestId("track-record-tooltip");
     expect(tooltip.textContent).not.toContain("one");
     expect(tooltip.textContent).not.toContain("two");
+  });
+
+  it("defaults the price scale to linear (Normal mode)", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    expect(screen.getByTestId("track-scale-linear")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("track-scale-log")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    const opts = createChartSpy.mock.calls[0][1] as {
+      rightPriceScale?: { mode?: number };
+    };
+    expect(opts.rightPriceScale?.mode).toBe(0); // PriceScaleMode.Normal
+  });
+
+  it("switches to Logarithmic mode on toggle without tearing down the chart", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    removeSpy.mockClear();
+    createChartSpy.mockClear();
+
+    fireEvent.click(screen.getByTestId("track-scale-log"));
+
+    expect(screen.getByTestId("track-scale-log")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("track-scale-linear")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    // Applied via applyOptions on the existing price scale (mode 1 =
+    // Logarithmic), the same technique as chip visibility — never a rebuild.
+    expect(priceScaleApplyOptionsSpy).toHaveBeenCalledWith({ mode: 1 });
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(createChartSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("track-scale-linear"));
+    expect(priceScaleApplyOptionsSpy).toHaveBeenCalledWith({ mode: 0 });
+    expect(removeSpy).not.toHaveBeenCalled();
+  });
+
+  it("never uses PriceScaleMode.Percentage, which would rebase each run segment to 0", () => {
+    // Percentage mode zeroes a series to its own first *visible* point; since
+    // one ticker is split into several run-segment series, a segment that
+    // starts mid-window would be flattened to 0%, destroying the chart's
+    // relative geometry (this is why the component computes percentages
+    // itself in track-record.ts instead of using this chart mode).
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    fireEvent.click(screen.getByTestId("track-scale-log"));
+    fireEvent.click(screen.getByTestId("track-scale-linear"));
+    const modesUsed = priceScaleApplyOptionsSpy.mock.calls.map(
+      (call) => (call[0] as { mode: number }).mode,
+    );
+    expect(modesUsed).not.toContain(2); // PriceScaleMode.Percentage
   });
 });
