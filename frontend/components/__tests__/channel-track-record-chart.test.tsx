@@ -401,6 +401,27 @@ describe("ChannelTrackRecordChart", () => {
     expect(tooltip.textContent).not.toContain("FFF");
   });
 
+  it("renders the crosshair tooltip's per-ticker value as a signed percentage of the indexed value, not the raw indexed number", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const aaaIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) => (call[1] as { title?: string }).title === "AAA",
+    );
+    const aaaSeries = createdSeries[aaaIndex];
+
+    const crosshairHandler = crosshairSpy.mock.calls[0][0] as (param: unknown) => void;
+    // 105 is an indexed-to-100 value (chart series data), meaning +5% —
+    // the tooltip must show "+5.0%", never "105.0%" or "105".
+    crosshairHandler({
+      point: { x: 10, y: 10 },
+      time: DAYS[0],
+      seriesData: new Map([[aaaSeries, { value: 105 }]]),
+    });
+
+    const tooltip = screen.getByTestId("track-record-tooltip");
+    expect(tooltip.textContent).toContain("+5.0%");
+    expect(tooltip.textContent).not.toContain("105.0%");
+  });
+
   it("keeps the chart container mounted (and does not tear down the chart) when a background revalidation errors on an already-loaded chart", () => {
     const { rerender } = render(<ChannelTrackRecordChart channelId="ch1" />);
     expect(screen.getByTestId("track-record-canvas")).toBeInTheDocument();
@@ -530,5 +551,21 @@ describe("ChannelTrackRecordChart", () => {
       (call) => (call[0] as { mode: number }).mode,
     );
     expect(modesUsed).not.toContain(2); // PriceScaleMode.Percentage
+  });
+
+  it("wires the price-scale formatter to render indexed chart values as signed percentages", () => {
+    // The series data plotted on the chart is indexed to 100 (see
+    // track-record.ts), not raw percent change — this confirms the formatter
+    // passed to createChart's `localization.priceFormatter` (which also
+    // drives the line-end labels via lastValueVisible/title) renders it back
+    // as the percentage the reader expects, e.g. price-scale ticks reading
+    // "+20.0%" rather than the raw indexed number "120".
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const opts = createChartSpy.mock.calls[0][1] as {
+      localization?: { priceFormatter?: (v: number) => string };
+    };
+    expect(opts.localization?.priceFormatter?.(120)).toBe("+20.0%");
+    expect(opts.localization?.priceFormatter?.(93)).toBe("-7.0%");
+    expect(opts.localization?.priceFormatter?.(786)).toBe("+686.0%");
   });
 });

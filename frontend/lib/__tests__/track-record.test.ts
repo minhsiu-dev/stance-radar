@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   baselineOf,
+  formatIndexedPercent,
   markerTime,
   splitRuns,
-  toPercentSeries,
-  type PercentPoint,
+  toIndexedSeries,
+  type IndexedPoint,
 } from "@/lib/track-record";
 import type { TrackRecordRun } from "@/lib/types";
 
@@ -15,17 +16,17 @@ const CLOSES = [
   { date: "2026-01-08", close: 90 },
 ];
 
-function pct(): PercentPoint[] {
-  return toPercentSeries(CLOSES, baselineOf(CLOSES));
+function pct(): IndexedPoint[] {
+  return toIndexedSeries(CLOSES, baselineOf(CLOSES));
 }
 
-describe("baselineOf / toPercentSeries", () => {
-  it("normalises against the first close in the window", () => {
+describe("baselineOf / toIndexedSeries", () => {
+  it("indexes against the first close in the window, baseline = 100", () => {
     const values = pct().map((p) => p.value);
-    expect(values[0]).toBeCloseTo(0);
-    expect(values[1]).toBeCloseTo(10);
-    expect(values[2]).toBeCloseTo(20);
-    expect(values[3]).toBeCloseTo(-10);
+    expect(values[0]).toBeCloseTo(100);
+    expect(values[1]).toBeCloseTo(110);
+    expect(values[2]).toBeCloseTo(120);
+    expect(values[3]).toBeCloseTo(90);
   });
 
   it("keeps the dates as the time axis", () => {
@@ -37,7 +38,29 @@ describe("baselineOf / toPercentSeries", () => {
   it("has no baseline for an empty or non-positive series", () => {
     expect(baselineOf([])).toBeNull();
     expect(baselineOf([{ date: "2026-01-05", close: 0 }])).toBeNull();
-    expect(toPercentSeries(CLOSES, null)).toEqual([]);
+    expect(toIndexedSeries(CLOSES, null)).toEqual([]);
+  });
+
+  it("stays strictly positive even when the series dips below its baseline", () => {
+    // This is the property log mode depends on: lightweight-charts v5's log
+    // scale is a signed transform that breaks on values that cross zero.
+    // Plain percent change (110-100=10, 90-100=-10) would go negative here;
+    // the indexed values must not.
+    const values = pct().map((p) => p.value);
+    expect(values.every((v) => v > 0)).toBe(true);
+    // Sanity: the dip is real (90 < baseline of 100 in raw-close terms) —
+    // confirms this test is actually exercising a below-baseline point,
+    // not vacuously true because the fixture never dips.
+    expect(values[3]).toBeLessThan(values[0]);
+  });
+});
+
+describe("formatIndexedPercent", () => {
+  it("pins the display contract: indexed value -> signed percent string", () => {
+    expect(formatIndexedPercent(120)).toBe("+20.0%");
+    expect(formatIndexedPercent(93)).toBe("-7.0%");
+    expect(formatIndexedPercent(786)).toBe("+686.0%");
+    expect(formatIndexedPercent(100)).toBe("+0.0%");
   });
 });
 

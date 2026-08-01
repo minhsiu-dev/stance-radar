@@ -22,9 +22,10 @@ import { cn } from "@/lib/utils";
 import { tickerColor, withAlpha } from "@/lib/ticker-palette";
 import {
   baselineOf,
+  formatIndexedPercent,
   markerTime,
   splitRuns,
-  toPercentSeries,
+  toIndexedSeries,
 } from "@/lib/track-record";
 import type { TrackRecordRange, TrackRecordResponse } from "@/lib/types";
 
@@ -174,9 +175,14 @@ export function ChannelTrackRecordChart({
         vertLines: { color: "#27272a" },
         horzLines: { color: "#27272a" },
       },
+      // The chart plots values indexed to 100 (see track-record.ts for why —
+      // it's what keeps log mode's signed-log transform sane), but the reader
+      // must still see percent change: this formatter subtracts the 100
+      // baseline back out, so price-scale ticks and line-end labels
+      // (lastValueVisible/title both route through it) all read as "+20.0%"
+      // rather than raw indexed numbers like "120.0".
       localization: {
-        priceFormatter: (v: number) =>
-          `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`,
+        priceFormatter: formatIndexedPercent,
       },
       // Seed from the latest `logScale` (via the ref, not a dependency —
       // same technique as activeRef above); the scale-mode effect further
@@ -200,7 +206,7 @@ export function ChannelTrackRecordChart({
       crosshairMarkerVisible: false,
     });
     benchmark.setData(
-      toPercentSeries(
+      toIndexedSeries(
         data.benchmark_closes,
         baselineOf(data.benchmark_closes),
       ).map((p) => ({ time: p.time as Time, value: p.value })),
@@ -235,7 +241,7 @@ export function ChannelTrackRecordChart({
       if (!hasPrice(item)) continue;
       const color = tickerColor(rankOf.get(item.ticker) ?? 0, dark);
       const segments = splitRuns(
-        toPercentSeries(item.closes, baselineOf(item.closes)),
+        toIndexedSeries(item.closes, baselineOf(item.closes)),
         item.runs,
       );
       const created: Entry[] = [];
@@ -334,6 +340,9 @@ export function ChannelTrackRecordChart({
         tip.style.display = "none";
         return;
       }
+      // Indexed values carry a constant +100 offset over percent change, so
+      // sorting by the raw indexed value orders identically to sorting by
+      // the displayed percentage — no need to subtract 100 first.
       rows.sort((a, b) => b.value - a.value);
 
       tip.replaceChildren();
@@ -352,7 +361,10 @@ export function ChannelTrackRecordChart({
         name.textContent = row.name; // textContent, not innerHTML
         const value = document.createElement("span");
         value.className = "tabular-nums";
-        value.textContent = `${row.value >= 0 ? "+" : ""}${row.value.toFixed(1)}%`;
+        // row.value is the indexed-to-100 value, not raw percent change (see
+        // track-record.ts) — formatIndexedPercent renders it the way the
+        // reader expects, matching the price-scale ticks and line-end labels.
+        value.textContent = formatIndexedPercent(row.value);
         line.append(dot, name, value);
         tip.appendChild(line);
         if (row.title) {

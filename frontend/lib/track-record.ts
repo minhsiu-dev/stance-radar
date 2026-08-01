@@ -4,8 +4,11 @@ import type {
   TrackRecordState,
 } from "@/lib/types";
 
-/** A normalized point: value = % change relative to the window start. */
-export interface PercentPoint {
+/** A normalized point: value = the close indexed to a baseline of 100 —
+ *  i.e. `(close / baseline) * 100`, so 100 = the window start, 120 = +20%,
+ *  93 = -7%. Display code renders `value - 100` as a signed percentage; see
+ *  `formatIndexedPercent` below. */
+export interface IndexedPoint {
   time: string; // "YYYY-MM-DD"
   value: number;
 }
@@ -19,26 +22,51 @@ export function baselineOf(closes: SparklinePoint[]): number | null {
   return first.close;
 }
 
-/** Compute percentages ourselves, not using lightweight-charts' PriceScaleMode.Percentage:
- *  that mode rebases each series against its own first visible point, and since one stock
- *  is split into multiple series (one per run), a segment starting mid-window would be
- *  zeroed to 0%, destroying the chart's relative geometry. */
-export function toPercentSeries(
+/** Compute the indexed series ourselves, not using lightweight-charts'
+ *  PriceScaleMode.Percentage: that mode rebases each series against its own first
+ *  visible point, and since one stock is split into multiple series (one per run),
+ *  a segment starting mid-window would be zeroed to 0%, destroying the chart's
+ *  relative geometry.
+ *
+ *  Values are indexed to 100 (`close / baseline * 100`) rather than plain percent
+ *  change (`(close / baseline - 1) * 100`) so that every plotted value is strictly
+ *  positive — closes and baselines are both positive by construction (see
+ *  `baselineOf`), so their ratio never crosses zero. This matters because
+ *  lightweight-charts v5's log scale is a *signed* log transform
+ *  (`sign(v) * (log10(|v| + 0.0001) + 4)`) meant for data that straddles zero: fed
+ *  ordinary percent-change values, any dip below the baseline (a negative value)
+ *  gets thrown to the opposite side of that transform from the gains, producing
+ *  chasms in the line and nonsense axis ticks. Indexing to 100 sidesteps that
+ *  entirely. Do NOT "simplify" this back to percent change — that silently
+ *  re-breaks log mode. The +100 offset is constant, so display code just
+ *  subtracts it back out (`formatIndexedPercent`) and every downstream
+ *  consumer (segment splitting, markers, sort order, hover) is unaffected by
+ *  the shift since they only compare/order values, never test against zero. */
+export function toIndexedSeries(
   closes: SparklinePoint[],
   baseline: number | null,
-): PercentPoint[] {
+): IndexedPoint[] {
   if (baseline == null) return [];
   return closes.map((c) => ({
     time: c.date,
-    value: (c.close / baseline - 1) * 100,
+    value: (c.close / baseline) * 100,
   }));
+}
+
+/** Renders an indexed-to-100 value as the signed percent-change string the UI
+ *  displays everywhere (price-scale ticks, line-end labels, crosshair tooltip):
+ *  120 -> "+20.0%", 93 -> "-7.0%", 786 -> "+686.0%". Centralized here so every
+ *  render site stays in lockstep with the indexing scheme above. */
+export function formatIndexedPercent(value: number): string {
+  const pct = value - 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
 }
 
 export interface RunSegment {
   state: TrackRecordState;
   from: string;
   to: string | null;
-  points: PercentPoint[];
+  points: IndexedPoint[];
   /** true = points[0] is borrowed from the previous segment for bridging and
    *  does not lie within [from, to). */
   bridged: boolean;
@@ -51,11 +79,11 @@ export interface RunSegment {
  *  its own, the borrowed point passes directly to the next segment). Segments with
  *  fewer than two points are dropped (lightweight-charts cannot draw them anyway). */
 export function splitRuns(
-  points: PercentPoint[],
+  points: IndexedPoint[],
   runs: TrackRecordRun[],
 ): RunSegment[] {
   const out: RunSegment[] = [];
-  let carried: PercentPoint | null = null;
+  let carried: IndexedPoint | null = null;
   for (const run of runs) {
     const own = points.filter(
       (p) => p.time >= run.from && (run.to === null || p.time < run.to),
