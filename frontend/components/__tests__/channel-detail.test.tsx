@@ -53,6 +53,22 @@ vi.mock("@/components/channel-performance-summary", () => ({
   ChannelPerformanceSummary: () => <div data-testid="perf-summary" />,
 }));
 
+// Captures the onEmptyChange callback so a test can trigger it from outside,
+// simulating the chart reporting "nothing to draw".
+const emptyCallback = vi.hoisted(() => ({
+  fn: null as ((empty: boolean) => void) | null,
+}));
+vi.mock("@/components/channel-track-record-chart", () => ({
+  ChannelTrackRecordChart: ({
+    onEmptyChange,
+  }: {
+    onEmptyChange?: (empty: boolean) => void;
+  }) => {
+    emptyCallback.fn = onEmptyChange ?? null;
+    return <div data-testid="track-record-chart" />;
+  },
+}));
+
 const useAdmin = vi.fn();
 vi.mock("@/components/admin-provider", () => ({ useAdmin: () => useAdmin() }));
 
@@ -88,6 +104,10 @@ const messages = {
       winRate: "Win rate",
       avgAlpha: "Avg excess",
       samples: "n",
+    },
+    trackRecordChart: {
+      showTable: "Show full data table",
+      hideTable: "Hide data table",
     },
     recent: {
       empty: "No mentions yet",
@@ -290,13 +310,14 @@ describe("ChannelDetail", () => {
 
   it("defaults to the track-record (個股戰績) tab", async () => {
     renderDetail();
-    // ticker table panel should be visible without clicking a tab:
-    expect(await screen.findByTestId("ticker-table")).toBeInTheDocument();
+    // The chart leads the tab and is visible without clicking a tab (the table
+    // stays collapsed by default, so it's not a valid proxy for "tab is active" anymore):
+    expect(await screen.findByTestId("track-record-chart")).toBeInTheDocument();
   });
 
   it("shows the recent feed after switching to the recent tab", async () => {
     renderDetail();
-    expect(await screen.findByTestId("ticker-table")).toBeInTheDocument();
+    expect(await screen.findByTestId("track-record-chart")).toBeInTheDocument();
     expect(screen.queryByTestId("recent-feed")).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("tab", { name: "Latest mentions" }));
     expect(screen.getByTestId("recent-feed")).toBeInTheDocument();
@@ -498,7 +519,7 @@ describe("ChannelDetail", () => {
   it("shows video list only after switching to the videos tab", async () => {
     renderDetail();
     // 個股戰績 is the default — videos content not yet visible
-    expect(await screen.findByTestId("ticker-table")).toBeInTheDocument();
+    expect(await screen.findByTestId("track-record-chart")).toBeInTheDocument();
     expect(screen.queryByText("Analyzed video")).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("tab", { name: "Videos tab" }));
     expect(await screen.findByText("Analyzed video")).toBeInTheDocument();
@@ -545,5 +566,24 @@ describe("ChannelDetail", () => {
     });
     const [err] = handleAuthError.mock.calls[0];
     expect(err).toMatchObject({ status: 401 });
+  });
+});
+
+describe("ChannelDetail tickers tab", () => {
+  it("leads with the chart and keeps the table collapsed until asked", async () => {
+    renderDetail();
+    expect(await screen.findByTestId("track-record-chart")).toBeInTheDocument();
+    // Collapsed by default -> not rendered, so ChannelTickerTable's useSWRInfinite never fires a request.
+    expect(screen.queryByTestId("ticker-table")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("toggle-ticker-table"));
+    expect(screen.getByTestId("ticker-table")).toBeInTheDocument();
+  });
+
+  it("expands the table when the chart has nothing to draw", async () => {
+    renderDetail();
+    await screen.findByTestId("track-record-chart");
+    act(() => emptyCallback.fn?.(true));
+    expect(screen.getByTestId("ticker-table")).toBeInTheDocument();
   });
 });

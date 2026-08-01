@@ -8,6 +8,7 @@ import { ExternalLink, Play, Zap, ZapOff } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { ChannelPerformanceSummary } from "@/components/channel-performance-summary";
 import { ChannelTickerTable } from "@/components/channel-ticker-table";
+import { ChannelTrackRecordChart } from "@/components/channel-track-record-chart";
 import { ChannelRecentFeed } from "@/components/channel-recent-feed";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,10 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
   const tChannels = useTranslations("Channels");
   const { mutate } = useSWRConfig();
   const { authenticated, handleAuthError } = useAdmin();
+  // The chart is the primary content; the table is collapsed underneath as a detail
+  // lookup. Conditionally rendered rather than CSS-hidden — that way
+  // ChannelTickerTable's useSWRInfinite doesn't fire a request until it's expanded.
+  const [showTable, setShowTable] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
@@ -367,8 +372,34 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
           <TabsTrigger value="videos">{t("tabs.videos")}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="tickers">
-          <ChannelTickerTable channelId={channelId} />
+        <TabsContent value="tickers" className="space-y-4">
+          <ChannelTrackRecordChart
+            channelId={channelId}
+            onEmptyChange={(empty) => {
+              // No directional calls at all -> the chart is empty and the whole tab
+              // would look broken, so expand the table automatically.
+              if (empty) setShowTable(true);
+            }}
+          />
+          <div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="toggle-ticker-table"
+              aria-expanded={showTable}
+              onClick={() => setShowTable((v) => !v)}
+            >
+              {showTable
+                ? t("trackRecordChart.hideTable")
+                : t("trackRecordChart.showTable")}
+            </Button>
+            {showTable && (
+              <div className="mt-4">
+                <ChannelTickerTable channelId={channelId} />
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="recent">
