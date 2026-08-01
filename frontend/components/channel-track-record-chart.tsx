@@ -62,6 +62,15 @@ export function ChannelTrackRecordChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const entriesRef = useRef<Map<string, Entry[]>>(new Map());
+  // Mirrors `active` for use inside the chart-creation effect's callbacks
+  // (initial series visibility, the crosshair tooltip filter) without making
+  // that effect depend on `active` — those reads need the latest value, but
+  // toggling a chip must not re-run chart creation (see the visibility effect
+  // further down, which is what actually reacts to `active` changing).
+  // Assigning a ref during render (rather than in its own effect) means it is
+  // always current by the time any later effect or event handler reads it.
+  const activeRef = useRef<ReadonlySet<string> | null>(null);
+  activeRef.current = active;
 
   const { data, error } = useSWR<TrackRecordResponse>(
     `/api/channels/${channelId}/track-record?range=${range}`,
@@ -75,22 +84,27 @@ export function ChannelTrackRecordChart({
     return map;
   }, [data]);
 
-  // Seed the first five active tickers (skipping ones with no price data,
-  // otherwise the default would silently draw fewer lines than expected without
-  // reason). Only seeded on the first data load: switching range must not wipe
-  // out the user's selections.
+  // Re-derive `active` every time `data` changes, not just on first load.
+  // Drawability is range-dependent: the backend fetches price bars only for
+  // the current window while ranking is all-time, so a ticker that had bars
+  // in `1y`/`all` can have none in `6m`. Without re-validating here, a chip
+  // toggled on under one range/data would stay stuck in `active` — rendered
+  // `disabled` (no price) but still `aria-pressed="true"` — with no way for
+  // the user to click it off. This only trims membership (it never re-adds a
+  // ticker that regains price data); it falls back to the default seed only
+  // when the intersection would otherwise be empty, so the chart is never
+  // left blank.
   useEffect(() => {
     if (!data) return;
-    setActive(
-      (prev) =>
-        prev ??
-        new Set(
-          data.tickers
-            .filter(hasPrice)
-            .slice(0, DEFAULT_ACTIVE)
-            .map((item) => item.ticker),
-        ),
-    );
+    const drawable = data.tickers.filter(hasPrice).map((item) => item.ticker);
+    const drawableSet = new Set(drawable);
+    const seedDefault = () => new Set(drawable.slice(0, DEFAULT_ACTIVE));
+    setActive((prev) => {
+      if (!prev) return seedDefault();
+      const kept = new Set([...prev].filter((ticker) => drawableSet.has(ticker)));
+      if (kept.size === prev.size) return prev; // nothing dropped — keep the same reference
+      return kept.size > 0 ? kept : seedDefault();
+    });
   }, [data]);
 
   const empty = data !== undefined && data.tickers.length === 0;
@@ -98,10 +112,16 @@ export function ChannelTrackRecordChart({
     if (data !== undefined) onEmptyChange?.(empty);
   }, [data, empty, onEmptyChange]);
 
+  // Builds a series for every drawable ticker up front — regardless of
+  // whether its chip is currently active — so toggling a chip never has to
+  // rebuild the chart; see the visibility effect below, which instead flips
+  // `visible` on the series this effect already created. `active` is
+  // deliberately NOT a dependency here: only `data` (range/reload), `dark`
+  // (theme), and `rankOf` (derived from `data`) legitimately require a full
+  // rebuild.
   useEffect(() => {
     const el = containerRef.current;
-    const activeSet = active;
-    if (!el || !data || !activeSet || data.tickers.length === 0) return;
+    if (!el || !data || data.tickers.length === 0) return;
 
     const chart = createChart(el, {
       width: el.clientWidth,
@@ -138,13 +158,21 @@ export function ChannelTrackRecordChart({
     );
 
     // series -> which ticker it represents and its color, for the crosshair
-    // tooltip to look up.
-    const labels = new Map<ISeriesApi<"Line">, { name: string; color: string }>();
-    labels.set(benchmark, { name: data.benchmark, color: BENCHMARK_COLOR });
+    // tooltip to look up. `ticker: null` marks the benchmark row, which is
+    // always shown regardless of chip state.
+    const labels = new Map<
+      ISeriesApi<"Line">,
+      { name: string; color: string; ticker: string | null }
+    >();
+    labels.set(benchmark, {
+      name: data.benchmark,
+      color: BENCHMARK_COLOR,
+      ticker: null,
+    });
 
     const entries = new Map<string, Entry[]>();
     for (const item of data.tickers) {
-      if (!activeSet.has(item.ticker)) continue;
+      if (!hasPrice(item)) continue;
       const color = tickerColor(rankOf.get(item.ticker) ?? 0, dark);
       const segments = splitRuns(
         toPercentSeries(item.closes, baselineOf(item.closes)),
@@ -165,6 +193,10 @@ export function ChannelTrackRecordChart({
           title: last ? item.ticker : "",
           lastValueVisible: last,
           priceLineVisible: false,
+          // Seed initial visibility from the latest `active` (via the ref, not
+          // a dependency — see the comment on activeRef above); the visibility
+          // effect below takes over from here for subsequent chip toggles.
+          visible: activeRef.current?.has(item.ticker) ?? false,
         });
         series.setData(
           segment.points.map((p) => ({ time: p.time as Time, value: p.value })),
@@ -184,7 +216,7 @@ export function ChannelTrackRecordChart({
             },
           ]);
         }
-        labels.set(series, { name: item.ticker, color });
+        labels.set(series, { name: item.ticker, color, ticker: item.ticker });
         created.push({ series, color, idle });
       });
       entries.set(item.ticker, created);
@@ -192,10 +224,14 @@ export function ChannelTrackRecordChart({
     entriesRef.current = entries;
     chart.timeScale().fitContent();
 
-    // Crosshair tooltip: the % value of every active series plus the benchmark
-    // on the hovered date, sorted by value. A stock split into multiple segments
-    // usually has data in only one segment per day (boundary days have two), so
-    // dedupe by name.
+    // Crosshair tooltip: the % value of every *active* series plus the
+    // benchmark on the hovered date, sorted by value. Series for toggled-off
+    // tickers still exist on the chart (merely `visible: false`) and can
+    // still show up in `param.seriesData`, so filter by the current active
+    // set (via the ref, kept fresh across renders) rather than assuming
+    // invisible series are absent. A stock split into multiple segments
+    // usually has data in only one segment per day (boundary days have two),
+    // so dedupe by name too.
     chart.subscribeCrosshairMove((param) => {
       const tip = tooltipRef.current;
       if (!tip) return;
@@ -206,13 +242,14 @@ export function ChannelTrackRecordChart({
       const seen = new Set<string>();
       const rows: { name: string; color: string; value: number }[] = [];
       for (const [series, meta] of labels) {
+        if (meta.ticker !== null && !activeRef.current?.has(meta.ticker)) continue;
         if (seen.has(meta.name)) continue;
         const point = param.seriesData.get(series) as
           | { value?: number }
           | undefined;
         if (point?.value === undefined) continue;
         seen.add(meta.name);
-        rows.push({ ...meta, value: point.value });
+        rows.push({ name: meta.name, color: meta.color, value: point.value });
       }
       if (rows.length === 0) {
         tip.style.display = "none";
@@ -255,11 +292,27 @@ export function ChannelTrackRecordChart({
 
     return () => {
       resizeObserver.disconnect();
-      chart.remove(); // series are torn down with the chart, so switching range / toggling chips never accumulates them
+      chart.remove(); // series are torn down with the chart, so a range change / reload never accumulates them
       if (tooltipRef.current) tooltipRef.current.style.display = "none";
       entriesRef.current = new Map();
     };
-  }, [data, active, dark, rankOf]);
+  }, [data, dark, rankOf]);
+
+  // Chip visibility. Must be declared AFTER the chart-creation effect —
+  // React flushes effects in declaration order, so entriesRef.current is
+  // already populated by the time this runs. Kept as its own effect, keyed
+  // only on `active`, so toggling a chip flips `visible` on the existing
+  // series (the same technique the hover effect below uses) instead of
+  // tearing down and rebuilding the whole chart — which would otherwise
+  // discard the user's zoom/pan on every click.
+  useEffect(() => {
+    for (const [ticker, list] of entriesRef.current) {
+      const visible = active?.has(ticker) ?? false;
+      for (const entry of list) {
+        entry.series.applyOptions({ visible });
+      }
+    }
+  }, [active]);
 
   // Hover highlighting. Must be declared AFTER the chart-creation effect —
   // React flushes effects in declaration order, so entriesRef.current is

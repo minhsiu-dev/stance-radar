@@ -1,20 +1,27 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const addSeriesSpy = vi.hoisted(() => vi.fn());
 const markersSpy = vi.hoisted(() => vi.fn());
 const removeSpy = vi.hoisted(() => vi.fn());
 const crosshairSpy = vi.hoisted(() => vi.fn());
 const appliedOptions = vi.hoisted(() => [] as unknown[]);
+// Parallel to addSeriesSpy.mock.calls: createdSeries[i] is the object
+// returned from the i-th addSeries(...) call, so a test can grab a specific
+// series (e.g. "whichever call had title 'FFF'") and feed it back into a
+// fabricated subscribeCrosshairMove param as `seriesData` keys.
+const createdSeries = vi.hoisted(() => [] as unknown[]);
 vi.mock("lightweight-charts", () => {
   const chart = {
     addSeries: (...args: unknown[]) => {
       addSeriesSpy(...args);
-      return {
+      const series = {
         setData: vi.fn(),
         applyOptions: (o: unknown) => appliedOptions.push(o),
         priceScale: () => ({ applyOptions: vi.fn() }),
       };
+      createdSeries.push(series);
+      return series;
     },
     timeScale: () => ({ fitContent: vi.fn(), applyOptions: vi.fn() }),
     subscribeCrosshairMove: crosshairSpy,
@@ -124,6 +131,7 @@ describe("ChannelTrackRecordChart", () => {
     removeSpy.mockClear();
     crosshairSpy.mockClear();
     appliedOptions.length = 0;
+    createdSeries.length = 0;
     swrData = RESPONSE;
     swrKey = null;
   });
@@ -218,5 +226,116 @@ describe("ChannelTrackRecordChart", () => {
     render(<ChannelTrackRecordChart channelId="ch1" />);
     expect(screen.getByTestId("track-record-tooltip")).toBeInTheDocument();
     expect(crosshairSpy).toHaveBeenCalled();
+  });
+
+  it("drops an active ticker from `active` when a data change makes it undrawable, without emptying the rest", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    expect(chipFor("AAA")).toHaveAttribute("aria-pressed", "true");
+    expect(chipFor("BBB")).toHaveAttribute("aria-pressed", "true");
+
+    // Simulate a range switch whose new window has no price bars for AAA
+    // (e.g. AAA's last trade is older than the new, narrower window) — the
+    // ticker is still in the list (still ranked), just no longer drawable.
+    swrData = {
+      ...RESPONSE,
+      tickers: RESPONSE.tickers.map((item) =>
+        item.ticker === "AAA" ? { ...item, closes: [] } : item,
+      ),
+    };
+    fireEvent.click(screen.getByTestId("track-range-6m"));
+
+    const aaaChip = chipFor("AAA");
+    expect(aaaChip).toBeDisabled();
+    // The old bug: AAA stays stuck aria-pressed="true" while disabled, so the
+    // user can never click it off. It must now read as off.
+    expect(aaaChip).toHaveAttribute("aria-pressed", "false");
+    // The rest of the previously-active selection survives untouched — this
+    // is a targeted drop, not a full reseed back to the default five.
+    expect(chipFor("BBB")).toHaveAttribute("aria-pressed", "true");
+    expect(chipFor("FFF")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("falls back to the default seed when every active ticker becomes undrawable at once", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    // All five originally-active tickers (AAA..EEE) lose their price data;
+    // only FFF (originally inactive) keeps it. The intersection with the
+    // drawable set would be empty, so the fallback should reseed instead of
+    // leaving no chart to show.
+    swrData = {
+      ...RESPONSE,
+      tickers: RESPONSE.tickers.map((item) =>
+        item.ticker === "FFF" ? item : { ...item, closes: [] },
+      ),
+    };
+    fireEvent.click(screen.getByTestId("track-range-6m"));
+    expect(chipFor("FFF")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("does not tear down the chart on a chip toggle, but does on a data-changing range switch", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    removeSpy.mockClear();
+
+    fireEvent.click(chipFor("FFF"));
+    expect(removeSpy).not.toHaveBeenCalled();
+
+    // A real range switch fetches a fresh response; simulate that by giving
+    // SWR a new (even if content-equivalent) object before the click causes
+    // a re-render.
+    swrData = { ...RESPONSE };
+    fireEvent.click(screen.getByTestId("track-range-6m"));
+    expect(removeSpy).toHaveBeenCalled();
+  });
+
+  it("hides a toggled ticker via visible:false on its existing series instead of removing it", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const callsAfterMount = addSeriesSpy.mock.calls.length;
+    // FFF's single-segment series already exists at mount (built eagerly for
+    // every drawable ticker), just hidden — confirm it was created up front.
+    expect(
+      addSeriesSpy.mock.calls.some(
+        (call) => (call[1] as { title?: string }).title === "FFF",
+      ),
+    ).toBe(true);
+
+    fireEvent.click(chipFor("FFF"));
+    // Turning a chip on/off must never call addSeries again.
+    expect(addSeriesSpy.mock.calls.length).toBe(callsAfterMount);
+    expect(
+      appliedOptions.some((o) => (o as { visible?: boolean }).visible === true),
+    ).toBe(true);
+
+    fireEvent.click(chipFor("FFF"));
+    expect(addSeriesSpy.mock.calls.length).toBe(callsAfterMount);
+    expect(
+      appliedOptions.some((o) => (o as { visible?: boolean }).visible === false),
+    ).toBe(true);
+  });
+
+  it("excludes a hidden ticker's series from the crosshair tooltip even if lightweight-charts still reports data for it", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const aaaIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) => (call[1] as { title?: string }).title === "AAA",
+    );
+    const fffIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) => (call[1] as { title?: string }).title === "FFF",
+    );
+    expect(aaaIndex).toBeGreaterThanOrEqual(0);
+    expect(fffIndex).toBeGreaterThanOrEqual(0);
+    const aaaSeries = createdSeries[aaaIndex];
+    const fffSeries = createdSeries[fffIndex]; // FFF is inactive by default
+
+    const crosshairHandler = crosshairSpy.mock.calls[0][0] as (param: unknown) => void;
+    crosshairHandler({
+      point: { x: 10, y: 10 },
+      time: DAYS[2],
+      seriesData: new Map([
+        [aaaSeries, { value: 5 }],
+        [fffSeries, { value: 42 }],
+      ]),
+    });
+
+    const tooltip = screen.getByTestId("track-record-tooltip");
+    expect(tooltip.textContent).toContain("AAA");
+    expect(tooltip.textContent).not.toContain("FFF");
   });
 });
