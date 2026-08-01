@@ -181,6 +181,18 @@
       "samples": "n",
       "pending": "pending"
     },
+    "trackRecordChart": {
+      "title": "Track record",
+      "legend": "Solid = recommending · Dotted = bearish · Faded = no call yet",
+      "axisNote": "% change since the start of the window",
+      "range": { "6m": "6M", "1y": "1Y", "all": "All" },
+      "empty": "This channel has no buy/sell calls yet, so there is nothing to chart.",
+      "error": "Could not load the track record: {message}",
+      "callCount": "{count} calls",
+      "noPriceData": "No price data for {ticker}, so it cannot be drawn",
+      "showTable": "Show full data table",
+      "hideTable": "Hide data table"
+    },
     "performance": {
       "title": "Last 180 days vs VOO",
       "filter": { "all": "All" },
