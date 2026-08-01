@@ -14,6 +14,21 @@ def _rhu(x: float, ndigits: int = 2) -> float:
     """Round half-away-from-zero (matches Postgres round(numeric), unlike Python's banker's round)."""
     return float(Decimal(str(x)).quantize(Decimal(1).scaleb(-ndigits), rounding=ROUND_HALF_UP))
 
+
+def _avg(values: list[float], ndigits: int = 2) -> float:
+    """avg() + round-half-up over EXACT decimals, matching Postgres avg(numeric)+round(numeric,n).
+    Plain float sum(values)/len(values) can land a hair off an exact .xx5 tie (e.g. -1.175 comes
+    out as -1.1749999999999998) and round the wrong way; summing as Decimal avoids that drift."""
+    total = sum(Decimal(str(v)) for v in values)
+    return float((total / len(values)).quantize(Decimal(1).scaleb(-ndigits), rounding=ROUND_HALF_UP))
+
+
+def _ratio_pct(numerator: int, denominator: int, ndigits: int = 1) -> float:
+    """100*numerator/denominator + round-half-up over EXACT decimals, matching the SQL win_rate
+    expression (same float-tie-boundary rationale as `_avg`)."""
+    pct = Decimal(100 * numerator) / Decimal(denominator)
+    return float(pct.quantize(Decimal(1).scaleb(-ndigits), rounding=ROUND_HALF_UP))
+
 _NOW = datetime.now(timezone.utc)
 _TODAY = _NOW.date()
 
@@ -130,9 +145,9 @@ def _expected_slice(slot, which: str) -> dict:
     n = len(alphas)
     return {
         "n": n,
-        "avg_alpha": _rhu(sum(alphas) / n, 2) if n else None,
-        "avg_return": _rhu(sum(rets) / n, 2) if n else None,
-        "win_rate": _rhu(100.0 * sum(1 for a in alphas if a > 0) / n, 1) if n else None,
+        "avg_alpha": _avg(alphas, 2) if n else None,
+        "avg_return": _avg(rets, 2) if n else None,
+        "win_rate": _ratio_pct(sum(1 for a in alphas if a > 0), n, 1) if n else None,
         "pending": pending,
     }
 

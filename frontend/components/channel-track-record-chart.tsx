@@ -233,7 +233,14 @@ export function ChannelTrackRecordChart({
               position: marker.stance === "buy" ? "belowBar" : "aboveBar",
               shape: marker.stance === "buy" ? "arrowUp" : "arrowDown",
               color,
-              text: item.ticker,
+              // No `text` label here: when several tickers open a call within
+              // a few days of each other (common right after a channel picks
+              // up coverage), lightweight-charts has no cross-series
+              // collision avoidance, so per-marker ticker text piles into an
+              // illegible smear (found via visual verification). The arrow's
+              // shape/color (matching the ticker's line and chip) plus the
+              // crosshair tooltip already identify it without needing text
+              // that only works when markers happen to be spaced apart.
             },
           ]);
         }
