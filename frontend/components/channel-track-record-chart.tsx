@@ -191,6 +191,17 @@ export function ChannelTrackRecordChart({
       ticker: null,
     });
 
+    // ticker + date -> the video title that made the call on that date, for
+    // the crosshair tooltip to show as provenance under a turning-point row.
+    // Keyed by date rather than reusing the marker objects directly because
+    // the tooltip only has the hovered date (`param.time`) to look up with.
+    const markerTitleByKey = new Map<string, string>();
+    for (const item of data.tickers) {
+      for (const marker of item.markers) {
+        markerTitleByKey.set(`${item.ticker}|${marker.date}`, marker.video_title);
+      }
+    }
+
     const entries = new Map<string, Entry[]>();
     for (const item of data.tickers) {
       if (!hasPrice(item)) continue;
@@ -259,7 +270,10 @@ export function ChannelTrackRecordChart({
     // set (via the ref, kept fresh across renders) rather than assuming
     // invisible series are absent. A stock split into multiple segments
     // usually has data in only one segment per day (boundary days have two),
-    // so dedupe by name too.
+    // so dedupe by name too. When the hovered date is a turning point for a
+    // ticker, its row also carries the video title that made the call — the
+    // provenance affordance the design spec always intended (an arrow alone
+    // shows *that* the channel flipped, not *where they said it*).
     chart.subscribeCrosshairMove((param) => {
       const tip = tooltipRef.current;
       if (!tip) return;
@@ -267,8 +281,14 @@ export function ChannelTrackRecordChart({
         tip.style.display = "none";
         return;
       }
+      const dateKey = String(param.time);
       const seen = new Set<string>();
-      const rows: { name: string; color: string; value: number }[] = [];
+      const rows: {
+        name: string;
+        color: string;
+        value: number;
+        title?: string;
+      }[] = [];
       for (const [series, meta] of labels) {
         if (meta.ticker !== null && !activeRef.current?.has(meta.ticker)) continue;
         if (seen.has(meta.name)) continue;
@@ -277,7 +297,10 @@ export function ChannelTrackRecordChart({
           | undefined;
         if (point?.value === undefined) continue;
         seen.add(meta.name);
-        rows.push({ name: meta.name, color: meta.color, value: point.value });
+        const title = meta.ticker
+          ? markerTitleByKey.get(`${meta.ticker}|${dateKey}`)
+          : undefined;
+        rows.push({ name: meta.name, color: meta.color, value: point.value, title });
       }
       if (rows.length === 0) {
         tip.style.display = "none";
@@ -304,6 +327,16 @@ export function ChannelTrackRecordChart({
         value.textContent = `${row.value >= 0 ? "+" : ""}${row.value.toFixed(1)}%`;
         line.append(dot, name, value);
         tip.appendChild(line);
+        if (row.title) {
+          // Supplementary provenance, visually secondary to the row above it
+          // (smaller, muted, indented to align under the name) and truncated
+          // — the tooltip's width is capped (see the max-w-[220px] on the
+          // container below), so a long title must ellipsize, never widen it.
+          const sub = document.createElement("div");
+          sub.className = "truncate pl-3.5 text-[10px] text-muted-foreground/80";
+          sub.textContent = row.title; // textContent, not innerHTML — third-party data
+          tip.appendChild(sub);
+        }
       }
       tip.style.display = "block";
       tip.style.left = `${Math.min(
@@ -480,7 +513,7 @@ export function ChannelTrackRecordChart({
             ref={tooltipRef}
             data-testid="track-record-tooltip"
             style={{ display: "none" }}
-            className="pointer-events-none absolute top-2 z-10 min-w-[9rem] rounded-md border bg-popover/95 px-2 py-1.5 text-[11px] shadow-sm"
+            className="pointer-events-none absolute top-2 z-10 min-w-[9rem] max-w-[220px] rounded-md border bg-popover/95 px-2 py-1.5 text-[11px] shadow-sm"
           />
         </div>
       </CardContent>

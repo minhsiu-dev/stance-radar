@@ -416,4 +416,47 @@ describe("ChannelTrackRecordChart", () => {
     expect(screen.getByTestId("track-record-canvas")).toBeInTheDocument();
     expect(removeSpy).not.toHaveBeenCalled();
   });
+
+  it("shows the video title as a secondary line under a ticker's row on its turning-point date", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const aaaIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) => (call[1] as { title?: string }).title === "AAA",
+    );
+    const aaaSeries = createdSeries[aaaIndex];
+
+    const crosshairHandler = crosshairSpy.mock.calls[0][0] as (
+      param: unknown,
+    ) => void;
+    // DAYS[2] is AAA's buy turning point (marker video_title: "one").
+    crosshairHandler({
+      point: { x: 10, y: 10 },
+      time: DAYS[2],
+      seriesData: new Map([[aaaSeries, { value: 5 }]]),
+    });
+
+    const tooltip = screen.getByTestId("track-record-tooltip");
+    expect(tooltip.textContent).toContain("one");
+  });
+
+  it("shows no video title line on a date that is not a turning point for that ticker", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const aaaIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) => (call[1] as { title?: string }).title === "AAA",
+    );
+    const aaaSeries = createdSeries[aaaIndex];
+
+    const crosshairHandler = crosshairSpy.mock.calls[0][0] as (
+      param: unknown,
+    ) => void;
+    // DAYS[0] has no marker for AAA.
+    crosshairHandler({
+      point: { x: 10, y: 10 },
+      time: DAYS[0],
+      seriesData: new Map([[aaaSeries, { value: 0 }]]),
+    });
+
+    const tooltip = screen.getByTestId("track-record-tooltip");
+    expect(tooltip.textContent).not.toContain("one");
+    expect(tooltip.textContent).not.toContain("two");
+  });
 });
