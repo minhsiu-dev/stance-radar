@@ -133,6 +133,40 @@ export interface SparklinePoint {
 // GET /api/stocks/sparklines response: ticker -> ascending daily closes
 export type SparklinesResponse = Record<string, SparklinePoint[]>;
 
+export type TrackRecordRange = "6m" | "1y" | "all";
+
+/** 未表態 / 推薦中 / 看空中。carry-forward 語意：neutral 發言完全忽略。 */
+export type TrackRecordState = "idle" | "buy" | "sell";
+
+export interface TrackRecordRun {
+  state: TrackRecordState;
+  from: string; // "YYYY-MM-DD"，首段等於觀察窗起點
+  to: string | null; // null = 一路延續到今天；否則與下一段的 from 同日
+}
+
+export interface TrackRecordMarker {
+  date: string; // "YYYY-MM-DD"
+  stance: "buy" | "sell";
+  video_id: string;
+  video_title: string;
+}
+
+export interface TrackRecordTicker {
+  ticker: string;
+  calls: number; // 全時間的方向性發言次數（排名依據）
+  runs: TrackRecordRun[];
+  markers: TrackRecordMarker[];
+  closes: SparklinePoint[];
+}
+
+export interface TrackRecordResponse {
+  benchmark: string;
+  range: TrackRecordRange;
+  start: string; // "YYYY-MM-DD"
+  benchmark_closes: SparklinePoint[];
+  tickers: TrackRecordTicker[];
+}
+
 export interface StanceRow {
   video_id: string;
   video_title: string;
