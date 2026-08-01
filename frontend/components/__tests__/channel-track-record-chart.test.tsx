@@ -210,6 +210,51 @@ describe("ChannelTrackRecordChart", () => {
     expect(onEmptyChange).toHaveBeenCalledWith(true);
   });
 
+  it("does not re-notify onEmptyChange when only the callback's identity changes", () => {
+    // Same underlying data object throughout — no SWR revalidation happens
+    // in this test, only a parent-style re-render with a fresh inline
+    // callback (what ChannelDetail used to pass on every render).
+    swrData = { ...RESPONSE, tickers: [] };
+    const first = vi.fn();
+    const { rerender } = render(
+      <ChannelTrackRecordChart channelId="ch1" onEmptyChange={first} />,
+    );
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(first).toHaveBeenCalledWith(true);
+
+    const second = vi.fn();
+    rerender(
+      <ChannelTrackRecordChart channelId="ch1" onEmptyChange={second} />,
+    );
+    expect(second).not.toHaveBeenCalled();
+  });
+
+  it("notifies again on a genuine flip of `empty`, but not on a same-emptiness revalidation", () => {
+    swrData = { ...RESPONSE, tickers: [] };
+    const onEmptyChange = vi.fn();
+    const { rerender } = render(
+      <ChannelTrackRecordChart channelId="ch1" onEmptyChange={onEmptyChange} />,
+    );
+    expect(onEmptyChange).toHaveBeenCalledWith(true);
+    onEmptyChange.mockClear();
+
+    // Simulate a revalidation (e.g. SWR's revalidateOnFocus) that resolves
+    // to the SAME emptiness: a brand new `data` object reference, but no
+    // real transition — must not re-notify.
+    swrData = { ...RESPONSE, tickers: [] };
+    rerender(
+      <ChannelTrackRecordChart channelId="ch1" onEmptyChange={onEmptyChange} />,
+    );
+    expect(onEmptyChange).not.toHaveBeenCalled();
+
+    // A genuine flip — the channel now has directional calls — must notify.
+    swrData = RESPONSE;
+    rerender(
+      <ChannelTrackRecordChart channelId="ch1" onEmptyChange={onEmptyChange} />,
+    );
+    expect(onEmptyChange).toHaveBeenCalledWith(false);
+  });
+
   it("keeps a price-less ticker listed but disabled and unselected", () => {
     const dead = { ...buyTicker("ZZZ"), closes: [] };
     // Placed first: even though it ranks first, it should not be selected by default.

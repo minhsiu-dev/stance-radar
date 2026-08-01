@@ -86,6 +86,14 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
   // lookup. Conditionally rendered rather than CSS-hidden — that way
   // ChannelTickerTable's useSWRInfinite doesn't fire a request until it's expanded.
   const [showTable, setShowTable] = useState(false);
+  // No directional calls at all -> the chart is empty and the whole tab would
+  // look broken, so expand the table automatically. Memoized (stable identity
+  // across renders) as defense in depth: the chart itself now dedupes calls
+  // by value, but keeping this prop stable means a fresh `onEmptyChange`
+  // identity can never be the thing that re-triggers the child's effect.
+  const handleTrackRecordEmptyChange = useCallback((empty: boolean) => {
+    if (empty) setShowTable(true);
+  }, []);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
@@ -375,11 +383,7 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
         <TabsContent value="tickers" className="space-y-4">
           <ChannelTrackRecordChart
             channelId={channelId}
-            onEmptyChange={(empty) => {
-              // No directional calls at all -> the chart is empty and the whole tab
-              // would look broken, so expand the table automatically.
-              if (empty) setShowTable(true);
-            }}
+            onEmptyChange={handleTrackRecordEmptyChange}
           />
           <div>
             <Button

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
@@ -53,10 +54,12 @@ vi.mock("@/components/channel-performance-summary", () => ({
   ChannelPerformanceSummary: () => <div data-testid="perf-summary" />,
 }));
 
-// Captures the onEmptyChange callback so a test can trigger it from outside,
-// simulating the chart reporting "nothing to draw".
-const emptyCallback = vi.hoisted(() => ({
-  fn: null as ((empty: boolean) => void) | null,
+// Drives the mock chart's "empty" state from outside, simulating the chart
+// resolving to "nothing to draw". Exposed as a setter (rather than a bare
+// captured callback) so the mock can re-notify through a *real* effect —
+// see below for why that distinction matters.
+const chartControl = vi.hoisted(() => ({
+  setEmpty: null as ((empty: boolean) => void) | null,
 }));
 vi.mock("@/components/channel-track-record-chart", () => ({
   ChannelTrackRecordChart: ({
@@ -64,7 +67,25 @@ vi.mock("@/components/channel-track-record-chart", () => ({
   }: {
     onEmptyChange?: (empty: boolean) => void;
   }) => {
-    emptyCallback.fn = onEmptyChange ?? null;
+    const [empty, setEmpty] = useState(false);
+    chartControl.setEmpty = setEmpty;
+    // Deliberately mirrors the *pre-fix* shape of the real component's notify
+    // effect (dependent on the callback's identity, not just a ref to it).
+    // A plain "call it once from outside" mock can never reproduce a bug
+    // that only shows up on a parent/child re-render interaction, which is
+    // exactly how this one was missed originally: ChannelDetail passed an
+    // inline arrow for onEmptyChange, so every parent re-render (e.g. the
+    // one caused by clicking "collapse" itself) produced a fresh callback
+    // identity, re-ran this effect, and re-notified — instantly reopening
+    // the table the user had just collapsed. The real chart component no
+    // longer depends on the callback's identity at all (it reads it via a
+    // ref) — this mock keeps depending on it so the suite instead verifies
+    // the *other* half of the fix: that ChannelDetail now hands the chart a
+    // referentially stable handler (useCallback), so even a child shaped
+    // like this can't be re-triggered by an unrelated parent re-render.
+    useEffect(() => {
+      onEmptyChange?.(empty);
+    }, [empty, onEmptyChange]);
     return <div data-testid="track-record-chart" />;
   },
 }));
@@ -253,14 +274,25 @@ function renderDetail(videosForKey?: (key: string) => unknown) {
     });
     return Promise.resolve(detail);
   });
-  render(
+  const ui = (
     <NextIntlClientProvider locale="en" messages={messages}>
       <SWRConfig value={{ fetcher, provider: () => new Map() }}>
         <ChannelDetail channelId="UC_a" />
       </SWRConfig>
-    </NextIntlClientProvider>,
+    </NextIntlClientProvider>
   );
+  const { rerender } = render(ui);
+  rerenderDetailImpl = () => rerender(ui);
   return fetcher;
+}
+
+// Set by renderDetail() on every call; lets a test force ChannelDetail through
+// another render pass with the exact same props/tree, simulating "something
+// unrelated elsewhere in the component re-rendered it" — the scenario that
+// exposed the onEmptyChange identity bug (see the chart mock above).
+let rerenderDetailImpl: (() => void) | null = null;
+function rerenderDetail() {
+  rerenderDetailImpl?.();
 }
 
 function makeVideo(n: number, status = "discovered") {
@@ -583,7 +615,28 @@ describe("ChannelDetail tickers tab", () => {
   it("expands the table when the chart has nothing to draw", async () => {
     renderDetail();
     await screen.findByTestId("track-record-chart");
-    act(() => emptyCallback.fn?.(true));
+    act(() => chartControl.setEmpty?.(true));
     expect(screen.getByTestId("ticker-table")).toBeInTheDocument();
+  });
+
+  it("lets the user collapse the auto-expanded table, and keeps it collapsed across a later parent re-render", async () => {
+    renderDetail();
+    await screen.findByTestId("track-record-chart");
+
+    // Chart resolves to "nothing to draw" -> auto-expand.
+    act(() => chartControl.setEmpty?.(true));
+    expect(screen.getByTestId("ticker-table")).toBeInTheDocument();
+
+    // The user collapses it manually. This click alone makes ChannelDetail
+    // re-render once (setShowTable) — exactly the re-render that regressed
+    // before the fix: a fresh onEmptyChange identity re-ran the mock's
+    // notify effect and re-opened the table instantly.
+    fireEvent.click(screen.getByTestId("toggle-ticker-table"));
+    expect(screen.queryByTestId("ticker-table")).not.toBeInTheDocument();
+
+    // A further, unrelated parent re-render (anything in ChannelDetail
+    // re-rendering — not just the collapse click itself) must not reopen it.
+    act(() => rerenderDetail());
+    expect(screen.queryByTestId("ticker-table")).not.toBeInTheDocument();
   });
 });

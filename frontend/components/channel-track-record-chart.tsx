@@ -71,6 +71,13 @@ export function ChannelTrackRecordChart({
   // always current by the time any later effect or event handler reads it.
   const activeRef = useRef<ReadonlySet<string> | null>(null);
   activeRef.current = active;
+  // Same pattern as activeRef above: the parent (ChannelDetail) passes an
+  // inline arrow for onEmptyChange, so it gets a fresh identity on every
+  // parent render. Reading it through a ref — instead of putting it in the
+  // notify-effect's dependency array below — means a new identity alone can
+  // never re-run that effect.
+  const onEmptyChangeRef = useRef(onEmptyChange);
+  onEmptyChangeRef.current = onEmptyChange;
 
   const { data, error } = useSWR<TrackRecordResponse>(
     `/api/channels/${channelId}/track-record?range=${range}`,
@@ -108,9 +115,23 @@ export function ChannelTrackRecordChart({
   }, [data]);
 
   const empty = data !== undefined && data.tickers.length === 0;
+  // Notify the parent only on an actual transition of `empty` — including the
+  // first resolution from "still loading" to a known value — never on every
+  // effect run. This is compared against the last value we *reported* (kept
+  // in a ref, seeded to `null` = "nothing reported yet"), not against `data`
+  // or `empty` by reference/dependency alone: `data` gets a new object
+  // identity on every SWR revalidation (e.g. focus refetch) even when its
+  // content is unchanged, so relying on that plus a fresh `onEmptyChange`
+  // identity each render previously caused a notify -> parent re-render ->
+  // new callback -> notify loop that made an auto-expanded table impossible
+  // to manually re-collapse while the chart stayed empty.
+  const lastReportedEmptyRef = useRef<boolean | null>(null);
   useEffect(() => {
-    if (data !== undefined) onEmptyChange?.(empty);
-  }, [data, empty, onEmptyChange]);
+    if (data === undefined) return;
+    if (lastReportedEmptyRef.current === empty) return;
+    lastReportedEmptyRef.current = empty;
+    onEmptyChangeRef.current?.(empty);
+  }, [data, empty]);
 
   // Builds a series for every drawable ticker up front — regardless of
   // whether its chip is currently active — so toggling a chip never has to
