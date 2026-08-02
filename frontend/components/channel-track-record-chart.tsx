@@ -30,7 +30,12 @@ import {
   toExcessSeries,
   toIndexedSeries,
 } from "@/lib/track-record";
-import type { TrackRecordRange, TrackRecordResponse } from "@/lib/types";
+import type {
+  SparklinePoint,
+  TrackRecordRange,
+  TrackRecordResponse,
+  TrackRecordTicker,
+} from "@/lib/types";
 
 const RANGES: TrackRecordRange[] = ["6m", "1y", "all"];
 const DEFAULT_ACTIVE = 5;
@@ -65,6 +70,21 @@ type Entry = {
  *  all-time call count, and silently disappearing would look like a sorting bug. */
 function hasPrice(item: { closes: unknown[] }): boolean {
   return item.closes.length >= 2;
+}
+
+/** Whether a ticker can actually be drawn in the given view. The price view only
+ *  needs bars; the performance view additionally needs at least one position
+ *  producing a drawable segment — a stock he never called has bars but no line. */
+function drawableIn(
+  view: TrackView,
+  item: TrackRecordTicker,
+  benchmarkCloses: SparklinePoint[],
+): boolean {
+  if (!hasPrice(item)) return false;
+  if (view === "price") return true;
+  return item.runs.some(
+    (run) => toExcessSeries(item.closes, benchmarkCloses, run).length >= 2,
+  );
 }
 
 export function ChannelTrackRecordChart({
@@ -126,19 +146,24 @@ export function ChannelTrackRecordChart({
     return map;
   }, [data]);
 
-  // Re-derive `active` every time `data` changes, not just on first load.
-  // Drawability is range-dependent: the backend fetches price bars only for
-  // the current window while ranking is all-time, so a ticker that had bars
-  // in `1y`/`all` can have none in `6m`. Without re-validating here, a chip
-  // toggled on under one range/data would stay stuck in `active` — rendered
-  // `disabled` (no price) but still `aria-pressed="true"` — with no way for
-  // the user to click it off. This only trims membership (it never re-adds a
-  // ticker that regains price data); it falls back to the default seed only
-  // when the intersection would otherwise be empty, so the chart is never
-  // left blank.
+  // Re-derive `active` every time `data` OR `view` changes, not just on first
+  // load. Drawability is both range-dependent (the backend fetches price bars
+  // only for the current window while ranking is all-time, so a ticker that
+  // had bars in `1y`/`all` can have none in `6m`) and view-dependent (the
+  // performance view additionally needs a drawable position — a ticker with
+  // full price history but every run `idle` draws in the price view but not
+  // here). Without re-validating on both, a chip toggled on under one
+  // data/view combination would stay stuck in `active` — rendered `disabled`
+  // (undrawable) but still `aria-pressed="true"` — with no way for the user
+  // to click it off. This only trims membership (it never re-adds a ticker
+  // that regains drawability); it falls back to the default seed only when
+  // the intersection would otherwise be empty, so the chart is never left
+  // blank.
   useEffect(() => {
     if (!data) return;
-    const drawable = data.tickers.filter(hasPrice).map((item) => item.ticker);
+    const drawable = data.tickers
+      .filter((item) => drawableIn(view, item, data.benchmark_closes))
+      .map((item) => item.ticker);
     const drawableSet = new Set(drawable);
     const seedDefault = () => new Set(drawable.slice(0, DEFAULT_ACTIVE));
     setActive((prev) => {
@@ -147,9 +172,15 @@ export function ChannelTrackRecordChart({
       if (kept.size === prev.size) return prev; // nothing dropped — keep the same reference
       return kept.size > 0 ? kept : seedDefault();
     });
-  }, [data]);
+  }, [data, view]);
 
-  const empty = data !== undefined && data.tickers.length === 0;
+  // `empty` also depends on `view`: a channel can have tickers with price
+  // history but, in the performance view, none of them holding a drawable
+  // position (every run `idle`) — the price view would still draw fine.
+  const drawableCount = (data?.tickers ?? []).filter((item) =>
+    drawableIn(view, item, data?.benchmark_closes ?? []),
+  ).length;
+  const empty = data !== undefined && drawableCount === 0;
   // Notify the parent only on an actual transition of `empty` — including the
   // first resolution from "still loading" to a known value — never on every
   // effect run. This is compared against the last value we *reported* (kept
@@ -269,7 +300,7 @@ export function ChannelTrackRecordChart({
 
     const entries = new Map<string, Entry[]>();
     for (const item of data.tickers) {
-      if (!hasPrice(item)) continue;
+      if (!drawableIn(view, item, data.benchmark_closes)) continue;
       const color = tickerColor(rankOf.get(item.ticker) ?? 0, dark);
       const created: Entry[] = [];
       if (performance) {
@@ -565,11 +596,10 @@ export function ChannelTrackRecordChart({
     setActive((prev) => {
       if (!prev) return prev;
       const next = new Set(prev);
-      // Chips with no price data are disabled in the DOM; guard again here
-      // for keyboard / programmatic activation.
-      if (!next.has(ticker) && !hasPrice(
-        data?.tickers.find((item) => item.ticker === ticker) ?? { closes: [] },
-      )) {
+      // Chips that cannot be drawn in the current view are disabled in the
+      // DOM; guard again here for keyboard / programmatic activation.
+      const item = data?.tickers.find((entry) => entry.ticker === ticker);
+      if (!next.has(ticker) && (!item || !drawableIn(view, item, data?.benchmark_closes ?? []))) {
         return prev;
       }
       if (next.has(ticker)) {
@@ -648,7 +678,7 @@ export function ChannelTrackRecordChart({
             {data.tickers.map((item, i) => {
               const on = active?.has(item.ticker) ?? false;
               const color = tickerColor(i, dark);
-              const drawable = hasPrice(item);
+              const drawable = drawableIn(view, item, data.benchmark_closes);
               return (
                 <button
                   key={item.ticker}
@@ -659,7 +689,9 @@ export function ChannelTrackRecordChart({
                   title={
                     drawable
                       ? t("callCount", { count: item.calls })
-                      : t("noPriceData", { ticker: item.ticker })
+                      : hasPrice(item)
+                        ? t("noPositionInView", { ticker: item.ticker })
+                        : t("noPriceData", { ticker: item.ticker })
                   }
                   onClick={() => toggle(item.ticker)}
                   onMouseEnter={() => setHovered(item.ticker)}
@@ -711,7 +743,7 @@ export function ChannelTrackRecordChart({
         {!data && !error && <Skeleton className="h-[360px] w-full" />}
         {empty && (
           <p className="py-12 text-center text-sm text-muted-foreground">
-            {t("empty")}
+            {performance ? t("emptyPerformance") : t("empty")}
           </p>
         )}
         <div className={cn("relative", (!data || empty) && "hidden")}>

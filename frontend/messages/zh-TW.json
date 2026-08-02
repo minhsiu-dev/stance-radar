@@ -191,9 +191,11 @@
       "range": { "6m": "6 個月", "1y": "1 年", "all": "全部" },
       "scale": { "linear": "線性", "log": "對數" },
       "empty": "這個頻道還沒有任何 buy/sell 發言,沒有可畫的走勢。",
+      "emptyPerformance": "這個窗內他對這些股票都沒有持倉,切換觀察窗或改看股價走勢。",
       "error": "走勢資料載入失敗:{message}",
       "callCount": "{count} 次發言",
       "noPriceData": "查不到 {ticker} 的股價,無法畫線",
+      "noPositionInView": "{ticker} 在這個觀察窗內沒有倉位",
       "showTable": "顯示完整數據表",
       "hideTable": "收合數據表"
     },

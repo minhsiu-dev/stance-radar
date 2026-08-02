@@ -191,9 +191,11 @@
       "range": { "6m": "6M", "1y": "1Y", "all": "All" },
       "scale": { "linear": "Linear", "log": "Log" },
       "empty": "This channel has no buy/sell calls yet, so there is nothing to chart.",
+      "emptyPerformance": "He held no position in any of these over this window — widen the range or switch to the price view.",
       "error": "Could not load the track record: {message}",
       "callCount": "{count} calls",
       "noPriceData": "No price data for {ticker}, so it cannot be drawn",
+      "noPositionInView": "{ticker} has no position in this window",
       "showTable": "Show full data table",
       "hideTable": "Hide data table"
     },

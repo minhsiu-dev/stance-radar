@@ -134,6 +134,18 @@ function buyTicker(name: string) {
   };
 }
 
+/** Priced, but every run is idle — nothing to draw in the performance view,
+ *  while the price view still draws it fine. */
+function idleOnlyTicker(name: string) {
+  return {
+    ticker: name,
+    calls: 1,
+    runs: [{ state: "idle" as const, from: DAYS[0], to: null, opened_at: null }],
+    markers: [],
+    closes: closes(),
+  };
+}
+
 const RESPONSE = {
   benchmark: "VOO",
   range: "1y",
@@ -788,5 +800,39 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     expect(plotted).toEqual(
       longPoints.map((p) => ({ time: p.time, value: -p.value })),
     );
+  });
+
+  it("disables a ticker that has no position in this view, but keeps its chip", () => {
+    swrData = { ...RESPONSE, tickers: [...RESPONSE.tickers, idleOnlyTicker("ZZZ")] };
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    // price view: drawable, so selectable
+    expect(screen.getByTestId("track-chip-ZZZ")).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId("track-view-performance"));
+    // performance view: no position -> disabled, but still listed
+    expect(screen.getByTestId("track-chip-ZZZ")).toBeInTheDocument();
+    expect(screen.getByTestId("track-chip-ZZZ")).toBeDisabled();
+  });
+
+  it("drops a now-undrawable ticker from active instead of stranding it", () => {
+    swrData = { ...RESPONSE, tickers: [idleOnlyTicker("ZZZ"), ...RESPONSE.tickers] };
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    expect(screen.getByTestId("track-chip-ZZZ")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    fireEvent.click(screen.getByTestId("track-view-performance"));
+    // must not stay pressed-and-disabled, which the user could never clear
+    expect(screen.getByTestId("track-chip-ZZZ")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("shows the empty state when no ticker has a position in this view", () => {
+    swrData = { ...RESPONSE, tickers: [idleOnlyTicker("ZZZ")] };
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    expect(screen.queryByText("emptyPerformance")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("track-view-performance"));
+    expect(screen.getByText("emptyPerformance")).toBeInTheDocument();
   });
 });
