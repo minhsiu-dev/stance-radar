@@ -668,6 +668,48 @@ describe("ChannelTrackRecordChart", () => {
     expect(plotted[0].time).toBe(DAYS[0]);
     expect(plotted[0].value).toBeCloseTo(100);
   });
+
+  it("clips the benchmark series to the window start too, not just the ticker series", () => {
+    // Mirrors the GGG test above, but for the benchmark line: the same
+    // globally-shared price_start extension that can put an early bar in a
+    // ticker's `closes` (see clipToWindow's docstring) lands in
+    // `benchmark_closes` as well, since both are fetched together. The
+    // fixture's default RESPONSE.benchmark_closes[0].date already equals
+    // RESPONSE.start, so it alone can't distinguish "clipped" from
+    // "unclipped" — this test injects an earlier bar to force that
+    // distinction.
+    const earlyBenchmarkCloses = [
+      // Wildly different price, dated before RESPONSE.start, so an unclipped
+      // baseline is obviously wrong rather than coincidentally close.
+      { date: "2025-01-01", close: 5000 },
+      ...RESPONSE.benchmark_closes,
+    ];
+    swrData = { ...RESPONSE, benchmark_closes: earlyBenchmarkCloses };
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const benchmarkIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) =>
+        (call[0] as { kind?: string }).kind === "line" &&
+        (call[1] as { title?: string }).title === "VOO",
+    );
+    expect(benchmarkIndex).toBeGreaterThanOrEqual(0);
+    const plotted = (
+      createdSeries[benchmarkIndex] as {
+        setData: { mock: { calls: [{ time: string; value: number }[]][] } };
+      }
+    ).setData.mock.calls[0][0];
+    // First plotted point is DAYS[0] (the window start) at close=500 ->
+    // indexed 100 (baseline = the window-start bar), not the injected
+    // 2025-01-01 bar (the bug: baselining/plotting off the unclipped array,
+    // which would put "2025-01-01" as plotted[0] instead).
+    expect(plotted[0].time).toBe(DAYS[0]);
+    expect(plotted[0].value).toBeCloseTo(100);
+    // DAYS[3]'s indexed value is baselined at 500 (clipped) -> 102, not at
+    // 5000 (unclipped) -> 10.2 — a wrong baseline would compress this ~10x.
+    const laterPoint = plotted.find(
+      (p: { time: string }) => p.time === DAYS[3],
+    );
+    expect(laterPoint.value).toBeCloseTo(102);
+  });
 });
 
 describe("ChannelTrackRecordChart — call performance view", () => {
