@@ -835,4 +835,33 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     fireEvent.click(screen.getByTestId("track-view-performance"));
     expect(screen.getByText("emptyPerformance")).toBeInTheDocument();
   });
+
+  it("recovers the default selection after `active` empties out and tickers become drawable again", () => {
+    // A single idle-only ticker: drawable (and thus default-seeded) in the
+    // price view, but undrawable in the performance view, so switching there
+    // empties `active` out to a zero-size Set — not just a trimmed one.
+    swrData = { ...RESPONSE, tickers: [idleOnlyTicker("ZZZ")] };
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    expect(screen.getByTestId("track-chip-ZZZ")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    fireEvent.click(screen.getByTestId("track-view-performance"));
+    // `active` is now an empty (but non-null) Set — nothing drawable here.
+    expect(screen.getByTestId("track-chip-ZZZ")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    fireEvent.click(screen.getByTestId("track-view-price"));
+    // Back in the price view ZZZ is drawable again. The old bail
+    // (`kept.size === prev.size`) matched trivially for an empty `prev`
+    // (0 === 0) and returned it unchanged, so the default selection could
+    // never repopulate once `active` had emptied out. It must reseed here.
+    expect(screen.getByTestId("track-chip-ZZZ")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
 });

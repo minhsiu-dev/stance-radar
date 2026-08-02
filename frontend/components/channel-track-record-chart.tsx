@@ -156,8 +156,8 @@ export function ChannelTrackRecordChart({
   // data/view combination would stay stuck in `active` — rendered `disabled`
   // (undrawable) but still `aria-pressed="true"` — with no way for the user
   // to click it off. This only trims membership (it never re-adds a ticker
-  // that regains drawability); it falls back to the default seed only when
-  // the intersection would otherwise be empty, so the chart is never left
+  // that regains drawability on its own); it falls back to the default seed
+  // whenever the surviving intersection is empty, so the chart is never left
   // blank.
   useEffect(() => {
     if (!data) return;
@@ -169,8 +169,22 @@ export function ChannelTrackRecordChart({
     setActive((prev) => {
       if (!prev) return seedDefault();
       const kept = new Set([...prev].filter((ticker) => drawableSet.has(ticker)));
+      // Check the emptied-out case BEFORE the unchanged-membership bail
+      // below: when `prev` is itself already an empty Set (everything was
+      // undrawable in the previous view/data), `kept` — the intersection of
+      // an empty set with anything — is trivially empty too, so
+      // `kept.size === prev.size` (0 === 0) would always match and the old
+      // ordering could never fall through to `seedDefault()`, permanently
+      // stranding the selection empty even after tickers become drawable
+      // again. Reseeding here is conditioned on `drawable.length > 0` (not
+      // just `kept.size === 0`) so that when NOTHING is drawable at all,
+      // this falls through to the reference-equality bail instead of
+      // manufacturing a fresh empty Set on every run (which would be a
+      // pointless-state-write regression of its own, even though the effect
+      // itself can't self-retrigger since it isn't keyed on `active`).
+      if (kept.size === 0 && drawable.length > 0) return seedDefault();
       if (kept.size === prev.size) return prev; // nothing dropped — keep the same reference
-      return kept.size > 0 ? kept : seedDefault();
+      return kept;
     });
   }, [data, view]);
 
