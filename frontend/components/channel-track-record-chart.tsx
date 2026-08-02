@@ -73,16 +73,27 @@ function hasPrice(item: { closes: unknown[] }): boolean {
   return item.closes.length >= 2;
 }
 
-/** Whether a ticker can actually be drawn in the given view. The price view only
- *  needs bars; the performance view additionally needs at least one position
- *  producing a drawable segment — a stock he never called has bars but no line. */
+/** Whether a ticker can actually be drawn in the given view.
+ *
+ *  The price view needs at least two bars WITHIN the window — `item.closes` can
+ *  extend earlier than `start` (see clipToWindow's docstring: the backend widens
+ *  the fetch to price another ranked ticker's pre-window entry), so a ticker
+ *  whose bars are ALL pre-window must not pass here even though `hasPrice`
+ *  (unclipped) is true — otherwise its chip renders enabled/default-selected
+ *  while the price view draws nothing for it (the "stranded chip" failure).
+ *
+ *  The performance view additionally needs at least one position producing a
+ *  drawable segment — a stock he never called has bars but no line — and,
+ *  unlike the price view, must NOT clip `item.closes`/`benchmarkCloses`:
+ *  `toExcessSeries` needs the unclipped arrays to price a pre-window entry. */
 function drawableIn(
   view: TrackView,
   item: TrackRecordTicker,
   benchmarkCloses: SparklinePoint[],
+  start: string,
 ): boolean {
+  if (view === "price") return clipToWindow(item.closes, start).length >= 2;
   if (!hasPrice(item)) return false;
-  if (view === "price") return true;
   return item.runs.some(
     (run) => toExcessSeries(item.closes, benchmarkCloses, run).length >= 2,
   );
@@ -165,7 +176,7 @@ export function ChannelTrackRecordChart({
   useEffect(() => {
     if (!data) return;
     const drawable = data.tickers
-      .filter((item) => drawableIn(view, item, data.benchmark_closes))
+      .filter((item) => drawableIn(view, item, data.benchmark_closes, data.start))
       .map((item) => item.ticker);
     const drawableSet = new Set(drawable);
     const seedDefault = () => new Set(drawable.slice(0, DEFAULT_ACTIVE));
@@ -195,7 +206,7 @@ export function ChannelTrackRecordChart({
   // history but, in the performance view, none of them holding a drawable
   // position (every run `idle`) — the price view would still draw fine.
   const drawableCount = (data?.tickers ?? []).filter((item) =>
-    drawableIn(view, item, data?.benchmark_closes ?? []),
+    drawableIn(view, item, data?.benchmark_closes ?? [], data?.start ?? ""),
   ).length;
   const empty = data !== undefined && drawableCount === 0;
   // Notify the parent only on an actual transition of `empty` — including the
@@ -331,7 +342,7 @@ export function ChannelTrackRecordChart({
 
     const entries = new Map<string, Entry[]>();
     for (const item of data.tickers) {
-      if (!drawableIn(view, item, data.benchmark_closes)) continue;
+      if (!drawableIn(view, item, data.benchmark_closes, data.start)) continue;
       const color = tickerColor(rankOf.get(item.ticker) ?? 0, dark);
       const created: Entry[] = [];
       if (isPerformanceView) {
@@ -639,7 +650,10 @@ export function ChannelTrackRecordChart({
       // Chips that cannot be drawn in the current view are disabled in the
       // DOM; guard again here for keyboard / programmatic activation.
       const item = data?.tickers.find((entry) => entry.ticker === ticker);
-      if (!next.has(ticker) && (!item || !drawableIn(view, item, data?.benchmark_closes ?? []))) {
+      if (
+        !next.has(ticker) &&
+        (!item || !drawableIn(view, item, data?.benchmark_closes ?? [], data?.start ?? ""))
+      ) {
         return prev;
       }
       if (next.has(ticker)) {
@@ -718,7 +732,7 @@ export function ChannelTrackRecordChart({
             {data.tickers.map((item, i) => {
               const on = active?.has(item.ticker) ?? false;
               const color = tickerColor(i, dark);
-              const drawable = drawableIn(view, item, data.benchmark_closes);
+              const drawable = drawableIn(view, item, data.benchmark_closes, data.start);
               return (
                 <button
                   key={item.ticker}

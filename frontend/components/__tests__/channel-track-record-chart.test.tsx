@@ -146,6 +146,32 @@ function idleOnlyTicker(name: string) {
   };
 }
 
+/** Priced entirely BEFORE the observation window (every bar predates
+ *  RESPONSE.start === DAYS[0]) — simulates an all-time-ranked ticker that was
+ *  delisted, or simply stopped trading, between the backend's widened
+ *  price_start and the window's actual start. `hasPrice` (unclipped) is true
+ *  — there are >= 2 bars — but `clipToWindow` drops every one of them, so the
+ *  price view has nothing to draw even though the ticker "has price data". */
+function preWindowOnlyTicker(name: string) {
+  return {
+    ticker: name,
+    calls: 1,
+    runs: [
+      {
+        state: "buy" as const,
+        from: "2025-01-01",
+        to: "2025-01-03",
+        opened_at: "2025-01-01",
+      },
+    ],
+    markers: [],
+    closes: [
+      { date: "2025-01-01", close: 50 },
+      { date: "2025-01-02", close: 60 },
+    ],
+  };
+}
+
 const RESPONSE = {
   benchmark: "VOO",
   range: "1y",
@@ -342,6 +368,23 @@ describe("ChannelTrackRecordChart", () => {
     expect(chip).toHaveAttribute("aria-pressed", "false");
     // The default five shift over instead of leaving only four lines drawn.
     expect(chipFor("EEE")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("treats a ticker whose bars all predate the window as undrawable in the price view — not the same as price-less", () => {
+    // Distinct from the "price-less" case above: YYY DOES have >= 2 bars
+    // (hasPrice, unclipped, is true), they just all fall before
+    // RESPONSE.start. Before the fix, drawableIn's price branch returned
+    // `true` as soon as hasPrice passed, regardless of `start` — so this
+    // chip rendered enabled and default-selected while the price view (which
+    // clips to the window before drawing) actually plotted nothing for it.
+    // As the sole ticker here, that produced a blank chart with no empty
+    // message, since drawableCount counted it as drawable.
+    swrData = { ...RESPONSE, tickers: [preWindowOnlyTicker("YYY")] };
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const chip = chipFor("YYY");
+    expect(chip).toBeDisabled();
+    expect(chip).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText("empty")).toBeInTheDocument();
   });
 
   it("wires a crosshair tooltip", () => {
