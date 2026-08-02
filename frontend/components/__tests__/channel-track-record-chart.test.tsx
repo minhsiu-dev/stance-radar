@@ -867,6 +867,21 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     expect(plotted.every((p) => p.value === 0)).toBe(true);
   });
 
+  it("dims baseline series via topLineColor, not color — the hover effect's baseline branch", () => {
+    // BaselineSeries has no `color` option; applying one fails silently (per
+    // the component's own comment), so this pins the branch that avoids that
+    // and would otherwise have zero coverage. Verified to fail if the
+    // `entry.baseline` branch in the hover effect were removed (that would
+    // route baseline series through the `color`-only path instead).
+    switchToPerformance();
+    appliedOptions.length = 0;
+    fireEvent.mouseEnter(screen.getByTestId("track-chip-AAA"));
+    const opts = appliedOptions as { color?: string; topLineColor?: string }[];
+    expect(opts.length).toBeGreaterThan(0);
+    expect(opts.some((o) => "topLineColor" in o)).toBe(true);
+    expect(opts.every((o) => !("color" in o))).toBe(true);
+  });
+
   it("hides the log toggle, whose signed-log transform breaks on zero-crossing values", () => {
     switchToPerformance();
     expect(screen.queryByTestId("track-scale-log")).not.toBeInTheDocument();
