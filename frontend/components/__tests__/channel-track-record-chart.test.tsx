@@ -772,6 +772,58 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     expect(opts.bottomFillColor1).toBe("transparent");
   });
 
+  it("clips the performance view's benchmark zero line to the window start too, not just the price view's baseline", () => {
+    // Mirrors "clips the benchmark series to the window start too" in the
+    // price-view describe above, but for the performance view's flat zero
+    // line. Every ticker's BaselineSeries starts at run.from >= data.start,
+    // so an unclipped zero line is the ONLY series carrying pre-window bars
+    // — and chart.timeScale().fitContent() fits the x-axis to whatever it's
+    // given, so that one unclipped series alone stretches the visible range
+    // back to price_start instead of the selected window (measured on the
+    // live app: at range=6m, 103 of 228 benchmark bars precede the window).
+    const earlyBenchmarkCloses = [
+      // Dated well before RESPONSE.start (DAYS[0]) — simulates the shared
+      // price_start extension fetched to price some OTHER ticker's early
+      // entry (see clipToWindow's docstring).
+      { date: "2025-01-01", close: 5000 },
+      ...RESPONSE.benchmark_closes,
+    ];
+    swrData = { ...RESPONSE, benchmark_closes: earlyBenchmarkCloses };
+    switchToPerformance();
+    // switchToPerformance() mounts in the price view first, then clicks over
+    // to performance — the chart is torn down and rebuilt (see the "tears
+    // down and recreates the chart exactly once" test above), but
+    // addSeriesSpy accumulates calls across BOTH chart instances. The first
+    // "line"+"VOO" match would be the price view's now-torn-down benchmark
+    // series, so this must find the LAST match — the live performance-view
+    // chart's benchmark series — same reasoning as the crosshairSpy lookups
+    // elsewhere in this describe block.
+    let benchmarkIndex = -1;
+    for (let i = addSeriesSpy.mock.calls.length - 1; i >= 0; i--) {
+      const call = addSeriesSpy.mock.calls[i];
+      if (
+        (call[0] as { kind?: string }).kind === "line" &&
+        (call[1] as { title?: string }).title === "VOO"
+      ) {
+        benchmarkIndex = i;
+        break;
+      }
+    }
+    expect(benchmarkIndex).toBeGreaterThanOrEqual(0);
+    const plotted = (
+      createdSeries[benchmarkIndex] as {
+        setData: { mock: { calls: [{ time: string; value: number }[]][] } };
+      }
+    ).setData.mock.calls[0][0] as { time: string; value: number }[];
+    // No bar earlier than data.start: the injected 2025-01-01 bar must be
+    // gone, and the first plotted bar must be the window start itself.
+    expect(plotted.every((p) => p.time >= RESPONSE.start)).toBe(true);
+    expect(plotted[0].time).toBe(DAYS[0]);
+    // Still a flat zero line — clipping must not touch the values, only drop
+    // the pre-window bars.
+    expect(plotted.every((p) => p.value === 0)).toBe(true);
+  });
+
   it("hides the log toggle, whose signed-log transform breaks on zero-crossing values", () => {
     switchToPerformance();
     expect(screen.queryByTestId("track-scale-log")).not.toBeInTheDocument();

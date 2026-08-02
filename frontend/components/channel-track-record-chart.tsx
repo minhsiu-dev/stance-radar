@@ -280,18 +280,29 @@ export function ChannelTrackRecordChart({
       priceLineVisible: false,
       crosshairMarkerVisible: false,
     });
+    // Hoisted once and reused by BOTH branches below — benchmark_closes may
+    // reach back before `data.start` (see clipToWindow's docstring: the
+    // backend widens the fetch to price another ranked ticker's pre-window
+    // entry). The price view already needed this for its baseline; the
+    // performance view's flat zero line needs it too, or it's the only series
+    // carrying pre-window bars and chart.timeScale().fitContent() stretches
+    // the x-axis back to price_start instead of the selected range (measured
+    // on the live app: at range=6m, 103 of benchmark_closes' 228 bars precede
+    // the window). Do NOT clip the unclipped `data.benchmark_closes` passed to
+    // `toExcessSeries` elsewhere in this effect — that one must stay unclipped
+    // so a pre-window position can still be priced from its true entry.
+    const benchWindow = clipToWindow(data.benchmark_closes, data.start);
     benchmark.setData(
       isPerformanceView
         ? // A flat zero line: in this view the benchmark IS the baseline, so it
           // stops competing for attention with the ten stock lines.
-          data.benchmark_closes.map((c) => ({ time: c.date as Time, value: 0 }))
-        : // clipToWindow: benchmark_closes may reach back before `data.start`
-          // (see its docstring) — the price view must baseline to the window
-          // start, not to that extension.
-          toIndexedSeries(
-            clipToWindow(data.benchmark_closes, data.start),
-            baselineOf(clipToWindow(data.benchmark_closes, data.start)),
-          ).map((p) => ({ time: p.time as Time, value: p.value })),
+          benchWindow.map((c) => ({ time: c.date as Time, value: 0 }))
+        : // the price view must baseline to the window start, not to
+          // benchmark_closes' pre-window extension.
+          toIndexedSeries(benchWindow, baselineOf(benchWindow)).map((p) => ({
+            time: p.time as Time,
+            value: p.value,
+          })),
     );
 
     // series -> which ticker it represents and its color, for the crosshair
