@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   baselineOf,
+  clipToWindow,
   formatIndexedPercent,
   formatSignedPercent,
   snapMarkers,
@@ -54,6 +55,46 @@ describe("baselineOf / toIndexedSeries", () => {
     // confirms this test is actually exercising a below-baseline point,
     // not vacuously true because the fixture never dips.
     expect(values[3]).toBeLessThan(values[0]);
+  });
+});
+
+describe("clipToWindow", () => {
+  it("drops bars before the window start", () => {
+    expect(clipToWindow(CLOSES, "2026-01-07")).toEqual([
+      { date: "2026-01-07", close: 120 },
+      { date: "2026-01-08", close: 90 },
+    ]);
+  });
+
+  it("keeps a bar exactly on the start date (half-open on the left, inclusive)", () => {
+    expect(clipToWindow(CLOSES, "2026-01-05")).toEqual(CLOSES);
+  });
+
+  it("is a no-op when nothing precedes the start", () => {
+    expect(clipToWindow(CLOSES, "2025-01-01")).toEqual(CLOSES);
+  });
+
+  it("regression: the price view must not baseline to a position's true entry", () => {
+    // track_record.py extends the fetch back to the earliest opened_at among
+    // ALL ranked tickers so toExcessSeries can price early positions — but
+    // that extension lands in every ticker's `closes`, not just the one
+    // whose position is old. Baselining the price view straight off
+    // closes[0] (pre-fix behavior) would silently index to that unrelated
+    // earlier date instead of the window start, inflating the displayed
+    // percent far beyond the selected range.
+    const extended = [
+      { date: "2025-09-04", close: 100 }, // another ticker's early entry
+      { date: "2026-02-01", close: 400 }, // the actual window start
+      { date: "2026-07-31", close: 460 },
+    ];
+    const windowStart = "2026-02-01";
+    const buggyBaseline = baselineOf(extended)!; // pre-fix: closes[0]
+    const fixedBaseline = baselineOf(clipToWindow(extended, windowStart))!;
+    expect(buggyBaseline).toBe(100);
+    expect(fixedBaseline).toBe(400);
+    const last = extended[extended.length - 1].close;
+    expect((last / buggyBaseline - 1) * 100).toBeCloseTo(360); // wrong: ~6x
+    expect((last / fixedBaseline - 1) * 100).toBeCloseTo(15); // correct
   });
 });
 

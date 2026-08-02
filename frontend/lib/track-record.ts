@@ -53,6 +53,30 @@ export function toIndexedSeries(
   }));
 }
 
+/** Drop bars before the observation window's start. The backend's `closes`
+ *  arrays are fetched from the earliest of (window start, every ranked
+ *  ticker's true position-entry date) — reaching back further than the
+ *  window whenever ANY of the top-10 tickers opened a position before it —
+ *  so that `toExcessSeries` can price a position from its real entry even
+ *  when that predates the window (see track_record.py's `price_start`).
+ *  That extension is shared across every ticker's `closes` in the response,
+ *  not just the one whose position is old, so `closes[0]` is frequently NOT
+ *  the window start. The price-trend view promises "% change since the
+ *  start of the window" (see the UI legend), so it must call this before
+ *  `baselineOf`/`toIndexedSeries` — otherwise the baseline silently drifts
+ *  to whatever the earliest-opened ranked position's entry date happens to
+ *  be, which can be many months earlier and inflates the displayed percent
+ *  far beyond the selected range (verified against the real channel: a 6-month
+ *  window baselined at the unclipped array's first bar overstated one ticker's
+ *  return by ~6x). The performance view does NOT use this — it needs the
+ *  unclipped array so `toExcessSeries` can look up the true entry price. */
+export function clipToWindow(
+  closes: SparklinePoint[],
+  start: string,
+): SparklinePoint[] {
+  return closes.filter((c) => c.date >= start);
+}
+
 /** Renders a percentage-point value with an explicit sign: 31.2 -> "+31.2%",
  *  -8.4 -> "-8.4%". Used directly by the call-anchored performance view, whose
  *  values are centred on zero. */

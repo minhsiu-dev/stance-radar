@@ -628,6 +628,46 @@ describe("ChannelTrackRecordChart", () => {
     expect(opts.localization?.priceFormatter?.(93)).toBe("-7.0%");
     expect(opts.localization?.priceFormatter?.(786)).toBe("+686.0%");
   });
+
+  it("baselines the price view to the window start, not to a bar fetched only to price another ticker's early entry", () => {
+    // track_record.py's price_start reaches back to the earliest opened_at
+    // across ALL ranked tickers (see build_track_record), so every ticker's
+    // `closes` array can carry bars before `data.start` even when this
+    // particular ticker's own run opened exactly at the window start. The
+    // price view must clip those leading bars before computing its baseline
+    // (see clipToWindow in track-record.ts) — otherwise the displayed "%
+    // since window start" silently drifts to whatever date the extension
+    // happens to start at.
+    const earlyBarTicker = {
+      ...buyTicker("GGG"),
+      // An extra bar dated before RESPONSE.start (DAYS[0]), simulating the
+      // backend's extension for some OTHER ticker's early position. Its
+      // price (1000) is wildly different from the window's actual first
+      // close (100 on DAYS[0]) so a wrong baseline is obvious.
+      closes: [{ date: "2025-01-01", close: 1000 }, ...closes()],
+    };
+    swrData = {
+      ...RESPONSE,
+      tickers: [earlyBarTicker, ...RESPONSE.tickers.slice(1)],
+    };
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const gggIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) =>
+        (call[0] as { kind?: string }).kind === "line" &&
+        (call[1] as { title?: string }).title === "GGG",
+    );
+    expect(gggIndex).toBeGreaterThanOrEqual(0);
+    const plotted = (
+      createdSeries[gggIndex] as {
+        setData: { mock: { calls: [{ time: string; value: number }[]][] } };
+      }
+    ).setData.mock.calls[0][0];
+    // First plotted point is DAYS[0] at close=100 -> indexed value 100
+    // (baseline = the window-start bar), not 100/1000*100 = 10 (the bug:
+    // baselining off the unclipped array's first bar).
+    expect(plotted[0].time).toBe(DAYS[0]);
+    expect(plotted[0].value).toBeCloseTo(100);
+  });
 });
 
 describe("ChannelTrackRecordChart — call performance view", () => {

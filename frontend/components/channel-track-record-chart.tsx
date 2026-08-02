@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { tickerColor, withAlpha } from "@/lib/ticker-palette";
 import {
   baselineOf,
+  clipToWindow,
   formatIndexedPercent,
   formatSignedPercent,
   snapMarkers,
@@ -282,9 +283,12 @@ export function ChannelTrackRecordChart({
         ? // A flat zero line: in this view the benchmark IS the baseline, so it
           // stops competing for attention with the ten stock lines.
           data.benchmark_closes.map((c) => ({ time: c.date as Time, value: 0 }))
-        : toIndexedSeries(
-            data.benchmark_closes,
-            baselineOf(data.benchmark_closes),
+        : // clipToWindow: benchmark_closes may reach back before `data.start`
+          // (see its docstring) — the price view must baseline to the window
+          // start, not to that extension.
+          toIndexedSeries(
+            clipToWindow(data.benchmark_closes, data.start),
+            baselineOf(clipToWindow(data.benchmark_closes, data.start)),
           ).map((p) => ({ time: p.time as Time, value: p.value })),
     );
 
@@ -369,8 +373,13 @@ export function ChannelTrackRecordChart({
           created.push({ series, color, idle: false, baseline: true });
         });
       } else {
+        // clipToWindow: item.closes may reach back before data.start to price
+        // an early-opened position for the performance view (see its
+        // docstring) — the price view baselines to the window start, not to
+        // that extension, so it must clip first.
+        const windowCloses = clipToWindow(item.closes, data.start);
         const segments = splitRuns(
-          toIndexedSeries(item.closes, baselineOf(item.closes)),
+          toIndexedSeries(windowCloses, baselineOf(windowCloses)),
           item.runs,
         );
         segments.forEach((segment, i) => {
