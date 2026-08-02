@@ -245,6 +245,11 @@ export function ChannelTrackRecordChart({
     drawableIn(view, item, data?.benchmark_closes ?? [], data?.start ?? ""),
   ).length;
   const empty = data !== undefined && drawableCount === 0;
+  // True only when the channel has made no calls at all (ever) — as opposed
+  // to having calls that just aren't drawable in the current view/range. Used
+  // to pick the empty-state copy below: "no position in this window" only
+  // makes sense when there ARE tickers to have held a position in.
+  const noCallsAtAll = data !== undefined && data.tickers.length === 0;
   // Notify the parent only on an actual transition of `empty` — including the
   // first resolution from "still loading" to a known value — never on every
   // effect run. This is compared against the last value we *reported* (kept
@@ -800,7 +805,16 @@ export function ChannelTrackRecordChart({
         {!data && !error && <Skeleton className="h-[360px] w-full" />}
         {empty && (
           <p className="py-12 text-center text-sm text-muted-foreground">
-            {isPerformanceView ? t("emptyPerformance") : t("empty")}
+            {/* A channel with zero calls at all times gets the generic
+             *  "empty" copy regardless of view — "no position in this
+             *  window" (emptyPerformance) is misleading when the real reason
+             *  is "no buy/sell calls yet", the same reason the price view
+             *  would give. Only shown for a *genuine* view-specific gap: some
+             *  tickers exist and are priced, but none holds a position in
+             *  the performance view (e.g. every run is idle). */}
+            {isPerformanceView && !noCallsAtAll
+              ? t("emptyPerformance")
+              : t("empty")}
           </p>
         )}
         <div className={cn("relative", (!data || empty) && "hidden")}>

@@ -1085,6 +1085,19 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     expect(screen.getByText("emptyPerformance")).toBeInTheDocument();
   });
 
+  it("uses the generic empty copy, not emptyPerformance, for a channel with no calls at all", () => {
+    // Zero tickers means "no buy/sell calls yet" — the same reason the price
+    // view would give — not "no position in this window", which implies
+    // there WERE tickers to have held a position in. emptyPerformance is
+    // reserved for the genuine view-specific gap (some tickers exist and are
+    // priced, but none holds a position here — see the idle-only test above).
+    swrData = { ...RESPONSE, tickers: [] };
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    fireEvent.click(screen.getByTestId("track-view-performance"));
+    expect(screen.getByText("empty")).toBeInTheDocument();
+    expect(screen.queryByText("emptyPerformance")).not.toBeInTheDocument();
+  });
+
   it("recovers the default selection after `active` empties out and tickers become drawable again", () => {
     // A single idle-only ticker: drawable (and thus default-seeded) in the
     // price view, but undrawable in the performance view, so switching there
