@@ -106,7 +106,9 @@ export function ChannelTrackRecordChart({
   // zero on a linear axis; log mode is an escape hatch, not the default.
   const [logScale, setLogScale] = useState(false);
   const [view, setView] = useState<TrackView>("price");
-  const performance = view === "performance";
+  // Named to avoid shadowing the global `window.performance` inside this
+  // 785-line component.
+  const isPerformanceView = view === "performance";
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -249,7 +251,7 @@ export function ChannelTrackRecordChart({
       // percentage points centred on zero, so it uses formatSignedPercent
       // directly — the two value spaces must never share a formatter.
       localization: {
-        priceFormatter: performance
+        priceFormatter: isPerformanceView
           ? formatSignedPercent
           : formatIndexedPercent,
       },
@@ -261,7 +263,7 @@ export function ChannelTrackRecordChart({
         // lightweight-charts' log scale is a signed-log transform that renders
         // any dip below the baseline as a plunge to the floor.
         mode:
-          !performance && logScaleRef.current
+          !isPerformanceView && logScaleRef.current
             ? PriceScaleMode.Logarithmic
             : PriceScaleMode.Normal,
       },
@@ -279,7 +281,7 @@ export function ChannelTrackRecordChart({
       crosshairMarkerVisible: false,
     });
     benchmark.setData(
-      performance
+      isPerformanceView
         ? // A flat zero line: in this view the benchmark IS the baseline, so it
           // stops competing for attention with the ten stock lines.
           data.benchmark_closes.map((c) => ({ time: c.date as Time, value: 0 }))
@@ -321,7 +323,7 @@ export function ChannelTrackRecordChart({
       if (!drawableIn(view, item, data.benchmark_closes)) continue;
       const color = tickerColor(rankOf.get(item.ticker) ?? 0, dark);
       const created: Entry[] = [];
-      if (performance) {
+      if (isPerformanceView) {
         // One position -> one BaselineSeries. Idle runs hold no position and are
         // not drawn at all, so the line only exists while he had a call out.
         const drawable = item.runs
@@ -512,7 +514,7 @@ export function ChannelTrackRecordChart({
         // centred percentage point, so it must go through formatSignedPercent
         // instead — same rule as the chart's own priceFormatter above: the
         // two views' value spaces must never share a formatter.
-        value.textContent = performance
+        value.textContent = isPerformanceView
           ? formatSignedPercent(row.value)
           : formatIndexedPercent(row.value);
         line.append(dot, name, value);
@@ -548,7 +550,11 @@ export function ChannelTrackRecordChart({
       if (tooltipEl) tooltipEl.style.display = "none";
       entriesRef.current = new Map();
     };
-  }, [data, dark, rankOf, view, performance]);
+    // `isPerformanceView` is deliberately NOT listed here — it is derived
+    // purely from `view` (already a dependency), so including it would be a
+    // redundant re-run trigger, never a distinct one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, dark, rankOf, view]);
 
   // Chip visibility. Must be declared AFTER the chart-creation effect —
   // React flushes effects in declaration order, so entriesRef.current is
@@ -670,7 +676,7 @@ export function ChannelTrackRecordChart({
                 </Button>
               ))}
             </div>
-            {!performance && (
+            {!isPerformanceView && (
               <div className="flex gap-1 border-l pl-2">
                 <Button
                   type="button"
@@ -742,17 +748,17 @@ export function ChannelTrackRecordChart({
           </div>
         )}
         <p className="text-[11px] text-muted-foreground">
-          {performance ? t("legendPerformance") : t("legend")}
+          {isPerformanceView ? t("legendPerformance") : t("legend")}
           <span className="mx-2 opacity-60">·</span>
-          {performance ? t("axisNotePerformance") : t("axisNote")}
+          {isPerformanceView ? t("axisNotePerformance") : t("axisNote")}
         </p>
       </CardHeader>
       <CardContent>
         {/* The chart container stays permanently mounted (hidden via CSS,
          *  never removed from the tree) so a transient revalidation error
          *  (e.g. SWR's revalidateOnFocus) never unmounts it. If it did, the
-         *  chart-creation effect below (keyed on [data, dark, rankOf, view,
-         *  performance], not on `error`) would not re-run its cleanup — its `data` reference
+         *  chart-creation effect below (keyed on [data, dark, rankOf, view],
+         *  not on `error`) would not re-run its cleanup — its `data` reference
          *  is unchanged when a revalidation merely fails — leaving the
          *  chart instance attached to a now-detached node while a fresh
          *  empty container mounts underneath, forever. Same pattern as
@@ -766,7 +772,7 @@ export function ChannelTrackRecordChart({
         {!data && !error && <Skeleton className="h-[360px] w-full" />}
         {empty && (
           <p className="py-12 text-center text-sm text-muted-foreground">
-            {performance ? t("emptyPerformance") : t("empty")}
+            {isPerformanceView ? t("emptyPerformance") : t("empty")}
           </p>
         )}
         <div className={cn("relative", (!data || empty) && "hidden")}>
