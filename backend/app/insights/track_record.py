@@ -47,15 +47,23 @@ def build_runs(calls: list[Call], start: date) -> tuple[list[dict], list[dict]]:
 
     `calls` 必須是同一支股票、依日期遞增、每天最多一筆（由 load_calls 收斂）。
     回傳 (runs, markers)：runs 首段的 from 恆等於 start、末段 to 為 None；相鄰段的
-    to 與下一段的 from 是同一天（邊界日共用）。markers 只含窗內的轉折——窗起點之前
-    的發言只用來決定首段的 carried state，不產生 marker。
+    to 與下一段的 from 是同一天（邊界日共用）。
+
+    runs 只在「反向」發言處切段（carry-forward），但 markers 收**每一次**窗內的方向性
+    發言，用 kind 區分：'new' = 這次改變了狀態（首次表態或反轉，同時也是某段的起點），
+    'repeat' = 同向重申（不切段，狀態沒變）。窗起點之前的發言只用來決定首段的 carried
+    state，不產生 marker。
     """
     state = "idle"
     transitions: list[Call] = []
+    marked: list[tuple[Call, str]] = []
     for call in calls:
         if call.stance != state:
             state = call.stance
             transitions.append(call)
+            marked.append((call, "new"))
+        else:
+            marked.append((call, "repeat"))
 
     carried = "idle"
     for call in transitions:
@@ -64,16 +72,21 @@ def build_runs(calls: list[Call], start: date) -> tuple[list[dict], list[dict]]:
     in_window = [call for call in transitions if call.day > start]
 
     runs: list[dict] = [{"state": carried, "from": start.isoformat(), "to": None}]
-    markers: list[dict] = []
     for call in in_window:
         runs[-1]["to"] = call.day.isoformat()
         runs.append({"state": call.stance, "from": call.day.isoformat(), "to": None})
-        markers.append({
+
+    markers: list[dict] = [
+        {
             "date": call.day.isoformat(),
             "stance": call.stance,
+            "kind": kind,
             "video_id": call.video_id,
             "video_title": call.video_title,
-        })
+        }
+        for call, kind in marked
+        if call.day > start
+    ]
     return runs, markers
 
 

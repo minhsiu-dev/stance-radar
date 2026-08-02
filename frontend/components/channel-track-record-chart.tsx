@@ -23,7 +23,7 @@ import { tickerColor, withAlpha } from "@/lib/ticker-palette";
 import {
   baselineOf,
   formatIndexedPercent,
-  markerTime,
+  snapMarkers,
   splitRuns,
   toIndexedSeries,
 } from "@/lib/track-record";
@@ -34,6 +34,12 @@ const DEFAULT_ACTIVE = 5;
 const CHART_HEIGHT = 360;
 const IDLE_ALPHA = 0.18;
 const DIMMED_ALPHA = 0.25;
+// Same-stance restatements are drawn as faded, smaller arrows so the calls that
+// actually changed the stance stay dominant. Mirrors StanceTrendChart's use of
+// opacity (not a lighter tint) for repeats — a tint reads brighter in dark mode,
+// inverting the meaning.
+const REPEAT_MARKER_ALPHA = 0.45;
+const REPEAT_MARKER_SIZE = 0.7;
 const BENCHMARK_COLOR = "#a1a1aa";
 
 type Entry = {
@@ -267,27 +273,33 @@ export function ChannelTrackRecordChart({
         series.setData(
           segment.points.map((p) => ({ time: p.time as Time, value: p.value })),
         );
-        // Anchor the turning-point marker on the segment's own first bar
-        // (the bridged/borrowed point doesn't count).
-        const marker = item.markers.find((m) => m.date === segment.from);
-        const at = markerTime(segment);
-        if (marker && at) {
-          createSeriesMarkers(series, [
-            {
-              time: at as Time,
+        // Every directional call in this segment gets an arrow, snapped onto a
+        // bar the segment actually plots. Restatements ("repeat") are drawn
+        // smaller and faded so the calls that actually changed the stance still
+        // read at a glance — same convention as StanceTrendChart's repeat bars.
+        const placed = snapMarkers(segment, item.markers);
+        if (placed.length > 0) {
+          createSeriesMarkers(
+            series,
+            placed.map(({ marker, time }) => ({
+              time: time as Time,
               position: marker.stance === "buy" ? "belowBar" : "aboveBar",
               shape: marker.stance === "buy" ? "arrowUp" : "arrowDown",
-              color,
-              // No `text` label here: when several tickers open a call within
-              // a few days of each other (common right after a channel picks
-              // up coverage), lightweight-charts has no cross-series
-              // collision avoidance, so per-marker ticker text piles into an
-              // illegible smear (found via visual verification). The arrow's
-              // shape/color (matching the ticker's line and chip) plus the
-              // crosshair tooltip already identify it without needing text
-              // that only works when markers happen to be spaced apart.
-            },
-          ]);
+              color:
+                marker.kind === "repeat"
+                  ? withAlpha(color, REPEAT_MARKER_ALPHA)
+                  : color,
+              size: marker.kind === "repeat" ? REPEAT_MARKER_SIZE : 1,
+              // No `text` label here: when several tickers call within a few
+              // days of each other (common right after a channel picks up
+              // coverage), lightweight-charts has no cross-series collision
+              // avoidance, so per-marker ticker text piles into an illegible
+              // smear (found via visual verification). The arrow's shape/color
+              // (matching the ticker's line and chip) plus the crosshair
+              // tooltip already identify it without needing text that only
+              // works when markers happen to be spaced apart.
+            })),
+          );
         }
         labels.set(series, { name: item.ticker, color, ticker: item.ticker });
         created.push({ series, color, idle });

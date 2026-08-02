@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   baselineOf,
   formatIndexedPercent,
-  markerTime,
+  snapMarkers,
   splitRuns,
   toIndexedSeries,
   type IndexedPoint,
@@ -111,21 +111,89 @@ describe("splitRuns", () => {
   });
 });
 
-describe("markerTime", () => {
-  it("anchors on the segment's own first bar, not the bridged one", () => {
-    const [, second] = splitRuns(pct(), [
-      { state: "idle", from: "2026-01-05", to: "2026-01-07" },
-      { state: "buy", from: "2026-01-07", to: null },
+describe("snapMarkers", () => {
+  const RUNS: TrackRecordRun[] = [
+    { state: "idle", from: "2026-01-05", to: "2026-01-07" },
+    { state: "buy", from: "2026-01-07", to: null },
+  ];
+
+  it("anchors on the segment's own bar, never the borrowed bridge point", () => {
+    const [, second] = splitRuns(pct(), RUNS);
+    // second.points[0] is 2026-01-06, borrowed from the idle segment
+    expect(snapMarkers(second, [{ date: "2026-01-07" }])).toEqual([
+      { marker: { date: "2026-01-07" }, time: "2026-01-07" },
     ]);
-    expect(markerTime(second)).toBe("2026-01-07");
   });
 
-  it("is null when the segment has no bar of its own", () => {
+  it("places every marker inside the segment, not just the one that opens it", () => {
+    const [, second] = splitRuns(pct(), RUNS);
+    const placed = snapMarkers(second, [
+      { date: "2026-01-07", id: "open" },
+      { date: "2026-01-08", id: "restate" },
+    ]);
+    expect(placed.map((p) => p.marker.id)).toEqual(["open", "restate"]);
+    expect(placed.map((p) => p.time)).toEqual(["2026-01-07", "2026-01-08"]);
+  });
+
+  it("assigns each marker to exactly one segment, so none is drawn twice", () => {
+    const segs = splitRuns(pct(), RUNS);
+    const markers = [{ date: "2026-01-06" }, { date: "2026-01-08" }];
+    const all = segs.flatMap((s) => snapMarkers(s, markers).map((p) => p.marker.date));
+    expect(all).toEqual(["2026-01-06", "2026-01-08"]); // no duplicates across segments
+  });
+
+  it("ignores a marker at or past `to` even if the segment still has bars there", () => {
+    // splitRuns never produces this (it clips own bars to < to), so this pins the
+    // function's own [from, to) contract rather than relying on its caller.
     expect(
-      markerTime({
-        state: "buy", from: "2026-01-07", to: null,
-        points: [{ time: "2026-01-06", value: 10 }], bridged: true,
-      }),
-    ).toBeNull();
+      snapMarkers(
+        {
+          state: "buy",
+          from: "2026-01-05",
+          to: "2026-01-07",
+          points: [
+            { time: "2026-01-05", value: 100 },
+            { time: "2026-01-08", value: 120 },
+          ],
+          bridged: false,
+        },
+        [{ date: "2026-01-07" }],
+      ),
+    ).toEqual([]);
+  });
+
+  it("moves a call published on a non-trading day forward to the next session", () => {
+    // A weekend gap: bars exist on Fri 01-09 and Mon 01-12, nothing between.
+    const gapped = toIndexedSeries(
+      [
+        { date: "2026-01-09", close: 100 },
+        { date: "2026-01-12", close: 110 },
+      ],
+      100,
+    );
+    const [segment] = splitRuns(gapped, [
+      { state: "buy", from: "2026-01-09", to: null },
+    ]);
+    // Called on Sat 01-10 -> anchors on Mon 01-12 rather than disappearing
+    expect(snapMarkers(segment, [{ date: "2026-01-10" }])[0].time).toBe(
+      "2026-01-12",
+    );
+  });
+
+  it("drops a marker with no bar at or after it", () => {
+    const [, second] = splitRuns(pct(), RUNS);
+    expect(snapMarkers(second, [{ date: "2026-02-01" }])).toEqual([]);
+  });
+
+  it("returns nothing for a segment made only of a borrowed point", () => {
+    expect(
+      snapMarkers(
+        {
+          state: "buy", from: "2026-01-07", to: null,
+          points: [{ time: "2026-01-06", value: 110 }], bridged: true,
+        },
+        [{ date: "2026-01-07" }],
+      ),
+    ).toEqual([]);
   });
 });

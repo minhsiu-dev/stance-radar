@@ -40,7 +40,11 @@ def test_build_runs_repeat_same_stance_does_not_split():
         ("idle", "2026-01-01", "2026-01-10"),
         ("buy", "2026-01-10", None),
     ]
-    assert [m["date"] for m in markers] == ["2026-01-10"]
+    # 不切段,但兩次發言都要有 marker(第二次標成 repeat)
+    assert [(m["date"], m["kind"]) for m in markers] == [
+        ("2026-01-10", "new"),
+        ("2026-03-10", "repeat"),
+    ]
 
 
 def test_build_runs_splits_only_on_reversal():
@@ -57,10 +61,12 @@ def test_build_runs_splits_only_on_reversal():
         ("sell", "2026-03-10", "2026-04-10"),
         ("buy", "2026-04-10", None),
     ]
-    # v2 是同向重複 -> 不產生 marker
-    assert [m["video_id"] for m in markers] == ["v1", "v3", "v4"]
-    assert markers[1] == {
-        "date": "2026-03-10", "stance": "sell",
+    # v2 是同向重複 -> 不切段,但仍然有 marker,只是 kind=repeat
+    assert [(m["video_id"], m["kind"]) for m in markers] == [
+        ("v1", "new"), ("v2", "repeat"), ("v3", "new"), ("v4", "new"),
+    ]
+    assert markers[2] == {
+        "date": "2026-03-10", "stance": "sell", "kind": "new",
         "video_id": "v3", "video_title": "t v3",
     }
 
@@ -74,6 +80,18 @@ def test_build_runs_carries_state_into_a_window_that_starts_mid_run():
     ]
     # 窗外的那次 buy 不產生 marker，只有窗內的反轉才有
     assert [m["video_id"] for m in markers] == ["v2"]
+
+
+def test_build_runs_repeat_before_the_window_start_does_not_leak_in():
+    # v1 首次表態、v2 同向重申,兩者都在窗外;只有窗內的 v3 該出現
+    calls = [
+        c("AAA", "buy", "2025-06-01", "v1"),
+        c("AAA", "buy", "2025-09-01", "v2"),
+        c("AAA", "buy", "2026-03-01", "v3"),
+    ]
+    runs, markers = build_runs(calls, date(2026, 1, 1))
+    assert states(runs) == [("buy", "2026-01-01", None)]
+    assert [(m["video_id"], m["kind"]) for m in markers] == [("v3", "repeat")]
 
 
 def test_build_runs_with_no_calls_is_a_single_idle_run():

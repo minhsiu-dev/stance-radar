@@ -75,9 +75,12 @@ async def test_track_record_shape_and_carry_forward(api, sessionmaker):
     assert aapl["runs"][-1]["to"] is None
     # 相鄰段共用邊界日
     assert aapl["runs"][0]["to"] == aapl["runs"][1]["from"]
-    # 同向重複的 v2 不產生 marker；起點上的 v1 也不產生
-    assert [m["video_id"] for m in aapl["markers"]] == ["v3"]
-    assert aapl["markers"][0]["stance"] == "sell"
+    # 每一次窗內的方向性發言都有 marker：同向重複的 v2 標 repeat(但不切段)，
+    # 反轉的 v3 標 new；落在起點上的 v1 仍然不產生 marker(它只決定 carried state)
+    assert [(m["video_id"], m["kind"]) for m in aapl["markers"]] == [
+        ("v2", "repeat"), ("v3", "new"),
+    ]
+    assert aapl["markers"][1]["stance"] == "sell"
 
     # BBB 唯一的方向性發言(v4, 250天前)晚於全頻道最早發言(AAPL 的 v1, 300天前) ->
     # 共用的全域 start 落在 BBB 被提及之前，所以 BBB 也有一段 idle 前導才轉 buy；
@@ -86,7 +89,7 @@ async def test_track_record_shape_and_carry_forward(api, sessionmaker):
     assert [r["state"] for r in bbb["runs"]] == ["idle", "buy"]
     assert bbb["runs"][0]["from"] == data["start"]
     assert bbb["runs"][-1]["to"] is None
-    assert [m["video_id"] for m in bbb["markers"]] == ["v4"]
+    assert [(m["video_id"], m["kind"]) for m in bbb["markers"]] == [("v4", "new")]
 
     # FakeMarketClient 有價格 -> 收盤序列非空且欄位正確
     assert data["benchmark_closes"]

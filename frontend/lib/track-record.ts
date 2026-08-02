@@ -104,9 +104,37 @@ export function splitRuns(
   return out;
 }
 
-/** The time of the segment's own first bar — the marker should anchor here (the
- *  borrowed bridge point does not count, otherwise the inflection arrow would fall
- *  before the inflection date). Returns null when the segment has no bar of its own. */
-export function markerTime(segment: RunSegment): string | null {
-  return segment.points[segment.bridged ? 1 : 0]?.time ?? null;
+/** The segment's own bars — the borrowed bridge point is excluded, since a marker
+ *  anchored there would render before the date it belongs to. */
+function ownPoints(segment: RunSegment): IndexedPoint[] {
+  return segment.bridged ? segment.points.slice(1) : segment.points;
+}
+
+/** Place every marker that belongs to this segment onto a bar the segment actually
+ *  plots.
+ *
+ *  A marker belongs to the run it falls inside, [from, to) — the same half-open
+ *  interval `splitRuns` uses, so each marker lands in exactly one segment and is
+ *  never drawn twice. Its date is then moved forward to the first bar at or after
+ *  it, so a call published on a weekend or a market holiday shows up on the next
+ *  session instead of vanishing. Markers with no bar at or after them within the
+ *  segment are dropped: there is nothing to anchor them to, and lightweight-charts
+ *  silently ignores markers whose time is absent from the series data.
+ *
+ *  Generic over the marker shape so this stays pure maths and testable without
+ *  constructing full DTOs. */
+export function snapMarkers<M extends { date: string }>(
+  segment: RunSegment,
+  markers: M[],
+): { marker: M; time: string }[] {
+  const own = ownPoints(segment);
+  if (own.length === 0) return [];
+  const out: { marker: M; time: string }[] = [];
+  for (const marker of markers) {
+    if (marker.date < segment.from) continue;
+    if (segment.to !== null && marker.date >= segment.to) continue;
+    const bar = own.find((p) => p.time >= marker.date);
+    if (bar) out.push({ marker, time: bar.time });
+  }
+  return out;
 }

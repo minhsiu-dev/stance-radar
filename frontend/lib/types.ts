@@ -148,6 +148,9 @@ export interface TrackRecordRun {
 export interface TrackRecordMarker {
   date: string; // "YYYY-MM-DD"
   stance: "buy" | "sell";
+  /** "new" = this call changed the stance (first call or a reversal), and so also
+   *  opens a run. "repeat" = a same-stance restatement, which does not split a run. */
+  kind: "new" | "repeat";
   video_id: string;
   video_title: string;
 }

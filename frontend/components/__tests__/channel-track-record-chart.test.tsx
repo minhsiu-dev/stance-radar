@@ -98,20 +98,25 @@ function threeRunTicker(name: string) {
       { state: "sell" as const, from: DAYS[3], to: null },
     ],
     markers: [
-      { date: DAYS[2], stance: "buy" as const, video_id: "v1", video_title: "one" },
-      { date: DAYS[3], stance: "sell" as const, video_id: "v2", video_title: "two" },
+      { date: DAYS[2], stance: "buy" as const, kind: "new" as const, video_id: "v1", video_title: "one" },
+      { date: DAYS[3], stance: "sell" as const, kind: "new" as const, video_id: "v2", video_title: "two" },
     ],
     closes: closes(),
   };
 }
 
-/** Single segment: buy all the way to today. */
+/** Single segment: buy all the way to today, with a same-stance restatement part
+ *  way through — two markers land inside one segment, which is what distinguishes
+ *  "every call is marked" from the old "only the call that opens a run is marked". */
 function buyTicker(name: string) {
   return {
     ticker: name,
-    calls: 1,
+    calls: 2,
     runs: [{ state: "buy" as const, from: DAYS[0], to: null }],
-    markers: [],
+    markers: [
+      { date: DAYS[0], stance: "buy" as const, kind: "new" as const, video_id: "b1", video_title: "opened" },
+      { date: DAYS[2], stance: "buy" as const, kind: "repeat" as const, video_id: "b2", video_title: "restated" },
+    ],
     closes: closes(),
   };
 }
@@ -215,6 +220,35 @@ describe("ChannelTrackRecordChart", () => {
         expect.objectContaining({ time: DAYS[3], shape: "arrowDown" }),
       ]),
     );
+  });
+
+  it("marks every call, including same-stance restatements inside one run", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    // BBB is a single buy run carrying two markers: the opening call and a
+    // restatement. Both must be drawn on that one segment.
+    const bbbIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) => (call[1] as { title?: string }).title === "BBB",
+    );
+    const bbbCall = markersSpy.mock.calls.find(
+      (call) => call[0] === createdSeries[bbbIndex],
+    );
+    const placed = bbbCall![1] as { time: string; size: number }[];
+    expect(placed.map((m) => m.time)).toEqual([DAYS[0], DAYS[2]]);
+  });
+
+  it("draws restatements faded and smaller so state changes stay dominant", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const placed = markersSpy.mock.calls.flatMap(
+      (call) => call[1] as { time: string; size: number; color: string }[],
+    );
+    const opened = placed.find((m) => m.time === DAYS[0])!;
+    const restated = placed.find(
+      (m) => m.time === DAYS[2] && m.size !== 1,
+    )!;
+    expect(opened.size).toBe(1);
+    expect(opened.color).not.toMatch(/^rgba\(/);
+    expect(restated.size).toBeLessThan(1);
+    expect(restated.color).toMatch(/^rgba\(/);
   });
 
   it("renders the empty state and reports it upward", () => {
