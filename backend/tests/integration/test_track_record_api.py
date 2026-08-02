@@ -186,3 +186,31 @@ async def test_track_record_defaults_to_1y(api, sessionmaker):
     assert data["start"] == (
         datetime.now(timezone.utc).date() - timedelta(days=365)
     ).isoformat()
+
+
+async def test_track_record_fetches_prices_back_to_an_out_of_window_entry(
+    api, sessionmaker, monkeypatch,
+):
+    app, client = api
+    # 唯一一次 buy 在 300 天前;切 6m 時窗起點只到 182 天前,但取價要回溯到進場日,
+    # 否則前端算不出進場價
+    await seed(sessionmaker, [("v1", 300, "AAPL", Stance.buy)])
+
+    starts: list = []
+    original = app.state.price_store.get_daily
+
+    async def spy(tickers, start):
+        starts.append(start)
+        return await original(tickers, start)
+
+    monkeypatch.setattr(app.state.price_store, "get_daily", spy)
+    data = (await client.get(
+        "/api/channels/ch1/track-record?range=6m"
+    )).json()["data"]
+
+    aapl = data["tickers"][0]
+    assert aapl["runs"][0]["opened_at"] == (
+        (_NOW - timedelta(days=300)).date().isoformat()
+    )
+    assert aapl["runs"][0]["from"] == data["start"]      # from 仍是裁切過的窗起點
+    assert starts and starts[0] <= (_NOW - timedelta(days=300)).date()

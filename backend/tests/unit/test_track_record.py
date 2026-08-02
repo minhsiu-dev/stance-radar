@@ -105,3 +105,32 @@ def test_build_runs_transition_exactly_on_start_is_carried_not_marked():
     runs, markers = build_runs(calls, date(2026, 1, 1))
     assert states(runs) == [("buy", "2026-01-01", None)]
     assert markers == []
+
+
+def test_build_runs_reports_the_true_open_date_of_a_carried_position():
+    # 進場在窗外 300 天前 -> runs[0].from 被裁到窗起點,但 opened_at 要保留真實進場日
+    calls = [c("AAA", "buy", "2025-06-01", "v1"), c("AAA", "sell", "2026-05-01", "v2")]
+    runs, _ = build_runs(calls, date(2026, 1, 1))
+    assert [(r["from"], r["opened_at"]) for r in runs] == [
+        ("2026-01-01", "2025-06-01"),   # 裁切過的 from vs 真實進場日
+        ("2026-05-01", "2026-05-01"),   # 窗內開的倉,兩者相同
+    ]
+
+
+def test_build_runs_idle_run_has_no_open_date():
+    calls = [c("AAA", "buy", "2026-03-01", "v1")]
+    runs, _ = build_runs(calls, date(2026, 1, 1))
+    assert [(r["state"], r["opened_at"]) for r in runs] == [
+        ("idle", None),
+        ("buy", "2026-03-01"),
+    ]
+
+
+def test_build_runs_repeat_does_not_move_the_open_date():
+    # 同向重申不開新倉 -> opened_at 仍是第一次 buy 的日期
+    calls = [
+        c("AAA", "buy", "2026-02-01", "v1"),
+        c("AAA", "buy", "2026-04-01", "v2"),
+    ]
+    runs, _ = build_runs(calls, date(2026, 1, 1))
+    assert runs[-1]["opened_at"] == "2026-02-01"

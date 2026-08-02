@@ -53,6 +53,9 @@ def build_runs(calls: list[Call], start: date) -> tuple[list[dict], list[dict]]:
     發言，用 kind 區分：'new' = 這次改變了狀態（首次表態或反轉，同時也是某段的起點），
     'repeat' = 同向重申（不切段，狀態沒變）。窗起點之前的發言只用來決定首段的 carried
     state，不產生 marker。
+
+    每段另有 opened_at：該段倉位未經裁切的真實進場日（idle 段為 None）。首段的 from 會被
+    裁到 start，但 opened_at 保留窗外的真實進場日，前端才取得到進場價。
     """
     state = "idle"
     transitions: list[Call] = []
@@ -66,15 +69,29 @@ def build_runs(calls: list[Call], start: date) -> tuple[list[dict], list[dict]]:
             marked.append((call, "repeat"))
 
     carried = "idle"
+    carried_opened: date | None = None
     for call in transitions:
         if call.day <= start:
             carried = call.stance
+            carried_opened = call.day
     in_window = [call for call in transitions if call.day > start]
 
-    runs: list[dict] = [{"state": carried, "from": start.isoformat(), "to": None}]
+    runs: list[dict] = [{
+        "state": carried,
+        "from": start.isoformat(),
+        "to": None,
+        # 真實進場日,未經觀察窗裁切:切 6m 時倉位可能是 10 個月前開的,
+        # 前端要用它回頭取進場價才算得出這段的損益。idle 沒有倉位 -> None。
+        "opened_at": carried_opened.isoformat() if carried_opened else None,
+    }]
     for call in in_window:
         runs[-1]["to"] = call.day.isoformat()
-        runs.append({"state": call.stance, "from": call.day.isoformat(), "to": None})
+        runs.append({
+            "state": call.stance,
+            "from": call.day.isoformat(),
+            "to": None,
+            "opened_at": call.day.isoformat(),
+        })
 
     markers: list[dict] = [
         {
@@ -133,19 +150,6 @@ async def build_track_record(
     else:
         start = today - timedelta(days=_RANGE_DAYS[range_key])
 
-    daily: dict[str, list] = {}
-    if tickers:
-        try:
-            daily = await store.get_daily(
-                sorted(chosen | {TRACK_RECORD_BENCHMARK}), start
-            )
-        except Exception:
-            logger.exception("track-record price fetch failed for %s", channel_id)
-            daily = {}
-
-    def closes(ticker: str) -> list[dict]:
-        return [{"date": c.time, "close": c.close} for c in daily.get(ticker, [])]
-
     items = []
     for ticker in tickers:
         ticker_calls = [c for c in selected if c.ticker == ticker]
@@ -155,8 +159,34 @@ async def build_track_record(
             "calls": len(ticker_calls),
             "runs": runs,
             "markers": markers,
-            "closes": closes(ticker),
         })
+
+    # 倉位可能在觀察窗之前就開了(切 6m 但他 10 個月前就喊)。前端要算那段的損益就得
+    # 有進場日當天的收盤,所以取價起點要往前涵蓋到最早的進場日。
+    price_start = min(
+        [start, *(
+            date.fromisoformat(run["opened_at"])
+            for item in items
+            for run in item["runs"]
+            if run["opened_at"] is not None
+        )]
+    )
+
+    daily: dict[str, list] = {}
+    if tickers:
+        try:
+            daily = await store.get_daily(
+                sorted(chosen | {TRACK_RECORD_BENCHMARK}), price_start
+            )
+        except Exception:
+            logger.exception("track-record price fetch failed for %s", channel_id)
+            daily = {}
+
+    def closes(ticker: str) -> list[dict]:
+        return [{"date": c.time, "close": c.close} for c in daily.get(ticker, [])]
+
+    for item in items:
+        item["closes"] = closes(item["ticker"])
 
     return {
         "benchmark": TRACK_RECORD_BENCHMARK,
