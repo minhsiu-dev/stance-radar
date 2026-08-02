@@ -143,6 +143,9 @@ export interface TrackRecordRun {
   state: TrackRecordState;
   from: string; // "YYYY-MM-DD"; the first segment equals the window's start
   to: string | null; // null = continues to today; otherwise same day as the next segment's `from`
+  /** The position's true entry date, NOT clipped to the observation window —
+   *  `from` may be later. Null for `idle` runs, which hold no position. */
+  opened_at: string | null;
 }
 
 export interface TrackRecordMarker {

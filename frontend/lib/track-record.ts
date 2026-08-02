@@ -53,13 +53,20 @@ export function toIndexedSeries(
   }));
 }
 
-/** Renders an indexed-to-100 value as the signed percent-change string the UI
- *  displays everywhere (price-scale ticks, line-end labels, crosshair tooltip):
- *  120 -> "+20.0%", 93 -> "-7.0%", 786 -> "+686.0%". Centralized here so every
- *  render site stays in lockstep with the indexing scheme above. */
-export function formatIndexedPercent(value: number): string {
-  const pct = value - 100;
+/** Renders a percentage-point value with an explicit sign: 31.2 -> "+31.2%",
+ *  -8.4 -> "-8.4%". Used directly by the call-anchored performance view, whose
+ *  values are centred on zero. */
+export function formatSignedPercent(pct: number): string {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+}
+
+/** Renders an indexed-to-100 value as the signed percent-change string the
+ *  price-trend view displays everywhere (price-scale ticks, line-end labels,
+ *  crosshair tooltip): 120 -> "+20.0%", 93 -> "-7.0%", 786 -> "+686.0%".
+ *  Centralized here so every render site stays in lockstep with the indexing
+ *  scheme above. */
+export function formatIndexedPercent(value: number): string {
+  return formatSignedPercent(value - 100);
 }
 
 export interface RunSegment {
@@ -135,6 +142,64 @@ export function snapMarkers<M extends { date: string }>(
     if (segment.to !== null && marker.date >= segment.to) continue;
     const bar = own.find((p) => p.time >= marker.date);
     if (bar) out.push({ marker, time: bar.time });
+  }
+  return out;
+}
+
+/** One point of the call-anchored performance view: percentage points of excess
+ *  return over the benchmark, so 0 means "exactly matched the benchmark". Unlike
+ *  IndexedPoint these are NOT indexed to 100 — they are centred on zero and go
+ *  negative, which is why the two views must not share a price formatter (and
+ *  why log mode is unavailable here: lightweight-charts' log scale is a
+ *  signed-log transform that mangles zero-crossing data). */
+export interface ExcessPoint {
+  time: string; // "YYYY-MM-DD"
+  value: number;
+}
+
+/** Stance-adjusted excess return over the benchmark for ONE position, measured
+ *  from that position's own entry rather than the window start.
+ *
+ *      long:  (P_t/P_d - 1) - (B_t/B_d - 1)
+ *      short: the negative of that — the channel said sell, so the stock falling
+ *             counts as the call working out
+ *
+ *  The sign flip matches ticker_perf.py's stance adjustment, which is what makes
+ *  this chart and the table below it read in the same units.
+ *
+ *  The anchor is `run.opened_at` (the true entry, possibly before the observation
+ *  window) while the drawn range is [run.from, run.to) — so a position opened
+ *  before the window starts mid-air, already carrying its accumulated P/L, which
+ *  is correct. An entry landing on a non-trading day snaps forward to the next
+ *  session. Bars with no matching benchmark session are skipped rather than
+ *  treated as "the benchmark didn't move", which would invent excess return.
+ *  Returns [] for an idle run (no position) or when either entry price is
+ *  missing or non-positive. */
+export function toExcessSeries(
+  closes: SparklinePoint[],
+  benchmarkCloses: SparklinePoint[],
+  run: TrackRecordRun,
+): ExcessPoint[] {
+  if (run.state === "idle" || run.opened_at === null) return [];
+
+  const anchor = run.opened_at;
+  const entry = closes.find((c) => c.date >= anchor);
+  const benchEntry = benchmarkCloses.find((c) => c.date >= anchor);
+  if (!entry || !benchEntry || entry.close <= 0 || benchEntry.close <= 0) {
+    return [];
+  }
+
+  const benchByDate = new Map(benchmarkCloses.map((c) => [c.date, c.close]));
+  const direction = run.state === "sell" ? -1 : 1;
+  const out: ExcessPoint[] = [];
+  for (const bar of closes) {
+    if (bar.date < run.from) continue;
+    if (run.to !== null && bar.date >= run.to) continue;
+    const bench = benchByDate.get(bar.date);
+    if (bench === undefined || bench <= 0) continue;
+    const stock = bar.close / entry.close - 1;
+    const index = bench / benchEntry.close - 1;
+    out.push({ time: bar.date, value: direction * (stock - index) * 100 });
   }
   return out;
 }

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   baselineOf,
   formatIndexedPercent,
+  formatSignedPercent,
   snapMarkers,
   splitRuns,
+  toExcessSeries,
   toIndexedSeries,
   type IndexedPoint,
 } from "@/lib/track-record";
@@ -66,8 +68,8 @@ describe("formatIndexedPercent", () => {
 
 describe("splitRuns", () => {
   const RUNS: TrackRecordRun[] = [
-    { state: "idle", from: "2026-01-05", to: "2026-01-07" },
-    { state: "buy", from: "2026-01-07", to: null },
+    { state: "idle", from: "2026-01-05", to: "2026-01-07", opened_at: null },
+    { state: "buy", from: "2026-01-07", to: null, opened_at: "2026-01-07" },
   ];
 
   it("keeps the run order and state", () => {
@@ -89,10 +91,10 @@ describe("splitRuns", () => {
 
   it("bridges a run whose date range contains no trading day", () => {
     const runs: TrackRecordRun[] = [
-      { state: "idle", from: "2026-01-05", to: "2026-01-07" },
+      { state: "idle", from: "2026-01-05", to: "2026-01-07", opened_at: null },
       // Weekend: no bar within the window
-      { state: "sell", from: "2026-01-07", to: "2026-01-07" },
-      { state: "buy", from: "2026-01-07", to: null },
+      { state: "sell", from: "2026-01-07", to: "2026-01-07", opened_at: "2026-01-07" },
+      { state: "buy", from: "2026-01-07", to: null, opened_at: "2026-01-07" },
     ];
     const segs = splitRuns(pct(), runs);
     // Empty sell segment is dropped, but buy segment still connects to idle's last point
@@ -102,8 +104,8 @@ describe("splitRuns", () => {
 
   it("drops segments that cannot be drawn", () => {
     const runs: TrackRecordRun[] = [
-      { state: "idle", from: "2026-01-05", to: "2026-01-06" },
-      { state: "buy", from: "2026-01-06", to: null },
+      { state: "idle", from: "2026-01-05", to: "2026-01-06", opened_at: null },
+      { state: "buy", from: "2026-01-06", to: null, opened_at: "2026-01-06" },
     ];
     const segs = splitRuns(pct(), runs);
     // idle has only 2026-01-05 -> cannot draw a line, so drop it
@@ -113,8 +115,8 @@ describe("splitRuns", () => {
 
 describe("snapMarkers", () => {
   const RUNS: TrackRecordRun[] = [
-    { state: "idle", from: "2026-01-05", to: "2026-01-07" },
-    { state: "buy", from: "2026-01-07", to: null },
+    { state: "idle", from: "2026-01-05", to: "2026-01-07", opened_at: null },
+    { state: "buy", from: "2026-01-07", to: null, opened_at: "2026-01-07" },
   ];
 
   it("anchors on the segment's own bar, never the borrowed bridge point", () => {
@@ -172,7 +174,7 @@ describe("snapMarkers", () => {
       100,
     );
     const [segment] = splitRuns(gapped, [
-      { state: "buy", from: "2026-01-09", to: null },
+      { state: "buy", from: "2026-01-09", to: null, opened_at: "2026-01-09" },
     ]);
     // Called on Sat 01-10 -> anchors on Mon 01-12 rather than disappearing
     expect(snapMarkers(segment, [{ date: "2026-01-10" }])[0].time).toBe(
@@ -195,5 +197,106 @@ describe("snapMarkers", () => {
         [{ date: "2026-01-07" }],
       ),
     ).toEqual([]);
+  });
+});
+
+describe("formatSignedPercent", () => {
+  it("signs both directions and keeps one decimal", () => {
+    expect(formatSignedPercent(31.2)).toBe("+31.2%");
+    expect(formatSignedPercent(-8.4)).toBe("-8.4%");
+    expect(formatSignedPercent(0)).toBe("+0.0%");
+  });
+
+  it("still backs the indexed formatter", () => {
+    expect(formatIndexedPercent(120)).toBe("+20.0%");
+    expect(formatIndexedPercent(93)).toBe("-7.0%");
+  });
+});
+
+describe("toExcessSeries", () => {
+  // Stock doubles (100 -> 200, +100%); benchmark rises 10% (500 -> 550).
+  const STOCK = [
+    { date: "2026-01-05", close: 100 },
+    { date: "2026-01-06", close: 150 },
+    { date: "2026-01-07", close: 200 },
+  ];
+  const BENCH = [
+    { date: "2026-01-05", close: 500 },
+    { date: "2026-01-06", close: 525 },
+    { date: "2026-01-07", close: 550 },
+  ];
+  const LONG: TrackRecordRun = {
+    state: "buy", from: "2026-01-05", to: null, opened_at: "2026-01-05",
+  };
+
+  it("starts at zero and measures excess over the benchmark", () => {
+    const pts = toExcessSeries(STOCK, BENCH, LONG);
+    expect(pts.map((p) => p.time)).toEqual([
+      "2026-01-05", "2026-01-06", "2026-01-07",
+    ]);
+    expect(pts[0].value).toBeCloseTo(0);
+    expect(pts[1].value).toBeCloseTo(45); // +50% stock, +5% bench
+    expect(pts[2].value).toBeCloseTo(90); // +100% stock, +10% bench
+  });
+
+  it("flips the sign for a short position, so a falling stock reads as a win", () => {
+    const short: TrackRecordRun = { ...LONG, state: "sell" };
+    const pts = toExcessSeries(STOCK, BENCH, short);
+    // he said sell and it doubled -> he was badly wrong
+    expect(pts[2].value).toBeCloseTo(-90);
+  });
+
+  it("draws nothing for an idle run", () => {
+    expect(
+      toExcessSeries(STOCK, BENCH, {
+        state: "idle", from: "2026-01-05", to: null, opened_at: null,
+      }),
+    ).toEqual([]);
+  });
+
+  it("anchors on the true entry date even when it precedes the window", () => {
+    // Position opened 01-05; the window only starts at 01-06, so the first
+    // plotted point already carries accumulated P/L rather than starting at 0.
+    const clipped: TrackRecordRun = {
+      state: "buy", from: "2026-01-06", to: null, opened_at: "2026-01-05",
+    };
+    const pts = toExcessSeries(STOCK, BENCH, clipped);
+    expect(pts.map((p) => p.time)).toEqual(["2026-01-06", "2026-01-07"]);
+    expect(pts[0].value).toBeCloseTo(45); // not 0 — it opened before the window
+  });
+
+  it("moves an entry on a non-trading day forward to the next session", () => {
+    const weekend: TrackRecordRun = {
+      state: "buy", from: "2026-01-05", to: null, opened_at: "2026-01-04",
+    };
+    // 01-04 has no bar; anchor falls on 01-05, so the series still starts at 0
+    expect(toExcessSeries(STOCK, BENCH, weekend)[0].value).toBeCloseTo(0);
+  });
+
+  it("stops at the run's end, exclusive", () => {
+    const closed: TrackRecordRun = {
+      state: "buy", from: "2026-01-05", to: "2026-01-07", opened_at: "2026-01-05",
+    };
+    expect(toExcessSeries(STOCK, BENCH, closed).map((p) => p.time)).toEqual([
+      "2026-01-05", "2026-01-06",
+    ]);
+  });
+
+  it("skips bars the benchmark has no matching session for", () => {
+    const gappy = [
+      { date: "2026-01-05", close: 500 },
+      { date: "2026-01-07", close: 550 },
+    ];
+    expect(toExcessSeries(STOCK, gappy, LONG).map((p) => p.time)).toEqual([
+      "2026-01-05", "2026-01-07",
+    ]);
+  });
+
+  it("draws nothing when the entry price or benchmark entry is missing", () => {
+    const late: TrackRecordRun = {
+      state: "buy", from: "2026-02-01", to: null, opened_at: "2026-02-01",
+    };
+    expect(toExcessSeries(STOCK, BENCH, late)).toEqual([]);
+    expect(toExcessSeries(STOCK, [], LONG)).toEqual([]);
   });
 });
