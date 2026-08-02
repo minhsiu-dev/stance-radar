@@ -783,7 +783,9 @@ export function ChannelTrackRecordChart({
         <p className="text-[11px] text-muted-foreground">
           {isPerformanceView ? t("legendPerformance") : t("legend")}
           <span className="mx-2 opacity-60">·</span>
-          {isPerformanceView ? t("axisNotePerformance") : t("axisNote")}
+          {isPerformanceView
+            ? t("axisNotePerformance", { benchmark: data?.benchmark ?? "" })
+            : t("axisNote")}
         </p>
       </CardHeader>
       <CardContent>
