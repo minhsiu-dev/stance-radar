@@ -46,6 +46,7 @@ vi.mock("lightweight-charts", () => {
       return { setMarkers: vi.fn() };
     },
     LineSeries: { kind: "line" },
+    BaselineSeries: { kind: "baseline" },
     LineStyle: { Solid: 0, Dotted: 1, Dashed: 2 },
     ColorType: { Solid: "solid" },
     // Values mirror the real enum (Normal=0, Logarithmic=1, ...) — the
@@ -77,8 +78,18 @@ vi.mock("swr", () => ({
 }));
 
 import { ChannelTrackRecordChart } from "@/components/channel-track-record-chart";
+import { toExcessSeries } from "@/lib/track-record";
 
-const DAYS = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"];
+// DAYS[4] exists only so AAA's open-ended sell run (see threeRunTicker below)
+// has two bars matching benchmark_closes to compute an excess-return series
+// from — the price-view tests below never reference it.
+const DAYS = [
+  "2026-01-05",
+  "2026-01-06",
+  "2026-01-07",
+  "2026-01-08",
+  "2026-01-09",
+];
 
 function closes() {
   return DAYS.map((date, i) => ({ date, close: 100 + i * 10 }));
@@ -87,15 +98,17 @@ function closes() {
 /** Three segments: idle [d0,d2) → buy [d2,d3) → sell [d3,∞).
  *  The boundaries are chosen so every segment still has >= 2 points after
  *  splitRuns (segments with fewer than two points get dropped, which would
- *  make it impossible to test the faded and dotted styling). */
+ *  make it impossible to test the faded and dotted styling).
+ *  `opened_at` mirrors `from` for the buy/sell runs (null for idle, which
+ *  holds no position) — a real position opened exactly when the run starts. */
 function threeRunTicker(name: string) {
   return {
     ticker: name,
     calls: 3,
     runs: [
-      { state: "idle" as const, from: DAYS[0], to: DAYS[2] },
-      { state: "buy" as const, from: DAYS[2], to: DAYS[3] },
-      { state: "sell" as const, from: DAYS[3], to: null },
+      { state: "idle" as const, from: DAYS[0], to: DAYS[2], opened_at: null },
+      { state: "buy" as const, from: DAYS[2], to: DAYS[3], opened_at: DAYS[2] },
+      { state: "sell" as const, from: DAYS[3], to: null, opened_at: DAYS[3] },
     ],
     markers: [
       { date: DAYS[2], stance: "buy" as const, kind: "new" as const, video_id: "v1", video_title: "one" },
@@ -112,7 +125,7 @@ function buyTicker(name: string) {
   return {
     ticker: name,
     calls: 2,
-    runs: [{ state: "buy" as const, from: DAYS[0], to: null }],
+    runs: [{ state: "buy" as const, from: DAYS[0], to: null, opened_at: DAYS[0] }],
     markers: [
       { date: DAYS[0], stance: "buy" as const, kind: "new" as const, video_id: "b1", video_title: "opened" },
       { date: DAYS[2], stance: "buy" as const, kind: "repeat" as const, video_id: "b2", video_title: "restated" },
@@ -128,6 +141,7 @@ const RESPONSE = {
   benchmark_closes: [
     { date: DAYS[0], close: 500 },
     { date: DAYS[3], close: 510 },
+    { date: DAYS[4], close: 515 },
   ],
   tickers: [
     threeRunTicker("AAA"),
@@ -601,5 +615,178 @@ describe("ChannelTrackRecordChart", () => {
     expect(opts.localization?.priceFormatter?.(120)).toBe("+20.0%");
     expect(opts.localization?.priceFormatter?.(93)).toBe("-7.0%");
     expect(opts.localization?.priceFormatter?.(786)).toBe("+686.0%");
+  });
+});
+
+describe("ChannelTrackRecordChart — call performance view", () => {
+  beforeEach(() => {
+    addSeriesSpy.mockClear();
+    // createdSeries is a module-level array that parallels
+    // addSeriesSpy.mock.calls by index (see the mock above); it must be
+    // cleared alongside the spy or an index computed from this test's own
+    // (freshly-cleared) calls would land on a stale entry left over from an
+    // earlier test.
+    createdSeries.length = 0;
+    swrData = RESPONSE;
+  });
+
+  function switchToPerformance() {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    fireEvent.click(screen.getByTestId("track-view-performance"));
+  }
+
+  it("tears down and recreates the chart exactly once when switching views, never accumulating series", () => {
+    // Unlike a chip toggle (visible:false on an existing series) or the
+    // linear/log toggle (applyOptions on the existing scale), the view
+    // switch is a genuine structural change — the series type itself
+    // changes from Line to Baseline — so it must go through the full
+    // teardown/rebuild path exactly once, not zero times (stale series
+    // reused) or more than once (leaked chart instances).
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    removeSpy.mockClear();
+    fireEvent.click(screen.getByTestId("track-view-performance"));
+    expect(removeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("defaults to the price view", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    expect(screen.getByTestId("track-view-price")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("switches the series type to Baseline with a zero base value", () => {
+    switchToPerformance();
+    const baselines = addSeriesSpy.mock.calls.filter(
+      (call) => (call[0] as { kind?: string }).kind === "baseline",
+    );
+    expect(baselines.length).toBeGreaterThan(0);
+    const opts = baselines[0][1] as {
+      baseValue: { type: string; price: number };
+      topLineColor: string;
+      bottomLineColor: string;
+      topFillColor1: string;
+      bottomFillColor1: string;
+    };
+    expect(opts.baseValue).toEqual({ type: "price", price: 0 });
+    // ticker hue above and below; only the opacity differs
+    expect(opts.topLineColor).not.toMatch(/^rgba\(/);
+    expect(opts.bottomLineColor).toMatch(/^rgba\(/);
+    // fills off: ten overlapping translucent fills would be mud
+    expect(opts.topFillColor1).toBe("transparent");
+    expect(opts.bottomFillColor1).toBe("transparent");
+  });
+
+  it("hides the log toggle, whose signed-log transform breaks on zero-crossing values", () => {
+    switchToPerformance();
+    expect(screen.queryByTestId("track-scale-log")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("track-scale-linear")).not.toBeInTheDocument();
+  });
+
+  it("forces a linear price scale even if log was left on in the price view", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    fireEvent.click(screen.getByTestId("track-scale-log"));
+    fireEvent.click(screen.getByTestId("track-view-performance"));
+    // createChart(el, options) — index 1 is the options object, matching the
+    // pre-existing "defaults the price scale to linear" test above.
+    const modes = createChartSpy.mock.calls.map(
+      (call) => (call[1] as { rightPriceScale?: { mode?: number } }).rightPriceScale?.mode,
+    );
+    expect(modes[modes.length - 1]).toBe(0); // PriceScaleMode.Normal
+  });
+
+  it("uses the centred percent formatter, not the indexed one", () => {
+    switchToPerformance();
+    // createChart(el, options) — index 1 is the options object.
+    const opts = createChartSpy.mock.calls[
+      createChartSpy.mock.calls.length - 1
+    ][1] as { localization: { priceFormatter: (v: number) => string } };
+    // 31.2 is already percentage points here; the indexed formatter would
+    // render this as "-68.8%"
+    expect(opts.localization.priceFormatter(31.2)).toBe("+31.2%");
+  });
+
+  it("draws no series for an idle run", () => {
+    // AAA's first run is idle; only its buy and sell runs may become series
+    switchToPerformance();
+    const titles = addSeriesSpy.mock.calls
+      .filter((call) => (call[0] as { kind?: string }).kind === "baseline")
+      .map((call) => (call[1] as { title?: string }).title)
+      .filter(Boolean);
+    expect(titles.filter((t) => t === "AAA")).toHaveLength(1);
+  });
+
+  it("renders the crosshair tooltip's value with the centred formatter, not the indexed one", () => {
+    // The tooltip builds its row text manually (not through the chart's own
+    // localization.priceFormatter), so it has its own chance to mix up the
+    // two views' value spaces. 5 is already a percentage point here; the
+    // indexed formatter would misread it as "-95.0%" (5 - 100).
+    switchToPerformance();
+    const aaaIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) =>
+        (call[0] as { kind?: string }).kind === "baseline" &&
+        (call[1] as { title?: string }).title === "AAA",
+    );
+    const aaaSeries = createdSeries[aaaIndex];
+
+    // crosshairSpy is not cleared in this describe's beforeEach (it
+    // accumulates across chart (re)creations); the freshest subscription is
+    // the one from the performance-view chart created by switchToPerformance.
+    const crosshairHandler = crosshairSpy.mock.calls[
+      crosshairSpy.mock.calls.length - 1
+    ][0] as (param: unknown) => void;
+    crosshairHandler({
+      point: { x: 10, y: 10 },
+      time: DAYS[3],
+      seriesData: new Map([[aaaSeries, { value: 5 }]]),
+    });
+
+    const tooltip = screen.getByTestId("track-record-tooltip");
+    expect(tooltip.textContent).toContain("+5.0%");
+    expect(tooltip.textContent).not.toContain("-95.0%");
+  });
+
+  it("negates the excess series for a sell run, so a falling stock reads as a win", () => {
+    // toExcessSeries' sign flip for `sell` runs is currently guarded by only
+    // one unit test in lib/track-record.test.ts and had no production
+    // consumer before this component. This is that consumer's own coverage:
+    // confirm the data actually handed to the chart series is the negated
+    // series, not just that the pure function negates in isolation.
+    switchToPerformance();
+    const aaaIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) =>
+        (call[0] as { kind?: string }).kind === "baseline" &&
+        (call[1] as { title?: string }).title === "AAA",
+    );
+    expect(aaaIndex).toBeGreaterThanOrEqual(0);
+    const aaaSeries = createdSeries[aaaIndex] as {
+      setData: (points: { time: string; value: number }[]) => void;
+    };
+    const plotted = (
+      aaaSeries.setData as unknown as {
+        mock: { calls: [{ time: string; value: number }[]][] };
+      }
+    ).mock.calls[0][0];
+
+    // AAA's only drawable run here is its sell run (from DAYS[3], opened_at
+    // DAYS[3] — see threeRunTicker; its buy run has no bar matching
+    // benchmark_closes). Recompute the same run as a `buy` (long) directly
+    // via toExcessSeries and assert the component plotted its negation.
+    const sellRun = {
+      state: "sell" as const,
+      from: DAYS[3],
+      to: null,
+      opened_at: DAYS[3],
+    };
+    const longPoints = toExcessSeries(
+      closes(),
+      RESPONSE.benchmark_closes,
+      { ...sellRun, state: "buy" as const },
+    );
+    expect(longPoints.length).toBeGreaterThan(0);
+    expect(plotted).toEqual(
+      longPoints.map((p) => ({ time: p.time, value: -p.value })),
+    );
   });
 });

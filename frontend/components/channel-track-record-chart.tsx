@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import {
+  BaselineSeries,
   ColorType,
   createChart,
   createSeriesMarkers,
@@ -23,8 +24,10 @@ import { tickerColor, withAlpha } from "@/lib/ticker-palette";
 import {
   baselineOf,
   formatIndexedPercent,
+  formatSignedPercent,
   snapMarkers,
   splitRuns,
+  toExcessSeries,
   toIndexedSeries,
 } from "@/lib/track-record";
 import type { TrackRecordRange, TrackRecordResponse } from "@/lib/types";
@@ -42,10 +45,19 @@ const REPEAT_MARKER_ALPHA = 0.45;
 const REPEAT_MARKER_SIZE = 0.7;
 const BENCHMARK_COLOR = "#a1a1aa";
 
+type TrackView = "price" | "performance";
+const VIEWS: TrackView[] = ["price", "performance"];
+// Losing side of the zero line keeps the ticker's hue, just faded — same
+// convention the idle runs use in the price view.
+const LOSING_ALPHA = 0.45;
+
 type Entry = {
-  series: ISeriesApi<"Line">;
+  series: ISeriesApi<"Line"> | ISeriesApi<"Baseline">;
   color: string;
+  /** faded regardless of hover — the price view's "no call yet" segments */
   idle: boolean;
+  /** baseline series take topLineColor/bottomLineColor, not color */
+  baseline: boolean;
 };
 
 /** A stock needs at least two bars to draw a line. Tickers with no price data
@@ -72,6 +84,8 @@ export function ChannelTrackRecordChart({
   // several ordinary ones squashes the rest into an unreadable band near
   // zero on a linear axis; log mode is an escape hatch, not the default.
   const [logScale, setLogScale] = useState(false);
+  const [view, setView] = useState<TrackView>("price");
+  const performance = view === "performance";
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -181,22 +195,29 @@ export function ChannelTrackRecordChart({
         vertLines: { color: "#27272a" },
         horzLines: { color: "#27272a" },
       },
-      // The chart plots values indexed to 100 (see track-record.ts for why —
-      // it's what keeps log mode's signed-log transform sane), but the reader
-      // must still see percent change: this formatter subtracts the 100
-      // baseline back out, so price-scale ticks and line-end labels
-      // (lastValueVisible/title both route through it) all read as "+20.0%"
-      // rather than raw indexed numbers like "120.0".
+      // The price view plots values indexed to 100 (see track-record.ts for
+      // why — it's what keeps log mode's signed-log transform sane) and this
+      // formatter subtracts the 100 baseline back out so price-scale ticks
+      // and line-end labels (lastValueVisible/title both route through it)
+      // read as "+20.0%". The performance view's values are already
+      // percentage points centred on zero, so it uses formatSignedPercent
+      // directly — the two value spaces must never share a formatter.
       localization: {
-        priceFormatter: formatIndexedPercent,
+        priceFormatter: performance
+          ? formatSignedPercent
+          : formatIndexedPercent,
       },
       // Seed from the latest `logScale` (via the ref, not a dependency —
       // same technique as activeRef above); the scale-mode effect further
       // down takes over from here for subsequent toggle clicks.
       rightPriceScale: {
-        mode: logScaleRef.current
-          ? PriceScaleMode.Logarithmic
-          : PriceScaleMode.Normal,
+        // Log is unavailable in the performance view: its values cross zero and
+        // lightweight-charts' log scale is a signed-log transform that renders
+        // any dip below the baseline as a plunge to the floor.
+        mode:
+          !performance && logScaleRef.current
+            ? PriceScaleMode.Logarithmic
+            : PriceScaleMode.Normal,
       },
     });
     chartRef.current = chart;
@@ -212,17 +233,21 @@ export function ChannelTrackRecordChart({
       crosshairMarkerVisible: false,
     });
     benchmark.setData(
-      toIndexedSeries(
-        data.benchmark_closes,
-        baselineOf(data.benchmark_closes),
-      ).map((p) => ({ time: p.time as Time, value: p.value })),
+      performance
+        ? // A flat zero line: in this view the benchmark IS the baseline, so it
+          // stops competing for attention with the ten stock lines.
+          data.benchmark_closes.map((c) => ({ time: c.date as Time, value: 0 }))
+        : toIndexedSeries(
+            data.benchmark_closes,
+            baselineOf(data.benchmark_closes),
+          ).map((p) => ({ time: p.time as Time, value: p.value })),
     );
 
     // series -> which ticker it represents and its color, for the crosshair
     // tooltip to look up. `ticker: null` marks the benchmark row, which is
     // always shown regardless of chip state.
     const labels = new Map<
-      ISeriesApi<"Line">,
+      ISeriesApi<"Line"> | ISeriesApi<"Baseline">,
       { name: string; color: string; ticker: string | null }
     >();
     labels.set(benchmark, {
@@ -246,64 +271,117 @@ export function ChannelTrackRecordChart({
     for (const item of data.tickers) {
       if (!hasPrice(item)) continue;
       const color = tickerColor(rankOf.get(item.ticker) ?? 0, dark);
-      const segments = splitRuns(
-        toIndexedSeries(item.closes, baselineOf(item.closes)),
-        item.runs,
-      );
       const created: Entry[] = [];
-      segments.forEach((segment, i) => {
-        const idle = segment.state === "idle";
-        const last = i === segments.length - 1;
-        const series = chart.addSeries(LineSeries, {
-          color: idle ? withAlpha(color, IDLE_ALPHA) : color,
-          lineWidth: idle ? 1 : 2,
-          lineStyle:
-            segment.state === "sell" ? LineStyle.Dotted : LineStyle.Solid,
-          // Direct line-end label: when a single stock is split into multiple
-          // segments, only the last segment carries a title — otherwise the
-          // price axis would print the same ticker once per segment.
-          title: last ? item.ticker : "",
-          lastValueVisible: last,
-          priceLineVisible: false,
-          // Seed initial visibility from the latest `active` (via the ref, not
-          // a dependency — see the comment on activeRef above); the visibility
-          // effect below takes over from here for subsequent chip toggles.
-          visible: activeRef.current?.has(item.ticker) ?? false,
-        });
-        series.setData(
-          segment.points.map((p) => ({ time: p.time as Time, value: p.value })),
-        );
-        // Every directional call in this segment gets an arrow, snapped onto a
-        // bar the segment actually plots. Restatements ("repeat") are drawn
-        // smaller and faded so the calls that actually changed the stance still
-        // read at a glance — same convention as StanceTrendChart's repeat bars.
-        const placed = snapMarkers(segment, item.markers);
-        if (placed.length > 0) {
-          createSeriesMarkers(
-            series,
-            placed.map(({ marker, time }) => ({
-              time: time as Time,
-              position: marker.stance === "buy" ? "belowBar" : "aboveBar",
-              shape: marker.stance === "buy" ? "arrowUp" : "arrowDown",
-              color:
-                marker.kind === "repeat"
-                  ? withAlpha(color, REPEAT_MARKER_ALPHA)
-                  : color,
-              size: marker.kind === "repeat" ? REPEAT_MARKER_SIZE : 1,
-              // No `text` label here: when several tickers call within a few
-              // days of each other (common right after a channel picks up
-              // coverage), lightweight-charts has no cross-series collision
-              // avoidance, so per-marker ticker text piles into an illegible
-              // smear (found via visual verification). The arrow's shape/color
-              // (matching the ticker's line and chip) plus the crosshair
-              // tooltip already identify it without needing text that only
-              // works when markers happen to be spaced apart.
-            })),
+      if (performance) {
+        // One position -> one BaselineSeries. Idle runs hold no position and are
+        // not drawn at all, so the line only exists while he had a call out.
+        const drawable = item.runs
+          .map((run) => ({
+            run,
+            points: toExcessSeries(item.closes, data.benchmark_closes, run),
+          }))
+          .filter((d) => d.points.length >= 2);
+        drawable.forEach(({ run, points }, i) => {
+          const last = i === drawable.length - 1;
+          const series = chart.addSeries(BaselineSeries, {
+            baseValue: { type: "price", price: 0 },
+            topLineColor: color,
+            bottomLineColor: withAlpha(color, LOSING_ALPHA),
+            // Fills off: ten overlapping translucent fills read as mud.
+            topFillColor1: "transparent",
+            topFillColor2: "transparent",
+            bottomFillColor1: "transparent",
+            bottomFillColor2: "transparent",
+            lineWidth: 2,
+            title: last ? item.ticker : "",
+            lastValueVisible: last,
+            priceLineVisible: false,
+            visible: activeRef.current?.has(item.ticker) ?? false,
+          });
+          series.setData(
+            points.map((p) => ({ time: p.time as Time, value: p.value })),
           );
-        }
-        labels.set(series, { name: item.ticker, color, ticker: item.ticker });
-        created.push({ series, color, idle });
-      });
+          const placed = snapMarkers(
+            { state: run.state, from: run.from, to: run.to, points, bridged: false },
+            item.markers,
+          );
+          if (placed.length > 0) {
+            createSeriesMarkers(
+              series,
+              placed.map(({ marker, time }) => ({
+                time: time as Time,
+                position: marker.stance === "buy" ? "belowBar" : "aboveBar",
+                shape: marker.stance === "buy" ? "arrowUp" : "arrowDown",
+                color:
+                  marker.kind === "repeat"
+                    ? withAlpha(color, REPEAT_MARKER_ALPHA)
+                    : color,
+                size: marker.kind === "repeat" ? REPEAT_MARKER_SIZE : 1,
+              })),
+            );
+          }
+          labels.set(series, { name: item.ticker, color, ticker: item.ticker });
+          created.push({ series, color, idle: false, baseline: true });
+        });
+      } else {
+        const segments = splitRuns(
+          toIndexedSeries(item.closes, baselineOf(item.closes)),
+          item.runs,
+        );
+        segments.forEach((segment, i) => {
+          const idle = segment.state === "idle";
+          const last = i === segments.length - 1;
+          const series = chart.addSeries(LineSeries, {
+            color: idle ? withAlpha(color, IDLE_ALPHA) : color,
+            lineWidth: idle ? 1 : 2,
+            lineStyle:
+              segment.state === "sell" ? LineStyle.Dotted : LineStyle.Solid,
+            // Direct line-end label: when a single stock is split into multiple
+            // segments, only the last segment carries a title — otherwise the
+            // price axis would print the same ticker once per segment.
+            title: last ? item.ticker : "",
+            lastValueVisible: last,
+            priceLineVisible: false,
+            // Seed initial visibility from the latest `active` (via the ref, not
+            // a dependency — see the comment on activeRef above); the visibility
+            // effect below takes over from here for subsequent chip toggles.
+            visible: activeRef.current?.has(item.ticker) ?? false,
+          });
+          series.setData(
+            segment.points.map((p) => ({ time: p.time as Time, value: p.value })),
+          );
+          // Every directional call in this segment gets an arrow, snapped onto a
+          // bar the segment actually plots. Restatements ("repeat") are drawn
+          // smaller and faded so the calls that actually changed the stance still
+          // read at a glance — same convention as StanceTrendChart's repeat bars.
+          const placed = snapMarkers(segment, item.markers);
+          if (placed.length > 0) {
+            createSeriesMarkers(
+              series,
+              placed.map(({ marker, time }) => ({
+                time: time as Time,
+                position: marker.stance === "buy" ? "belowBar" : "aboveBar",
+                shape: marker.stance === "buy" ? "arrowUp" : "arrowDown",
+                color:
+                  marker.kind === "repeat"
+                    ? withAlpha(color, REPEAT_MARKER_ALPHA)
+                    : color,
+                size: marker.kind === "repeat" ? REPEAT_MARKER_SIZE : 1,
+                // No `text` label here: when several tickers call within a few
+                // days of each other (common right after a channel picks up
+                // coverage), lightweight-charts has no cross-series collision
+                // avoidance, so per-marker ticker text piles into an illegible
+                // smear (found via visual verification). The arrow's shape/color
+                // (matching the ticker's line and chip) plus the crosshair
+                // tooltip already identify it without needing text that only
+                // works when markers happen to be spaced apart.
+              })),
+            );
+          }
+          labels.set(series, { name: item.ticker, color, ticker: item.ticker });
+          created.push({ series, color, idle, baseline: false });
+        });
+      }
       entries.set(item.ticker, created);
     }
     entriesRef.current = entries;
@@ -373,10 +451,16 @@ export function ChannelTrackRecordChart({
         name.textContent = row.name; // textContent, not innerHTML
         const value = document.createElement("span");
         value.className = "tabular-nums";
-        // row.value is the indexed-to-100 value, not raw percent change (see
-        // track-record.ts) — formatIndexedPercent renders it the way the
-        // reader expects, matching the price-scale ticks and line-end labels.
-        value.textContent = formatIndexedPercent(row.value);
+        // In the price view row.value is the indexed-to-100 value, not raw
+        // percent change (see track-record.ts) — formatIndexedPercent renders
+        // it the way the reader expects, matching the price-scale ticks and
+        // line-end labels. In the performance view row.value is already a
+        // centred percentage point, so it must go through formatSignedPercent
+        // instead — same rule as the chart's own priceFormatter above: the
+        // two views' value spaces must never share a formatter.
+        value.textContent = performance
+          ? formatSignedPercent(row.value)
+          : formatIndexedPercent(row.value);
         line.append(dot, name, value);
         tip.appendChild(line);
         if (row.title) {
@@ -410,7 +494,7 @@ export function ChannelTrackRecordChart({
       if (tooltipEl) tooltipEl.style.display = "none";
       entriesRef.current = new Map();
     };
-  }, [data, dark, rankOf]);
+  }, [data, dark, rankOf, view, performance]);
 
   // Chip visibility. Must be declared AFTER the chart-creation effect —
   // React flushes effects in declaration order, so entriesRef.current is
@@ -450,14 +534,29 @@ export function ChannelTrackRecordChart({
     for (const [ticker, list] of entriesRef.current) {
       const dim = hovered !== null && hovered !== ticker;
       for (const entry of list) {
-        entry.series.applyOptions({
-          color: entry.idle
-            ? withAlpha(entry.color, dim ? IDLE_ALPHA / 2 : IDLE_ALPHA)
-            : dim
-              ? withAlpha(entry.color, DIMMED_ALPHA)
-              : entry.color,
-          lineWidth: entry.idle ? 1 : hovered === ticker ? 3 : 2,
-        });
+        const faded = entry.idle
+          ? withAlpha(entry.color, dim ? IDLE_ALPHA / 2 : IDLE_ALPHA)
+          : dim
+            ? withAlpha(entry.color, DIMMED_ALPHA)
+            : entry.color;
+        // BaselineSeries has no `color` option (only topLineColor/bottomLineColor)
+        // — applying `color` to one fails silently, so hover dimming would just
+        // quietly stop working in the performance view without this branch.
+        if (entry.baseline) {
+          entry.series.applyOptions({
+            topLineColor: faded,
+            bottomLineColor: withAlpha(
+              entry.color,
+              dim ? DIMMED_ALPHA / 2 : LOSING_ALPHA,
+            ),
+            lineWidth: hovered === ticker ? 3 : 2,
+          });
+        } else {
+          entry.series.applyOptions({
+            color: faded,
+            lineWidth: entry.idle ? 1 : hovered === ticker ? 3 : 2,
+          });
+        }
       }
     }
   }, [hovered]);
@@ -490,6 +589,21 @@ export function ChannelTrackRecordChart({
           <CardTitle className="text-base">{t("title")}</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex gap-1">
+              {VIEWS.map((v) => (
+                <Button
+                  key={v}
+                  type="button"
+                  size="sm"
+                  data-testid={`track-view-${v}`}
+                  aria-pressed={view === v}
+                  variant={view === v ? "default" : "outline"}
+                  onClick={() => setView(v)}
+                >
+                  {t(`view.${v}`)}
+                </Button>
+              ))}
+            </div>
+            <div className="flex gap-1">
               {RANGES.map((r) => (
                 <Button
                   key={r}
@@ -503,28 +617,30 @@ export function ChannelTrackRecordChart({
                 </Button>
               ))}
             </div>
-            <div className="flex gap-1 border-l pl-2">
-              <Button
-                type="button"
-                size="sm"
-                data-testid="track-scale-linear"
-                aria-pressed={!logScale}
-                variant={!logScale ? "default" : "outline"}
-                onClick={() => setLogScale(false)}
-              >
-                {t("scale.linear")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                data-testid="track-scale-log"
-                aria-pressed={logScale}
-                variant={logScale ? "default" : "outline"}
-                onClick={() => setLogScale(true)}
-              >
-                {t("scale.log")}
-              </Button>
-            </div>
+            {!performance && (
+              <div className="flex gap-1 border-l pl-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  data-testid="track-scale-linear"
+                  aria-pressed={!logScale}
+                  variant={!logScale ? "default" : "outline"}
+                  onClick={() => setLogScale(false)}
+                >
+                  {t("scale.linear")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  data-testid="track-scale-log"
+                  aria-pressed={logScale}
+                  variant={logScale ? "default" : "outline"}
+                  onClick={() => setLogScale(true)}
+                >
+                  {t("scale.log")}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
         {data && data.tickers.length > 0 && (
@@ -571,17 +687,17 @@ export function ChannelTrackRecordChart({
           </div>
         )}
         <p className="text-[11px] text-muted-foreground">
-          {t("legend")}
+          {performance ? t("legendPerformance") : t("legend")}
           <span className="mx-2 opacity-60">·</span>
-          {t("axisNote")}
+          {performance ? t("axisNotePerformance") : t("axisNote")}
         </p>
       </CardHeader>
       <CardContent>
         {/* The chart container stays permanently mounted (hidden via CSS,
          *  never removed from the tree) so a transient revalidation error
          *  (e.g. SWR's revalidateOnFocus) never unmounts it. If it did, the
-         *  chart-creation effect below (keyed on [data, dark, rankOf], not
-         *  on `error`) would not re-run its cleanup — its `data` reference
+         *  chart-creation effect below (keyed on [data, dark, rankOf, view,
+         *  performance], not on `error`) would not re-run its cleanup — its `data` reference
          *  is unchanged when a revalidation merely fails — leaving the
          *  chart instance attached to a now-detached node while a fresh
          *  empty container mounts underneath, forever. Same pattern as
