@@ -172,6 +172,32 @@ function preWindowOnlyTicker(name: string) {
   };
 }
 
+/** A buy call published on DAYS[1] — a date with NO bar of its own (closes
+ *  skip straight from DAYS[0] to DAYS[3]) — so snapMarkers must move it
+ *  forward onto DAYS[3], the first bar at or after it. Distinguishes a
+ *  tooltip lookup keyed by the marker's raw date from one keyed by the
+ *  snapped bar date the chart actually plots the arrow on. */
+function gapTicker(name: string) {
+  return {
+    ticker: name,
+    calls: 1,
+    runs: [{ state: "buy" as const, from: DAYS[0], to: null, opened_at: DAYS[0] }],
+    markers: [
+      {
+        date: DAYS[1],
+        stance: "buy" as const,
+        kind: "new" as const,
+        video_id: "g1",
+        video_title: "gap-title",
+      },
+    ],
+    closes: [
+      { date: DAYS[0], close: 100 },
+      { date: DAYS[3], close: 130 },
+    ],
+  };
+}
+
 const RESPONSE = {
   benchmark: "VOO",
   range: "1y",
@@ -597,6 +623,37 @@ describe("ChannelTrackRecordChart", () => {
     const tooltip = screen.getByTestId("track-record-tooltip");
     expect(tooltip.textContent).not.toContain("one");
     expect(tooltip.textContent).not.toContain("two");
+  });
+
+  it("resolves the marker title by the snapped bar date, not the call's raw (non-trading-day) date", () => {
+    // GGG's only marker is dated DAYS[1], a day with no bar of its own —
+    // snapMarkers moves it forward to DAYS[3] (see gapTicker above), which is
+    // also the only bar the crosshair can ever report as `param.time` for
+    // this series. If the tooltip's lookup map were still keyed by the
+    // marker's raw date (the pre-fix behavior), hovering DAYS[3] would find
+    // nothing — the title would be permanently unreachable.
+    // Placed first so it lands in the default-active five (the crosshair
+    // tooltip skips inactive tickers entirely — see activeRef filtering
+    // below — which is orthogonal to what this test is pinning).
+    swrData = { ...RESPONSE, tickers: [gapTicker("GGG"), ...RESPONSE.tickers] };
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    const gggIndex = addSeriesSpy.mock.calls.findIndex(
+      (call) => (call[1] as { title?: string }).title === "GGG",
+    );
+    expect(gggIndex).toBeGreaterThanOrEqual(0);
+    const gggSeries = createdSeries[gggIndex];
+
+    const crosshairHandler = crosshairSpy.mock.calls[
+      crosshairSpy.mock.calls.length - 1
+    ][0] as (param: unknown) => void;
+    crosshairHandler({
+      point: { x: 10, y: 10 },
+      time: DAYS[3],
+      seriesData: new Map([[gggSeries, { value: 3 }]]),
+    });
+
+    const tooltip = screen.getByTestId("track-record-tooltip");
+    expect(tooltip.textContent).toContain("gap-title");
   });
 
   it("defaults the price scale to linear (Normal mode)", () => {

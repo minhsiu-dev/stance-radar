@@ -367,14 +367,13 @@ export function ChannelTrackRecordChart({
 
     // ticker + date -> the video title that made the call on that date, for
     // the crosshair tooltip to show as provenance under a turning-point row.
-    // Keyed by date rather than reusing the marker objects directly because
-    // the tooltip only has the hovered date (`param.time`) to look up with.
+    // Keyed by the SNAPPED bar date that snapMarkers resolves each marker to
+    // (populated below, alongside each snapMarkers() call), not the marker's
+    // own raw date: the tooltip only has the hovered bar's date (`param.time`)
+    // to look up with, and a call published on a weekend or holiday snaps
+    // forward to the next session — keying by the raw date would leave that
+    // entry unreachable from any bar the chart actually plots.
     const markerTitleByKey = new Map<string, string>();
-    for (const item of data.tickers) {
-      for (const marker of item.markers) {
-        markerTitleByKey.set(`${item.ticker}|${marker.date}`, marker.video_title);
-      }
-    }
 
     const entries = new Map<string, Entry[]>();
     for (const item of data.tickers) {
@@ -414,6 +413,9 @@ export function ChannelTrackRecordChart({
             { state: run.state, from: run.from, to: run.to, points, bridged: false },
             item.markers,
           );
+          for (const { marker, time } of placed) {
+            markerTitleByKey.set(`${item.ticker}|${time}`, marker.video_title);
+          }
           drawMarkers(series, placed, color);
           labels.set(series, { name: item.ticker, color, ticker: item.ticker });
           created.push({ series, color, idle: false, baseline: true });
@@ -453,6 +455,9 @@ export function ChannelTrackRecordChart({
           // Every directional call in this segment gets an arrow, snapped onto a
           // bar the segment actually plots.
           const placed = snapMarkers(segment, item.markers);
+          for (const { marker, time } of placed) {
+            markerTitleByKey.set(`${item.ticker}|${time}`, marker.video_title);
+          }
           drawMarkers(series, placed, color);
           labels.set(series, { name: item.ticker, color, ticker: item.ticker });
           created.push({ series, color, idle, baseline: false });
