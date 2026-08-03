@@ -81,6 +81,7 @@ export interface JobProgress {
   channels_done?: number;
   channels_total?: number;
   videos_done?: number;
+  videos_failed?: number;
   videos_total?: number;
   discovered?: number;
 }

@@ -67,6 +67,7 @@
       "label": "檢查新影片",
       "running": "處理中… {stage}",
       "lastFailed": "上次更新失敗:{message}",
+      "lastPartialFailure": "上次更新有 {failed} 支影片分析失敗",
       "triggerFailed": "更新失敗",
       "autoEvery": "每 {minutes} 分鐘自動更新",
       "stages": {

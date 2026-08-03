@@ -90,6 +90,11 @@ export function RefreshButton() {
           {t("lastFailed", { message: job.error_message ?? "" })}
         </p>
       )}
+      {!running && job?.status === "done" && (job.progress.videos_failed ?? 0) > 0 && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          {t("lastPartialFailure", { failed: job.progress.videos_failed })}
+        </p>
+      )}
     </div>
   );
 }
