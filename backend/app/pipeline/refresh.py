@@ -145,7 +145,7 @@ class RefreshRunner:
             error: str | None = None
             async with semaphore:
                 try:
-                    await self._process_video(video_id)
+                    error = await self._process_video(video_id)
                 except Exception as exc:  # one video failing shouldn't take down the whole job
                     logger.exception("video %s processing failed", video_id)
                     await self._mark_video_failed(video_id, str(exc))
@@ -294,7 +294,13 @@ class RefreshRunner:
             await session.commit()
             return added
 
-    async def _process_video(self, video_id: str) -> None:
+    async def _process_video(self, video_id: str) -> str | None:
+        """Process one video.
+
+        Returns the error message when a failure was handled internally (so the
+        caller can still count it), or None on success / no_transcript — neither
+        of which is a failure.
+        """
         deps = self._deps
         async with deps.sessionmaker() as session:
             video = await session.get(Video, video_id)
@@ -308,7 +314,7 @@ class RefreshRunner:
                     video.status = VideoStatus.no_transcript
                     video.error_message = None
                     await session.commit()
-                    return
+                    return None
                 video.transcript = transcript_to_json(transcript)
             try:
                 result = await deps.llm.analyze(
@@ -318,7 +324,7 @@ class RefreshRunner:
                 video.status = VideoStatus.failed
                 video.error_message = str(exc)
                 await session.commit()
-                return
+                return str(exc)
 
             # Idempotent: when reprocessing a failed video, clear leftover data first
             await session.execute(delete(Mention).where(Mention.video_id == video_id))
