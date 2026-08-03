@@ -26,6 +26,14 @@ from app.youtube.client import QuotaExceededError, YouTubeClient
 logger = logging.getLogger(__name__)
 
 
+class AllVideosFailedError(Exception):
+    """Every video in an analyze run failed.
+
+    That is a failed run, not a success with no results — without it the job reports
+    `done` and a wholly broken pipeline looks identical to a healthy one.
+    """
+
+
 def _is_short(duration_seconds: int | None, max_seconds: int) -> bool:
     """A video at or under max_seconds (a Short / too-short clip) — skip on import.
 
@@ -82,6 +90,12 @@ class RefreshRunner:
         except QuotaExceededError as exc:
             await jobs.finish_job(self._deps.sessionmaker, job_id, error=str(exc))
             return
+        except AllVideosFailedError as exc:
+            # Not an unexpected crash: a clean, already-logged verdict about the run.
+            # Returning here also skips _continue_if_pending(), so a fully broken
+            # pipeline does not immediately queue itself another round.
+            await jobs.finish_job(self._deps.sessionmaker, job_id, error=str(exc))
+            return
         except Exception as exc:
             logger.exception("job %s failed", job_id)
             await jobs.finish_job(
@@ -120,21 +134,28 @@ class RefreshRunner:
     async def _run_analyze(self, job_id: int) -> None:
         deps = self._deps
         done = 0
+        failed = 0
+        last_error: str | None = None
         seen: set[str] = set()  # never reprocess an id within this job run
         progress_lock = asyncio.Lock()
         semaphore = asyncio.Semaphore(deps.settings.analysis_concurrency)
 
         async def process(video_id: str) -> None:
-            nonlocal done
+            nonlocal done, failed, last_error
+            error: str | None = None
             async with semaphore:
                 try:
                     await self._process_video(video_id)
                 except Exception as exc:  # one video failing shouldn't take down the whole job
                     logger.exception("video %s processing failed", video_id)
                     await self._mark_video_failed(video_id, str(exc))
+                    error = str(exc)
             async with progress_lock:
                 done += 1
-                await self._report_analyze(job_id, done)
+                if error is not None:
+                    failed += 1
+                    last_error = error
+                await self._report_analyze(job_id, done, failed)
 
         # Drain: keep pulling pending until none remain, so videos queued mid-run
         # (resume semantics + the user selecting more while this job runs) fold into
@@ -151,8 +172,14 @@ class RefreshRunner:
             if not batch:
                 break
             seen.update(batch)
-            await self._report_analyze(job_id, done)
+            await self._report_analyze(job_id, done, failed)
             await asyncio.gather(*(process(vid) for vid in batch))
+
+        # Judged across the whole run, drain batches included.
+        if done > 0 and failed == done:
+            raise AllVideosFailedError(
+                f"All {done} videos failed; last error: {last_error}"
+            )
 
     async def _count_pending(self) -> int:
         async with self._deps.sessionmaker() as session:
@@ -161,11 +188,12 @@ class RefreshRunner:
                 .where(Video.status == VideoStatus.pending)
             )).scalar_one()
 
-    async def _report_analyze(self, job_id: int, done: int) -> None:
+    async def _report_analyze(self, job_id: int, done: int, failed: int) -> None:
         remaining = await self._count_pending()
         await jobs.update_progress(self._deps.sessionmaker, job_id, {
             "stage": "analyzing",
             "videos_done": done,
+            "videos_failed": failed,
             "videos_total": done + remaining,
         })
 
