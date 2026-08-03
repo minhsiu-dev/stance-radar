@@ -180,6 +180,36 @@ def _schema_hint() -> str:
     )
 
 
+async def _communicate(proc, stdin_data: bytes) -> tuple[int, bytes, bytes]:
+    """communicate() that tolerates the child dying before it drains stdin.
+
+    asyncio's own communicate() feeds stdin and reads stdout/stderr in one gather, so
+    a failed write tears down the whole thing and discards the child's output — which
+    is exactly the diagnosis when the child died early. Feeding stdin as its own task
+    keeps the reads intact whatever stdin does. Worth tolerating rather than trusting
+    the write: stdlib asyncio swallows the BrokenPipeError, while uvloop (what uvicorn
+    serves on) raises RuntimeError from the already-closed transport.
+    """
+
+    async def feed() -> None:
+        try:
+            proc.stdin.write(stdin_data)
+            await proc.stdin.drain()
+        except (BrokenPipeError, ConnectionResetError, RuntimeError):
+            pass
+        finally:
+            try:
+                proc.stdin.close()
+            except (BrokenPipeError, ConnectionResetError, RuntimeError):
+                pass
+
+    _, stdout, stderr = await asyncio.gather(
+        feed(), proc.stdout.read(), proc.stderr.read()
+    )
+    await proc.wait()
+    return proc.returncode, stdout, stderr
+
+
 async def _default_runner(
     args: list[str], stdin_data: bytes, *, timeout: float | None = None
 ) -> tuple[int, bytes, bytes]:
@@ -190,7 +220,7 @@ async def _default_runner(
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(stdin_data), timeout)
+        return await asyncio.wait_for(_communicate(proc, stdin_data), timeout)
     except asyncio.TimeoutError:
         proc.kill()
         try:
@@ -199,7 +229,6 @@ async def _default_runner(
             pass
         logger.warning("claude analysis timed out after %ss; killed and will retry", timeout)
         raise AnalysisError(f"claude timed out after {timeout}s")
-    return proc.returncode, stdout, stderr
 
 
 class ClaudeCLIClient:

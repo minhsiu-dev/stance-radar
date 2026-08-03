@@ -183,6 +183,60 @@ async def test_default_runner_no_timeout_runs_to_completion():
     assert out == b"hello"
 
 
+# ---- _default_runner under uvloop ----
+#
+# The suite runs on the stdlib loop, but uvicorn serves on uvloop. The two differ
+# exactly where it hurts: writing to the stdin of an already-exited child is a
+# swallowed BrokenPipeError on stdlib and a raised RuntimeError on uvloop. These
+# cases therefore have to drive a real uvloop loop to mean anything.
+
+
+def _on_uvloop(make_coro):
+    import uvloop
+
+    return uvloop.run(make_coro())
+
+
+# stdin big enough that the child cannot drain it into the pipe buffer and exit
+_UNDRAINABLE_STDIN = b"x" * (1024 * 1024)
+
+
+def test_default_runner_does_not_crash_when_child_exits_before_reading_stdin():
+    # `true` exits before the stdin write is even attempted, so uvloop finds the
+    # transport already closed. A child that dies early is the LLM CLI failing —
+    # the runner has to report that, not die with the transport's own RuntimeError.
+    # (Anything slower, e.g. `sh -c ...`, wins the race and hides this.)
+    code, out, err = _on_uvloop(
+        lambda: _default_runner(["true"], _UNDRAINABLE_STDIN, timeout=10)
+    )
+    assert code == 0
+
+
+def test_default_runner_timeout_still_reported_as_timeout_on_uvloop():
+    # The child never reads stdin, so the write is still pending when the timeout
+    # cancels it; tearing that down must not replace the timeout with its own error.
+    with pytest.raises(AnalysisError, match="timed out"):
+        _on_uvloop(
+            lambda: _default_runner(
+                ["sh", "-c", "sleep 5"], _UNDRAINABLE_STDIN, timeout=0.3
+            )
+        )
+
+
+def test_default_runner_keeps_child_stderr_when_stdin_is_never_drained():
+    # The child fails without reading its 1MB of stdin. Whether the write breaks or
+    # merely blocks, its exit code and stderr are the actual diagnosis and must
+    # survive — feeding stdin must never be able to discard the reads.
+    for _ in range(6):
+        code, out, err = _on_uvloop(
+            lambda: _default_runner(
+                ["sh", "-c", "echo boom >&2; exit 3"], _UNDRAINABLE_STDIN, timeout=10
+            )
+        )
+        assert code == 3
+        assert b"boom" in err
+
+
 # ---- FakeLLMClient (seeded results) ----
 
 
