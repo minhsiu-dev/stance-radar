@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     claude_bin: str = "claude"
     claude_model: str = "claude-haiku-4-5"
     backfill_limit: int = 30
-    analysis_concurrency: int = 4
+    analysis_concurrency: int = 2
     # Max seconds to wait for a single Claude CLI analysis call before killing it and retrying.
     # Long transcripts spend the whole call generating a large JSON output (a single turn, no
     # tool use); e.g. a ~15-min video measured ~196s, so 180s timed out. 300s covers that.
