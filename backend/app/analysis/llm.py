@@ -220,15 +220,28 @@ async def _default_runner(
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        return await asyncio.wait_for(_communicate(proc, stdin_data), timeout)
-    except asyncio.TimeoutError:
-        proc.kill()
         try:
-            await proc.wait()  # reap the killed child
-        except ProcessLookupError:
-            pass
-        logger.warning("claude analysis timed out after %ss; killed and will retry", timeout)
-        raise AnalysisError(f"claude timed out after {timeout}s")
+            return await asyncio.wait_for(_communicate(proc, stdin_data), timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            try:
+                await proc.wait()  # reap the killed child
+            except ProcessLookupError:
+                pass
+            logger.warning("claude analysis timed out after %ss; killed and will retry", timeout)
+            raise AnalysisError(f"claude timed out after {timeout}s")
+    finally:
+        # Any other exception escaping _communicate (e.g. an OSError from a
+        # pipe read) must not leave the child running: reap it here too.
+        if proc.returncode is None:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                await proc.wait()
+            except ProcessLookupError:
+                pass
 
 
 class ClaudeCLIClient:

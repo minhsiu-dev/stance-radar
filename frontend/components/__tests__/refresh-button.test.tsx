@@ -92,3 +92,39 @@ it("stays quiet when the finished run had no failures", async () => {
   });
   expect(screen.queryByText(/failed to analyze/)).not.toBeInTheDocument();
 });
+
+it("stays quiet when the finished run's progress has no videos_failed key at all", async () => {
+  // Jobs created before this field existed, and discover/load_older jobs,
+  // never set videos_failed — the `?? 0` guard at refresh-button.tsx:93
+  // exists for exactly this shape, so it must be exercised without the key
+  // present rather than just with it set to 0.
+  const job = {
+    id: 1,
+    kind: "analyze",
+    status: "done",
+    progress: {
+      stage: "analyzing",
+      videos_done: 3,
+      videos_total: 3,
+    },
+    started_at: "2026-08-03T00:00:00Z",
+    finished_at: "2026-08-03T00:01:00Z",
+    error_message: null,
+  };
+  apiFetchMock.mockResolvedValue(job);
+  const cache = new Map();
+  render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <SWRConfig value={{ provider: () => cache }}>
+        <RefreshButton />
+      </SWRConfig>
+    </NextIntlClientProvider>,
+  );
+  // Same proof-of-load requirement as the test above: a job with no
+  // videos_failed key renders identically to no job having loaded yet, so
+  // confirm the fetch actually settled into a "done" job via the SWR cache.
+  await waitFor(() => {
+    expect(cache.get("/api/jobs/current")?.data?.status).toBe("done");
+  });
+  expect(screen.queryByText(/failed to analyze/)).not.toBeInTheDocument();
+});

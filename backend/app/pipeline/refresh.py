@@ -148,8 +148,8 @@ class RefreshRunner:
                     error = await self._process_video(video_id)
                 except Exception as exc:  # one video failing shouldn't take down the whole job
                     logger.exception("video %s processing failed", video_id)
-                    await self._mark_video_failed(video_id, str(exc))
                     error = str(exc)
+                    await self._mark_video_failed(video_id, error)
             async with progress_lock:
                 done += 1
                 if error is not None:
