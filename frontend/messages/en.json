@@ -198,7 +198,14 @@
       "noPriceData": "No price data for {ticker}, so it cannot be drawn",
       "noPositionInView": "{ticker} has no position in this window",
       "showTable": "Show full data table",
-      "hideTable": "Hide data table"
+      "hideTable": "Hide data table",
+      "picker": {
+        "trigger": "Stocks {n}/{max}",
+        "placeholder": "Search ticker…",
+        "empty": "No matching ticker",
+        "maxReached": "Up to {max} at once — remove one first",
+        "minOne": "Keep at least one"
+      }
     },
     "performance": {
       "title": "Last 180 days vs VOO",

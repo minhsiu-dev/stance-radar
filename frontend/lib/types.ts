@@ -159,6 +159,12 @@ export interface TrackRecordMarker {
   video_title: string;
 }
 
+/** 下拉選單的一列：該頻道對這支股票的全時間方向性發言數。不含價格。 */
+export interface TrackRecordAvailable {
+  ticker: string;
+  calls: number;
+}
+
 export interface TrackRecordTicker {
   ticker: string;
   calls: number; // all-time count of directional calls (ranking basis)
@@ -171,6 +177,8 @@ export interface TrackRecordResponse {
   benchmark: string;
   range: TrackRecordRange;
   start: string; // "YYYY-MM-DD"
+  /** 所有有方向性發言的股票 + 次數，依次數 desc、ticker asc。`tickers` 只含選取的那幾支。 */
+  available: TrackRecordAvailable[];
   benchmark_closes: SparklinePoint[];
   tickers: TrackRecordTicker[];
 }

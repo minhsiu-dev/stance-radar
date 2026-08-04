@@ -198,7 +198,14 @@
       "noPriceData": "查不到 {ticker} 的股價,無法畫線",
       "noPositionInView": "{ticker} 在這個觀察窗內沒有倉位",
       "showTable": "顯示完整數據表",
-      "hideTable": "收合數據表"
+      "hideTable": "收合數據表",
+      "picker": {
+        "trigger": "選擇股票 {n}/{max}",
+        "placeholder": "搜尋代號…",
+        "empty": "找不到符合的代號",
+        "maxReached": "最多同時 {max} 支,先取消一支",
+        "minOne": "至少要留一支"
+      }
     },
     "performance": {
       "title": "近 180 天推薦績效 (vs VOO)",
