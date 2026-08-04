@@ -80,6 +80,58 @@ describe("TrackRecordTickerPicker", () => {
     );
   });
 
+  it("marks selected items as checked and leaves unselected items unchecked", () => {
+    renderPicker(["NVDA"]);
+    open();
+    expect(screen.getByTestId("track-picker-option-NVDA")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("track-picker-option-TSM")).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+  });
+
+  it("keeps the checkmark synced when the parent refuses to drop the last selection", () => {
+    // This is the scenario the component's controlled-value comment exists for:
+    // the parent enforces "keep at least one selected" by declining to change
+    // `selected`. If the Combobox Root were uncontrolled, base-ui would apply
+    // the deselect to its own internal state regardless of what the parent
+    // decided, and the checkmark would go stale.
+    const colorOf = (t: string) => (t === "NVDA" ? "#2a78d6" : null);
+    const { rerender } = render(
+      <TrackRecordTickerPicker
+        available={AVAILABLE}
+        selected={["NVDA"]}
+        max={10}
+        colorOf={colorOf}
+        onToggle={onToggle}
+      />,
+    );
+    open();
+
+    // Try to deselect the only selected ticker.
+    fireEvent.click(screen.getByTestId("track-picker-option-NVDA"));
+    expect(onToggle).toHaveBeenCalledWith("NVDA");
+
+    // Simulate the parent refusing: re-render with `selected` UNCHANGED.
+    rerender(
+      <TrackRecordTickerPicker
+        available={AVAILABLE}
+        selected={["NVDA"]}
+        max={10}
+        colorOf={colorOf}
+        onToggle={onToggle}
+      />,
+    );
+
+    expect(screen.getByTestId("track-picker-option-NVDA")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
   it("shows the selected count and the cap on the trigger", () => {
     renderPicker(["NVDA", "TSM"], 10);
     expect(screen.getByTestId("track-picker-trigger")).toHaveTextContent(
