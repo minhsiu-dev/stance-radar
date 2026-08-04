@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -54,13 +54,19 @@ function wrap(videosFailed: number) {
     error_message: null,
   };
   apiFetchMock.mockResolvedValue(job);
-  return render(
+  // Expose the SWR cache Map so tests can prove the fetch actually settled
+  // (a same-shaped `job` with videos_failed: 0 renders identically to "no
+  // job loaded yet" — see test 2 below — so the DOM alone can't prove data
+  // arrived; SWR's own cache entry for the key can).
+  const cache = new Map();
+  render(
     <NextIntlClientProvider locale="en" messages={messages}>
-      <SWRConfig value={{ provider: () => new Map() }}>
+      <SWRConfig value={{ provider: () => cache }}>
         <RefreshButton />
       </SWRConfig>
     </NextIntlClientProvider>,
   );
+  return cache;
 }
 
 beforeEach(() => {
@@ -75,7 +81,14 @@ it("reports how many videos failed in a finished run", async () => {
 });
 
 it("stays quiet when the finished run had no failures", async () => {
-  wrap(0);
-  expect(await screen.findByText("Check new videos")).toBeInTheDocument();
+  const cache = wrap(0);
+  // A job with videos_failed: 0 renders identically to no job having loaded
+  // yet (button just says "Check new videos" either way), so proving the
+  // absence of the failure message is meaningful requires first proving the
+  // fetch actually resolved into a "done" job — checked via the SWR cache
+  // entry, not the DOM, which wouldn't distinguish the two states.
+  await waitFor(() => {
+    expect(cache.get("/api/jobs/current")?.data?.status).toBe("done");
+  });
   expect(screen.queryByText(/failed to analyze/)).not.toBeInTheDocument();
 });
