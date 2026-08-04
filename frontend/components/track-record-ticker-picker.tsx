@@ -95,7 +95,6 @@ export function TrackRecordTickerPicker({
                 data-testid={`track-picker-option-${ticker}`}
                 // 選滿之後只鎖「還沒選的」——已選的還要能點來取消。
                 disabled={!on && full}
-                title={!on && full ? t("picker.maxReached", { max }) : undefined}
               >
                 <span
                   aria-hidden
@@ -116,6 +115,21 @@ export function TrackRecordTickerPicker({
             );
           }}
         </ComboboxList>
+        {/* A disabled ComboboxItem gets pointer-events-none from the vendored
+            combobox (see combobox.tsx's data-disabled styling), so a native
+            `title` attribute on it can never be hovered — that tooltip would
+            be unreachable in any browser. Render the hint as visible text in
+            the popup body instead, where it can actually paint. Full and
+            "exactly one left" are mutually exclusive in practice (max > 1),
+            so only one line ever shows. */}
+        {(full || selected.length === 1) && (
+          <p
+            data-testid="track-picker-hint"
+            className="border-t px-2 py-1.5 text-xs text-muted-foreground"
+          >
+            {full ? t("picker.maxReached", { max }) : t("picker.minOne")}
+          </p>
+        )}
       </ComboboxContent>
     </Combobox>
   );

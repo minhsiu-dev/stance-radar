@@ -147,4 +147,26 @@ describe("TrackRecordTickerPicker", () => {
     });
     expect(screen.getByTestId("track-picker-empty")).toBeInTheDocument();
   });
+
+  it("shows the max-reached hint in the popup body once the cap is hit", () => {
+    renderPicker(["NVDA", "TSM"], 2);
+    open();
+    expect(screen.getByTestId("track-picker-hint")).toHaveTextContent(
+      'picker.maxReached:{"max":2}',
+    );
+  });
+
+  it("shows the min-one hint in the popup body when exactly one ticker is selected", () => {
+    renderPicker(["NVDA"], 10);
+    open();
+    expect(screen.getByTestId("track-picker-hint")).toHaveTextContent(
+      "picker.minOne",
+    );
+  });
+
+  it("shows neither hint when there is room to add and more than one is selected", () => {
+    renderPicker(["NVDA", "TSM"], 10);
+    open();
+    expect(screen.queryByTestId("track-picker-hint")).toBeNull();
+  });
 });
