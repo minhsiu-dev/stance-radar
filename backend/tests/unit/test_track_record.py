@@ -1,7 +1,7 @@
 from datetime import date
 
 from app.insights.track_record import (
-    Call, build_runs, call_counts, parse_ticker_param, rank_tickers, resolve_selection,
+    Call, build_runs, call_counts, parse_ticker_param, resolve_selection,
 )
 
 
@@ -17,22 +17,6 @@ def c(ticker: str, stance: str, day: str, vid: str = "v") -> Call:
 
 def states(runs: list[dict]) -> list[tuple[str, str, str | None]]:
     return [(r["state"], r["from"], r["to"]) for r in runs]
-
-
-def test_rank_tickers_orders_by_directional_count_then_ticker():
-    calls = [
-        c("AAA", "buy", "2026-01-01"), c("AAA", "buy", "2026-02-01"),
-        c("BBB", "sell", "2026-01-05"), c("BBB", "buy", "2026-02-05"),
-        c("CCC", "buy", "2026-01-09"),
-        c("DDD", "buy", "2026-01-09"),
-    ]
-    # AAA/BBB 各 2 次 -> 依 ticker 升冪；CCC/DDD 各 1 次 -> CCC 先
-    assert rank_tickers(calls, top_n=3) == ["AAA", "BBB", "CCC"]
-
-
-def test_rank_tickers_caps_at_top_n():
-    calls = [c(f"T{i:02d}", "buy", "2026-01-01") for i in range(15)]
-    assert len(rank_tickers(calls)) == 10
 
 
 def test_call_counts_orders_by_count_desc_then_ticker_asc():

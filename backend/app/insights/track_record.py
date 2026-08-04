@@ -43,13 +43,6 @@ def call_counts(calls: list[Call]) -> list[tuple[str, int]]:
     return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
 
 
-def rank_tickers(
-    calls: list[Call], top_n: int = TRACK_RECORD_MAX_SELECTED
-) -> list[str]:
-    """前 N 支股票的 ticker，排序同 call_counts。"""
-    return [ticker for ticker, _ in call_counts(calls)][:top_n]
-
-
 def parse_ticker_param(raw: str | None) -> list[str] | None:
     """`?tickers=nvda,mu` -> ["NVDA", "MU"]。去空白、轉大寫、去重且保留順序；
     未給 / 空字串 / 只有分隔符 -> None（等同未指定，交給 resolve_selection 給預設）。"""
