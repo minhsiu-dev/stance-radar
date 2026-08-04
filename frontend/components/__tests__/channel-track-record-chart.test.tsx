@@ -202,6 +202,18 @@ const RESPONSE = {
   benchmark: "VOO",
   range: "1y",
   start: DAYS[0],
+  // Every ticker with a directional call, count desc then ticker asc — the
+  // picker's list. GGG appears ONLY here, never in `tickers`: "available but
+  // not currently selected", which is what the slot tests below exercise.
+  available: [
+    { ticker: "AAA", calls: 3 },
+    { ticker: "BBB", calls: 2 },
+    { ticker: "CCC", calls: 2 },
+    { ticker: "DDD", calls: 2 },
+    { ticker: "EEE", calls: 2 },
+    { ticker: "FFF", calls: 2 },
+    { ticker: "GGG", calls: 1 },
+  ],
   benchmark_closes: [
     { date: DAYS[0], close: 500 },
     { date: DAYS[3], close: 510 },
@@ -236,32 +248,102 @@ describe("ChannelTrackRecordChart", () => {
     swrKey = null;
   });
 
-  it("activates the first five tickers by default", () => {
+  it("renders one chip per server-selected ticker", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    for (const name of ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"]) {
+      expect(chipFor(name)).toBeInTheDocument();
+    }
+    // GGG is only in `available`, so it gets no chip — the chip row shows what
+    // is selected, not what is selectable.
+    expect(screen.queryByTestId("track-chip-GGG")).toBeNull();
+  });
+
+  it("removes a ticker when its chip is clicked, and puts it in the SWR key", () => {
+    render(<ChannelTrackRecordChart channelId="ch1" />);
+    fireEvent.click(chipFor("FFF"));
+    expect(screen.queryByTestId("track-chip-FFF")).toBeNull();
+    expect(swrKey).toBe(
+      "/api/channels/ch1/track-record?range=1y&tickers=AAA,BBB,CCC,DDD,EEE",
+    );
+  });
+
+  it("refuses to remove the last remaining ticker", () => {
     render(<ChannelTrackRecordChart channelId="ch1" />);
     for (const name of ["AAA", "BBB", "CCC", "DDD", "EEE"]) {
-      expect(chipFor(name)).toHaveAttribute("aria-pressed", "true");
+      fireEvent.click(chipFor(name));
     }
-    expect(chipFor("FFF")).toHaveAttribute("aria-pressed", "false");
+    expect(chipFor("FFF")).toBeInTheDocument();
+    fireEvent.click(chipFor("FFF"));
+    expect(chipFor("FFF")).toBeInTheDocument();
   });
 
-  it("toggles a ticker on and off", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
-    fireEvent.click(chipFor("FFF"));
-    expect(chipFor("FFF")).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(chipFor("FFF"));
-    expect(chipFor("FFF")).toHaveAttribute("aria-pressed", "false");
+  it("keeps every other line's colour when one is removed from the middle", () => {
+    const { rerender } = render(<ChannelTrackRecordChart channelId="ch1" />);
+    const colorOf = (title: string) =>
+      (addSeriesSpy.mock.calls.find(
+        (call) => (call[1] as { title?: string })?.title === title,
+      )?.[1] as { color?: string; topLineColor?: string }) ?? {};
+    const before = colorOf("EEE").color;
+    expect(before).toBeTruthy();
+
+    // Drop CCC from the middle, then let the server answer with a payload that
+    // no longer carries CCC.
+    fireEvent.click(chipFor("CCC"));
+    addSeriesSpy.mockClear();
+    swrData = {
+      ...RESPONSE,
+      tickers: RESPONSE.tickers.filter((item) => item.ticker !== "CCC"),
+    };
+    rerender(<ChannelTrackRecordChart channelId="ch1" />);
+
+    // The slot is freed but nothing is re-packed -> EEE keeps its colour. The
+    // old rankOf (an index into data.tickers) shifted everything below the
+    // removal up by one, recolouring the whole tail.
+    expect(colorOf("EEE").color).toBe(before);
   });
 
-  it("refuses to turn off the last active ticker", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
-    for (const name of ["AAA", "BBB", "CCC", "DDD"]) fireEvent.click(chipFor(name));
-    expect(chipFor("EEE")).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(chipFor("EEE"));
-    expect(chipFor("EEE")).toHaveAttribute("aria-pressed", "true");
+  it("gives a newly added ticker the freed slot, not a duplicate colour", () => {
+    const { rerender } = render(<ChannelTrackRecordChart channelId="ch1" />);
+    const colorOf = (title: string) =>
+      (addSeriesSpy.mock.calls.find(
+        (call) => (call[1] as { title?: string })?.title === title,
+      )?.[1] as { color?: string })?.color;
+    const freed = colorOf("BBB");
+    expect(freed).toBeTruthy();
+
+    fireEvent.click(chipFor("BBB")); // frees slot 1
+    fireEvent.click(screen.getByTestId("track-picker-trigger"));
+    fireEvent.click(screen.getByTestId("track-picker-option-GGG"));
+    // Slot order, NOT rank order: the request carries the slots, the response
+    // comes back ranked, and the two need not agree.
+    expect(swrKey).toBe(
+      "/api/channels/ch1/track-record?range=1y&tickers=AAA,GGG,CCC,DDD,EEE,FFF",
+    );
+
+    addSeriesSpy.mockClear();
+    // The answer comes back in RANK order, and GGG ranks LAST (1 call, see
+    // RESPONSE.available) — so its slot (1) and its rank (5) disagree. That
+    // disagreement is the whole point: colouring by rank would hand GGG
+    // palette[5] here instead of the slot-1 colour BBB gave up.
+    swrData = {
+      ...RESPONSE,
+      tickers: [
+        RESPONSE.tickers[0],
+        ...RESPONSE.tickers.slice(2),
+        buyTicker("GGG"),
+      ],
+    };
+    rerender(<ChannelTrackRecordChart channelId="ch1" />);
+    expect(colorOf("GGG")).toBe(freed);
+    // ...and it is genuinely free, not shared: six lines, six colours.
+    const drawn = ["AAA", "CCC", "DDD", "EEE", "FFF", "GGG"].map(colorOf);
+    expect(new Set(drawn).size).toBe(drawn.length);
   });
 
   it("changes the SWR key when the range changes", () => {
     render(<ChannelTrackRecordChart channelId="ch1" />);
+    // The user has not touched the selection yet -> no `tickers` param, so the
+    // server's own default applies and we don't fire a second, identical request.
     expect(swrKey).toBe("/api/channels/ch1/track-record?range=1y");
     fireEvent.click(screen.getByTestId("track-range-6m"));
     expect(swrKey).toBe("/api/channels/ch1/track-record?range=6m");
@@ -384,16 +466,16 @@ describe("ChannelTrackRecordChart", () => {
     expect(onEmptyChange).toHaveBeenCalledWith(false);
   });
 
-  it("keeps a price-less ticker listed but disabled and unselected", () => {
+  it("keeps a price-less ticker listed but disabled", () => {
     const dead = { ...buyTicker("ZZZ"), closes: [] };
-    // Placed first: even though it ranks first, it should not be selected by default.
+    // Placed first: it ranks first, so the server hands it back as selected —
+    // it must still be listed rather than silently vanishing from the row.
     swrData = { ...RESPONSE, tickers: [dead, ...RESPONSE.tickers] };
     render(<ChannelTrackRecordChart channelId="ch1" />);
-    const chip = chipFor("ZZZ");
-    expect(chip).toBeDisabled();
-    expect(chip).toHaveAttribute("aria-pressed", "false");
-    // The default five shift over instead of leaving only four lines drawn.
-    expect(chipFor("EEE")).toHaveAttribute("aria-pressed", "true");
+    expect(chipFor("ZZZ")).toBeDisabled();
+    // The rest of the server's selection is unaffected by the dead one.
+    expect(chipFor("EEE")).toBeInTheDocument();
+    expect(chipFor("EEE")).not.toBeDisabled();
   });
 
   it("treats a ticker whose bars all predate the window as undrawable in the price view — not the same as price-less", () => {
@@ -407,9 +489,7 @@ describe("ChannelTrackRecordChart", () => {
     // message, since drawableCount counted it as drawable.
     swrData = { ...RESPONSE, tickers: [preWindowOnlyTicker("YYY")] };
     render(<ChannelTrackRecordChart channelId="ch1" />);
-    const chip = chipFor("YYY");
-    expect(chip).toBeDisabled();
-    expect(chip).toHaveAttribute("aria-pressed", "false");
+    expect(chipFor("YYY")).toBeDisabled();
     expect(screen.getByText("empty")).toBeInTheDocument();
   });
 
@@ -419,115 +499,13 @@ describe("ChannelTrackRecordChart", () => {
     expect(crosshairSpy).toHaveBeenCalled();
   });
 
-  it("drops an active ticker from `active` when a data change makes it undrawable, without emptying the rest", () => {
+  it("tears down the chart when the selection changes, since that refetches", () => {
     render(<ChannelTrackRecordChart channelId="ch1" />);
-    expect(chipFor("AAA")).toHaveAttribute("aria-pressed", "true");
-    expect(chipFor("BBB")).toHaveAttribute("aria-pressed", "true");
-
-    // Simulate a range switch whose new window has no price bars for AAA
-    // (e.g. AAA's last trade is older than the new, narrower window) — the
-    // ticker is still in the list (still ranked), just no longer drawable.
-    swrData = {
-      ...RESPONSE,
-      tickers: RESPONSE.tickers.map((item) =>
-        item.ticker === "AAA" ? { ...item, closes: [] } : item,
-      ),
-    };
-    fireEvent.click(screen.getByTestId("track-range-6m"));
-
-    const aaaChip = chipFor("AAA");
-    expect(aaaChip).toBeDisabled();
-    // The old bug: AAA stays stuck aria-pressed="true" while disabled, so the
-    // user can never click it off. It must now read as off.
-    expect(aaaChip).toHaveAttribute("aria-pressed", "false");
-    // The rest of the previously-active selection survives untouched — this
-    // is a targeted drop, not a full reseed back to the default five.
-    expect(chipFor("BBB")).toHaveAttribute("aria-pressed", "true");
-    expect(chipFor("FFF")).toHaveAttribute("aria-pressed", "false");
-  });
-
-  it("falls back to the default seed when every active ticker becomes undrawable at once", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
-    // All five originally-active tickers (AAA..EEE) lose their price data;
-    // only FFF (originally inactive) keeps it. The intersection with the
-    // drawable set would be empty, so the fallback should reseed instead of
-    // leaving no chart to show.
-    swrData = {
-      ...RESPONSE,
-      tickers: RESPONSE.tickers.map((item) =>
-        item.ticker === "FFF" ? item : { ...item, closes: [] },
-      ),
-    };
-    fireEvent.click(screen.getByTestId("track-range-6m"));
-    expect(chipFor("FFF")).toHaveAttribute("aria-pressed", "true");
-  });
-
-  it("does not tear down the chart on a chip toggle, but does on a data-changing range switch", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
-    removeSpy.mockClear();
-
-    fireEvent.click(chipFor("FFF"));
     expect(removeSpy).not.toHaveBeenCalled();
-
-    // A real range switch fetches a fresh response; simulate that by giving
-    // SWR a new (even if content-equivalent) object before the click causes
-    // a re-render.
-    swrData = { ...RESPONSE };
-    fireEvent.click(screen.getByTestId("track-range-6m"));
-    expect(removeSpy).toHaveBeenCalled();
-  });
-
-  it("hides a toggled ticker via visible:false on its existing series instead of removing it", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
-    const callsAfterMount = addSeriesSpy.mock.calls.length;
-    // FFF's single-segment series already exists at mount (built eagerly for
-    // every drawable ticker), just hidden — confirm it was created up front.
-    expect(
-      addSeriesSpy.mock.calls.some(
-        (call) => (call[1] as { title?: string }).title === "FFF",
-      ),
-    ).toBe(true);
-
     fireEvent.click(chipFor("FFF"));
-    // Turning a chip on/off must never call addSeries again.
-    expect(addSeriesSpy.mock.calls.length).toBe(callsAfterMount);
-    expect(
-      appliedOptions.some((o) => (o as { visible?: boolean }).visible === true),
-    ).toBe(true);
-
-    fireEvent.click(chipFor("FFF"));
-    expect(addSeriesSpy.mock.calls.length).toBe(callsAfterMount);
-    expect(
-      appliedOptions.some((o) => (o as { visible?: boolean }).visible === false),
-    ).toBe(true);
-  });
-
-  it("excludes a hidden ticker's series from the crosshair tooltip even if lightweight-charts still reports data for it", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
-    const aaaIndex = addSeriesSpy.mock.calls.findIndex(
-      (call) => (call[1] as { title?: string }).title === "AAA",
-    );
-    const fffIndex = addSeriesSpy.mock.calls.findIndex(
-      (call) => (call[1] as { title?: string }).title === "FFF",
-    );
-    expect(aaaIndex).toBeGreaterThanOrEqual(0);
-    expect(fffIndex).toBeGreaterThanOrEqual(0);
-    const aaaSeries = createdSeries[aaaIndex];
-    const fffSeries = createdSeries[fffIndex]; // FFF is inactive by default
-
-    const crosshairHandler = crosshairSpy.mock.calls[0][0] as (param: unknown) => void;
-    crosshairHandler({
-      point: { x: 10, y: 10 },
-      time: DAYS[2],
-      seriesData: new Map([
-        [aaaSeries, { value: 5 }],
-        [fffSeries, { value: 42 }],
-      ]),
-    });
-
-    const tooltip = screen.getByTestId("track-record-tooltip");
-    expect(tooltip.textContent).toContain("AAA");
-    expect(tooltip.textContent).not.toContain("FFF");
+    // Selected is drawn: dropping one necessarily rebuilds (the data behind it
+    // changed), the same path a range or view switch takes.
+    expect(removeSpy).toHaveBeenCalledTimes(1);
   });
 
   it("renders the crosshair tooltip's per-ticker value as a signed percentage of the indexed value, not the raw indexed number", () => {
@@ -632,9 +610,6 @@ describe("ChannelTrackRecordChart", () => {
     // this series. If the tooltip's lookup map were still keyed by the
     // marker's raw date (the pre-fix behavior), hovering DAYS[3] would find
     // nothing — the title would be permanently unreachable.
-    // Placed first so it lands in the default-active five (the crosshair
-    // tooltip skips inactive tickers entirely — see activeRef filtering
-    // below — which is orthogonal to what this test is pinning).
     swrData = { ...RESPONSE, tickers: [gapTicker("GGG"), ...RESPONSE.tickers] };
     render(<ChannelTrackRecordChart channelId="ch1" />);
     const gggIndex = addSeriesSpy.mock.calls.findIndex(
@@ -1062,21 +1037,6 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     expect(screen.getByTestId("track-chip-ZZZ")).toBeDisabled();
   });
 
-  it("drops a now-undrawable ticker from active instead of stranding it", () => {
-    swrData = { ...RESPONSE, tickers: [idleOnlyTicker("ZZZ"), ...RESPONSE.tickers] };
-    render(<ChannelTrackRecordChart channelId="ch1" />);
-    expect(screen.getByTestId("track-chip-ZZZ")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    fireEvent.click(screen.getByTestId("track-view-performance"));
-    // must not stay pressed-and-disabled, which the user could never clear
-    expect(screen.getByTestId("track-chip-ZZZ")).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-  });
-
   it("shows the empty state when no ticker has a position in this view", () => {
     swrData = { ...RESPONSE, tickers: [idleOnlyTicker("ZZZ")] };
     render(<ChannelTrackRecordChart channelId="ch1" />);
@@ -1098,32 +1058,4 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     expect(screen.queryByText("emptyPerformance")).not.toBeInTheDocument();
   });
 
-  it("recovers the default selection after `active` empties out and tickers become drawable again", () => {
-    // A single idle-only ticker: drawable (and thus default-seeded) in the
-    // price view, but undrawable in the performance view, so switching there
-    // empties `active` out to a zero-size Set — not just a trimmed one.
-    swrData = { ...RESPONSE, tickers: [idleOnlyTicker("ZZZ")] };
-    render(<ChannelTrackRecordChart channelId="ch1" />);
-    expect(screen.getByTestId("track-chip-ZZZ")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
-    fireEvent.click(screen.getByTestId("track-view-performance"));
-    // `active` is now an empty (but non-null) Set — nothing drawable here.
-    expect(screen.getByTestId("track-chip-ZZZ")).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-
-    fireEvent.click(screen.getByTestId("track-view-price"));
-    // Back in the price view ZZZ is drawable again. The old bail
-    // (`kept.size === prev.size`) matched trivially for an empty `prev`
-    // (0 === 0) and returned it unchanged, so the default selection could
-    // never repopulate once `active` had emptied out. It must reseed here.
-    expect(screen.getByTestId("track-chip-ZZZ")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-  });
 });

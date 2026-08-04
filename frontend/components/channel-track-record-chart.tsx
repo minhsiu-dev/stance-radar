@@ -19,6 +19,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TrackRecordTickerPicker } from "@/components/track-record-ticker-picker";
 import { cn } from "@/lib/utils";
 import { tickerColor, withAlpha } from "@/lib/ticker-palette";
 import {
@@ -40,7 +41,11 @@ import type {
 } from "@/lib/types";
 
 const RANGES: TrackRecordRange[] = ["6m", "1y", "all"];
-const DEFAULT_ACTIVE = 5;
+// Equal to lib/ticker-palette.ts's palette size — a slot index IS the palette
+// index, so the two must stay in lockstep or an 11th selection would collide
+// with the 1st. How many are selected *by default* is the backend's call
+// (TRACK_RECORD_DEFAULT_N); the frontend only enforces the cap.
+const SLOT_COUNT = 10;
 const CHART_HEIGHT = 360;
 const IDLE_ALPHA = 0.18;
 const DIMMED_ALPHA = 0.25;
@@ -67,9 +72,10 @@ type Entry = {
   baseline: boolean;
 };
 
-/** A stock needs at least two bars to draw a line. Tickers with no price data
- *  (e.g. delisted) still need to show up in the chip row — the list order is
- *  all-time call count, and silently disappearing would look like a sorting bug. */
+/** A stock needs at least two bars to draw a line. A selected ticker with no
+ *  price data (e.g. delisted) still needs to show up in the chip row, greyed
+ *  out — silently dropping something the user (or the server default) picked
+ *  would read as a bug. */
 function hasPrice(item: { closes: unknown[] }): boolean {
   return item.closes.length >= 2;
 }
@@ -146,7 +152,12 @@ export function ChannelTrackRecordChart({
   const { resolvedTheme } = useTheme();
   const dark = resolvedTheme === "dark";
   const [range, setRange] = useState<TrackRecordRange>("1y");
-  const [active, setActive] = useState<ReadonlySet<string> | null>(null);
+  // null = the user has not touched the selection yet, so the server's default
+  // stands. Once touched it becomes a fixed-length array: a non-null entry is a
+  // selected ticker, its index is the palette slot, and a hole is an empty
+  // slot. Removing writes null into the slot (never splices), so the other
+  // lines keep their colours.
+  const [slots, setSlots] = useState<(string | null)[] | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   // Linear by default. A channel that made one huge call (e.g. +686%) among
   // several ordinary ones squashes the rest into an unreadable band near
@@ -160,23 +171,15 @@ export function ChannelTrackRecordChart({
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const entriesRef = useRef<Map<string, Entry[]>>(new Map());
-  // Mirrors `active` for use inside the chart-creation effect's callbacks
-  // (initial series visibility, the crosshair tooltip filter) without making
-  // that effect depend on `active` — those reads need the latest value, but
-  // toggling a chip must not re-run chart creation (see the visibility effect
-  // further down, which is what actually reacts to `active` changing).
-  // Assigning a ref during render (rather than in its own effect) means it is
-  // always current by the time any later effect or event handler reads it.
-  const activeRef = useRef<ReadonlySet<string> | null>(null);
-  activeRef.current = active;
-  // Same pattern: seeds the initial price-scale mode on chart creation
-  // without making that effect depend on `logScale` — the scale-mode effect
-  // further down (declared after chart creation, like the visibility/hover
-  // effects) is what actually reacts to the toggle changing, via
-  // applyOptions rather than a rebuild.
+  // Seeds the initial price-scale mode on chart creation without making that
+  // effect depend on `logScale` — the scale-mode effect further down (declared
+  // after chart creation, like the hover effect) is what actually reacts to
+  // the toggle changing, via applyOptions rather than a rebuild. Assigning a
+  // ref during render (rather than in its own effect) means it is always
+  // current by the time any later effect or event handler reads it.
   const logScaleRef = useRef(false);
   logScaleRef.current = logScale;
-  // Same pattern as activeRef above: the parent (ChannelDetail) passes an
+  // Same pattern, different reason: the parent (ChannelDetail) passes an
   // inline arrow for onEmptyChange, so it gets a fresh identity on every
   // parent render. Reading it through a ref — instead of putting it in the
   // notify-effect's dependency array below — means a new identity alone can
@@ -184,59 +187,47 @@ export function ChannelTrackRecordChart({
   const onEmptyChangeRef = useRef(onEmptyChange);
   onEmptyChangeRef.current = onEmptyChange;
 
+  // Keyed on `slots` only, never on `data` — "key -> data -> selection -> key"
+  // would otherwise close a loop. While `slots` is null (untouched) the key
+  // carries no `tickers`, so the server's own default applies and we don't
+  // fire a second, identical request just to say the same thing back to it.
   const { data, error } = useSWR<TrackRecordResponse>(
-    `/api/channels/${channelId}/track-record?range=${range}`,
+    `/api/channels/${channelId}/track-record?range=${range}` +
+      (slots
+        ? `&tickers=${slots.filter((t): t is string => t !== null).join(",")}`
+        : ""),
+    // Keeps the old chart on screen across a selection change instead of
+    // flashing back to the skeleton.
+    { keepPreviousData: true },
   );
 
-  // Color follows the ticker's all-time rank (the server's return order is the
-  // rank), so toggling a chip never recolors the chart.
-  const rankOf = useMemo(() => {
-    const map = new Map<string, number>();
-    (data?.tickers ?? []).forEach((item, i) => map.set(item.ticker, i));
-    return map;
-  }, [data]);
+  // The server's default selection, used as the slot contents only until the
+  // user touches the picker. Must be declared after useSWR — it reads `data`.
+  const serverSelection = useMemo(
+    () => (data?.tickers ?? []).map((item) => item.ticker),
+    [data],
+  );
 
-  // Re-derive `active` every time `data` OR `view` changes, not just on first
-  // load. Drawability is both range-dependent (the backend fetches price bars
-  // only for the current window while ranking is all-time, so a ticker that
-  // had bars in `1y`/`all` can have none in `6m`) and view-dependent (the
-  // performance view additionally needs a drawable position — a ticker with
-  // full price history but every run `idle` draws in the price view but not
-  // here). Without re-validating on both, a chip toggled on under one
-  // data/view combination would stay stuck in `active` — rendered `disabled`
-  // (undrawable) but still `aria-pressed="true"` — with no way for the user
-  // to click it off. This only trims membership (it never re-adds a ticker
-  // that regains drawability on its own); it falls back to the default seed
-  // whenever the surviving intersection is empty, so the chart is never left
-  // blank.
-  useEffect(() => {
-    if (!data) return;
-    const drawable = data.tickers
-      .filter((item) => drawableIn(view, item, data.benchmark_closes, data.start))
-      .map((item) => item.ticker);
-    const drawableSet = new Set(drawable);
-    const seedDefault = () => new Set(drawable.slice(0, DEFAULT_ACTIVE));
-    setActive((prev) => {
-      if (!prev) return seedDefault();
-      const kept = new Set([...prev].filter((ticker) => drawableSet.has(ticker)));
-      // Check the emptied-out case BEFORE the unchanged-membership bail
-      // below: when `prev` is itself already an empty Set (everything was
-      // undrawable in the previous view/data), `kept` — the intersection of
-      // an empty set with anything — is trivially empty too, so
-      // `kept.size === prev.size` (0 === 0) would always match and the old
-      // ordering could never fall through to `seedDefault()`, permanently
-      // stranding the selection empty even after tickers become drawable
-      // again. Reseeding here is conditioned on `drawable.length > 0` (not
-      // just `kept.size === 0`) so that when NOTHING is drawable at all,
-      // this falls through to the reference-equality bail instead of
-      // manufacturing a fresh empty Set on every run (which would be a
-      // pointless-state-write regression of its own, even though the effect
-      // itself can't self-retrigger since it isn't keyed on `active`).
-      if (kept.size === 0 && drawable.length > 0) return seedDefault();
-      if (kept.size === prev.size) return prev; // nothing dropped — keep the same reference
-      return kept;
+  // Before the user has touched anything, the server's default selection
+  // stands in as a set of slots; colours and the chip row both read this.
+  const effectiveSlots = useMemo(() => {
+    if (slots) return slots;
+    const seeded: (string | null)[] = Array(SLOT_COUNT).fill(null);
+    serverSelection.slice(0, SLOT_COUNT).forEach((ticker, i) => {
+      seeded[i] = ticker;
     });
-  }, [data, view]);
+    return seeded;
+  }, [slots, serverSelection]);
+
+  const selected = useMemo(
+    () => effectiveSlots.filter((t): t is string => t !== null),
+    [effectiveSlots],
+  );
+
+  const colorOf = (ticker: string) => {
+    const slot = effectiveSlots.indexOf(ticker);
+    return slot < 0 ? null : tickerColor(slot, dark);
+  };
 
   // `empty` also depends on `view`: a channel can have tickers with price
   // history but, in the performance view, none of them holding a drawable
@@ -268,13 +259,14 @@ export function ChannelTrackRecordChart({
     onEmptyChangeRef.current?.(empty);
   }, [data, empty]);
 
-  // Builds a series for every drawable ticker up front — regardless of
-  // whether its chip is currently active — so toggling a chip never has to
-  // rebuild the chart; see the visibility effect below, which instead flips
-  // `visible` on the series this effect already created. `active` is
-  // deliberately NOT a dependency here: only `data` (range/reload), `dark`
-  // (theme), and `rankOf` (derived from `data`) legitimately require a full
-  // rebuild.
+  // Builds a series for every selected, drawable ticker. Selection IS what is
+  // drawn now, so `effectiveSlots` is a legitimate rebuild trigger alongside
+  // `data` (range/reload/refetch), `dark` (theme) and `view`: a selection
+  // change refetches anyway, and rebuilding immediately — on the payload
+  // `keepPreviousData` is still holding — is what makes a removed line vanish
+  // on click rather than one round-trip later. `effectiveSlots` is memoized on
+  // `[slots, serverSelection]` and `serverSelection` on `[data]`, so listing it
+  // adds exactly one new trigger (the user toggling), never a re-run storm.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !data || data.tickers.length === 0) return;
@@ -383,7 +375,12 @@ export function ChannelTrackRecordChart({
     const entries = new Map<string, Entry[]>();
     for (const item of data.tickers) {
       if (!drawableIn(view, item, data.benchmark_closes, data.start)) continue;
-      const color = tickerColor(rankOf.get(item.ticker) ?? 0, dark);
+      const slot = effectiveSlots.indexOf(item.ticker);
+      // Reached in the instant after a removal, while `keepPreviousData` is
+      // still serving the payload that included this ticker: skipping it here
+      // drops the line immediately instead of waiting for the refetch.
+      if (slot < 0) continue;
+      const color = tickerColor(slot, dark);
       const created: Entry[] = [];
       if (isPerformanceView) {
         // One position -> one BaselineSeries. Idle runs hold no position and are
@@ -409,7 +406,6 @@ export function ChannelTrackRecordChart({
             title: last ? item.ticker : "",
             lastValueVisible: last,
             priceLineVisible: false,
-            visible: activeRef.current?.has(item.ticker) ?? false,
           });
           series.setData(
             points.map((p) => ({ time: p.time as Time, value: p.value })),
@@ -449,10 +445,6 @@ export function ChannelTrackRecordChart({
             title: last ? item.ticker : "",
             lastValueVisible: last,
             priceLineVisible: false,
-            // Seed initial visibility from the latest `active` (via the ref, not
-            // a dependency — see the comment on activeRef above); the visibility
-            // effect below takes over from here for subsequent chip toggles.
-            visible: activeRef.current?.has(item.ticker) ?? false,
           });
           series.setData(
             segment.points.map((p) => ({ time: p.time as Time, value: p.value })),
@@ -473,12 +465,10 @@ export function ChannelTrackRecordChart({
     entriesRef.current = entries;
     chart.timeScale().fitContent();
 
-    // Crosshair tooltip: the % value of every *active* series plus the
-    // benchmark on the hovered date, sorted by value. Series for toggled-off
-    // tickers still exist on the chart (merely `visible: false`) and can
-    // still show up in `param.seriesData`, so filter by the current active
-    // set (via the ref, kept fresh across renders) rather than assuming
-    // invisible series are absent. A stock split into multiple segments
+    // Crosshair tooltip: the % value of every series on the chart plus the
+    // benchmark on the hovered date, sorted by value. Every series that exists
+    // belongs to a selected ticker (unselected ones are never built), so no
+    // filtering is needed here. A stock split into multiple segments
     // usually has data in only one segment per day (boundary days have two),
     // so dedupe by name too. When the hovered date is a turning point for a
     // ticker, its row also carries the video title that made the call — the
@@ -500,7 +490,6 @@ export function ChannelTrackRecordChart({
         title?: string;
       }[] = [];
       for (const [series, meta] of labels) {
-        if (meta.ticker !== null && !activeRef.current?.has(meta.ticker)) continue;
         if (seen.has(meta.name)) continue;
         const point = param.seriesData.get(series) as
           | { value?: number }
@@ -584,29 +573,13 @@ export function ChannelTrackRecordChart({
     // purely from `view` (already a dependency), so including it would be a
     // redundant re-run trigger, never a distinct one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, dark, rankOf, view]);
-
-  // Chip visibility. Must be declared AFTER the chart-creation effect —
-  // React flushes effects in declaration order, so entriesRef.current is
-  // already populated by the time this runs. Kept as its own effect, keyed
-  // only on `active`, so toggling a chip flips `visible` on the existing
-  // series (the same technique the hover effect below uses) instead of
-  // tearing down and rebuilding the whole chart — which would otherwise
-  // discard the user's zoom/pan on every click.
-  useEffect(() => {
-    for (const [ticker, list] of entriesRef.current) {
-      const visible = active?.has(ticker) ?? false;
-      for (const entry of list) {
-        entry.series.applyOptions({ visible });
-      }
-    }
-  }, [active]);
+  }, [data, dark, effectiveSlots, view]);
 
   // Price-scale mode. Must be declared AFTER the chart-creation effect —
   // React flushes effects in declaration order, so chartRef.current is
   // already populated by the time this runs. Kept as its own effect, keyed
   // only on `logScale`, so toggling linear/log flips the mode on the
-  // existing price scale (same technique as chip visibility above) instead
+  // existing price scale (same technique as hover dimming below) instead
   // of rebuilding the whole chart — which would otherwise discard zoom/pan.
   // PriceScaleMode.Percentage is never used here (see track-record.ts) —
   // only Normal/Logarithmic, which don't rebase series against each other.
@@ -652,26 +625,21 @@ export function ChannelTrackRecordChart({
   }, [hovered]);
 
   function toggle(ticker: string) {
-    setActive((prev) => {
-      if (!prev) return prev;
-      const next = new Set(prev);
-      // Chips that cannot be drawn in the current view are disabled in the
-      // DOM; guard again here for keyboard / programmatic activation.
-      const item = data?.tickers.find((entry) => entry.ticker === ticker);
-      if (
-        !next.has(ticker) &&
-        (!item || !drawableIn(view, item, data?.benchmark_closes ?? [], data?.start ?? ""))
-      ) {
-        return prev;
-      }
-      if (next.has(ticker)) {
-        if (next.size === 1) return prev; // a chart with nothing turned on is meaningless
-        next.delete(ticker);
-      } else {
-        next.add(ticker);
-      }
-      return next;
-    });
+    const base = effectiveSlots;
+    const at = base.indexOf(ticker);
+    if (at >= 0) {
+      // A chart with nothing on it is meaningless.
+      if (selected.length === 1) return;
+      const next = [...base];
+      next[at] = null;
+      setSlots(next);
+      return;
+    }
+    const free = base.indexOf(null);
+    if (free === -1) return; // full — the picker already disables this too
+    const next = [...base];
+    next[free] = ticker;
+    setSlots(next);
   }
 
   return (
@@ -680,6 +648,15 @@ export function ChannelTrackRecordChart({
         <div className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">{t("title")}</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
+            {data && data.available.length > 0 && (
+              <TrackRecordTickerPicker
+                available={data.available}
+                selected={selected}
+                max={SLOT_COUNT}
+                colorOf={colorOf}
+                onToggle={toggle}
+              />
+            )}
             <div className="flex gap-1">
               {VIEWS.map((v) => (
                 <Button
@@ -735,46 +712,45 @@ export function ChannelTrackRecordChart({
             )}
           </div>
         </div>
-        {data && data.tickers.length > 0 && (
+        {data && selected.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {data.tickers.map((item, i) => {
-              const on = active?.has(item.ticker) ?? false;
-              const color = tickerColor(i, dark);
-              const drawable = drawableIn(view, item, data.benchmark_closes, data.start);
+            {selected.map((ticker) => {
+              const color = colorOf(ticker) ?? "transparent";
+              const item = data.tickers.find((entry) => entry.ticker === ticker);
+              // No item = just added, its data still in flight (keepPreviousData
+              // keeps serving the older payload). That is neither "undrawable"
+              // nor a reason to disable it, so treat it as fine.
+              const drawable =
+                item === undefined ||
+                drawableIn(view, item, data.benchmark_closes, data.start);
               return (
                 <button
-                  key={item.ticker}
+                  key={ticker}
                   type="button"
-                  data-testid={`track-chip-${item.ticker}`}
-                  aria-pressed={on}
+                  data-testid={`track-chip-${ticker}`}
                   disabled={!drawable}
                   title={
                     drawable
-                      ? t("callCount", { count: item.calls })
-                      : hasPrice(item)
-                        ? t("noPositionInView", { ticker: item.ticker })
-                        : t("noPriceData", { ticker: item.ticker })
+                      ? t("callCount", { count: item?.calls ?? 0 })
+                      : item && hasPrice(item)
+                        ? t("noPositionInView", { ticker })
+                        : t("noPriceData", { ticker })
                   }
-                  onClick={() => toggle(item.ticker)}
-                  onMouseEnter={() => setHovered(item.ticker)}
+                  onClick={() => toggle(ticker)}
+                  onMouseEnter={() => setHovered(ticker)}
                   onMouseLeave={() => setHovered(null)}
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors",
                     !drawable && "cursor-not-allowed opacity-40",
-                    on
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:text-foreground",
+                    "bg-muted text-foreground",
                   )}
                 >
                   <span
                     aria-hidden
                     className="inline-block h-2 w-2 rounded-sm"
-                    style={{
-                      backgroundColor: on ? color : "transparent",
-                      boxShadow: on ? undefined : `inset 0 0 0 1px ${color}`,
-                    }}
+                    style={{ backgroundColor: color }}
                   />
-                  {item.ticker}
+                  {ticker}
                 </button>
               );
             })}
@@ -792,9 +768,9 @@ export function ChannelTrackRecordChart({
         {/* The chart container stays permanently mounted (hidden via CSS,
          *  never removed from the tree) so a transient revalidation error
          *  (e.g. SWR's revalidateOnFocus) never unmounts it. If it did, the
-         *  chart-creation effect below (keyed on [data, dark, rankOf, view],
-         *  not on `error`) would not re-run its cleanup — its `data` reference
-         *  is unchanged when a revalidation merely fails — leaving the
+         *  chart-creation effect below (keyed on [data, dark, effectiveSlots,
+         *  view], not on `error`) would not re-run its cleanup — its `data`
+         *  reference is unchanged when a revalidation merely fails — leaving the
          *  chart instance attached to a now-detached node while a fresh
          *  empty container mounts underneath, forever. Same pattern as
          *  price-chart.tsx: render the error message above the chart
