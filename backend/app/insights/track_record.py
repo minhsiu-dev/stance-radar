@@ -50,6 +50,37 @@ def rank_tickers(
     return [ticker for ticker, _ in call_counts(calls)][:top_n]
 
 
+def parse_ticker_param(raw: str | None) -> list[str] | None:
+    """`?tickers=nvda,mu` -> ["NVDA", "MU"]。去空白、轉大寫、去重且保留順序；
+    未給 / 空字串 / 只有分隔符 -> None（等同未指定，交給 resolve_selection 給預設）。"""
+    if raw is None:
+        return None
+    seen: dict[str, None] = {}
+    for part in raw.split(","):
+        ticker = part.strip().upper()
+        if ticker:
+            seen.setdefault(ticker, None)
+    return list(seen) or None
+
+
+def resolve_selection(
+    counts: list[tuple[str, int]], requested: list[str] | None
+) -> list[str]:
+    """最終要畫哪幾支。一律寬鬆處理、不拋錯：未知代號默默丟掉、超過上限截斷、
+    篩完是空的就退回預設前 N 支。這個參數是檢視狀態不是寫入操作,舊書籤裡有頻道
+    已不再提及的股票時,照常畫出剩下的比噴 422 有用。
+
+    回傳一律依 counts 的排名順序（次數 desc、ticker asc），**不跟隨請求順序**，
+    回應才具決定性；前端配色以自己的 slot 為準，與這個順序無關。"""
+    ranked = [ticker for ticker, _ in counts]
+    if requested is not None:
+        wanted = set(requested)
+        chosen = [t for t in ranked if t in wanted][:TRACK_RECORD_MAX_SELECTED]
+        if chosen:
+            return chosen
+    return ranked[:TRACK_RECORD_DEFAULT_N]
+
+
 def build_runs(calls: list[Call], start: date) -> tuple[list[dict], list[dict]]:
     """把一支股票的方向性發言攤成 [start, today] 上的狀態區段 + 轉折 marker。
 
@@ -141,16 +172,21 @@ async def load_calls(session: AsyncSession, channel_id: str) -> list[Call]:
 
 
 async def build_track_record(
-    session: AsyncSession, store: PriceStore, channel_id: str, range_key: str
+    session: AsyncSession,
+    store: PriceStore,
+    channel_id: str,
+    range_key: str,
+    tickers: list[str] | None = None,
 ) -> dict:
-    """前十支股票的日線 + 立場區段 + 轉折 marker，外加 benchmark 序列。
+    """選取股票的日線 + 立場區段 + 轉折 marker，外加 benchmark 序列與完整的
+    available 清單。
 
     價格層失敗不得讓端點 500（比照 /api/stocks/sparklines）：例外時所有 closes
     降級為空陣列，立場區段照常回傳。"""
     calls = await load_calls(session, channel_id)
     counts = call_counts(calls)
-    tickers = [ticker for ticker, _ in counts][:TRACK_RECORD_MAX_SELECTED]
-    chosen = set(tickers)
+    selected_tickers = resolve_selection(counts, tickers)
+    chosen = set(selected_tickers)
     selected = [c for c in calls if c.ticker in chosen]
 
     today = datetime.now(timezone.utc).date()
@@ -160,7 +196,7 @@ async def build_track_record(
         start = today - timedelta(days=_RANGE_DAYS[range_key])
 
     items = []
-    for ticker in tickers:
+    for ticker in selected_tickers:
         ticker_calls = [c for c in selected if c.ticker == ticker]
         runs, markers = build_runs(ticker_calls, start)
         items.append({
@@ -182,7 +218,7 @@ async def build_track_record(
     )
 
     daily: dict[str, list] = {}
-    if tickers:
+    if selected_tickers:
         try:
             daily = await store.get_daily(
                 sorted(chosen | {TRACK_RECORD_BENCHMARK}), price_start

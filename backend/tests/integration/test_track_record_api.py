@@ -40,6 +40,13 @@ _ROWS = [
     ("v6", 50, "CCC", Stance.neutral),   # CCC 完全沒有方向性發言
 ]
 
+_MANY_ROWS = [
+    # 七支股票、次數遞減 -> 用來驗證未指定時只回預設的前五支
+    (f"m{i}", 100 - i, ticker, Stance.buy)
+    for i, ticker in enumerate(["AAPL", "MSFT", "GOOG", "AMZN", "META", "NVDA", "TSLA"])
+    for _ in range(1)
+]
+
 
 async def test_track_record_unknown_channel_404(api):
     _, client = api
@@ -229,3 +236,61 @@ async def test_track_record_fetches_prices_back_to_an_out_of_window_entry(
     )
     assert aapl["runs"][0]["from"] == data["start"]      # from 仍是裁切過的窗起點
     assert starts and starts[0] <= (_NOW - timedelta(days=300)).date()
+
+
+async def test_track_record_defaults_to_the_top_five_tickers(api, sessionmaker):
+    _, client = api
+    await seed(sessionmaker, _MANY_ROWS)
+    data = (await client.get("/api/channels/ch1/track-record")).json()["data"]
+    # 七支都在 available 裡,但預設只畫五支
+    assert len(data["available"]) == 7
+    assert len(data["tickers"]) == 5
+
+
+async def test_track_record_honours_an_explicit_ticker_selection(api, sessionmaker):
+    _, client = api
+    await seed(sessionmaker, _ROWS)
+    data = (await client.get(
+        "/api/channels/ch1/track-record?range=all&tickers=BBB"
+    )).json()["data"]
+    assert [t["ticker"] for t in data["tickers"]] == ["BBB"]
+    # 選取縮小不影響下拉選單的完整清單
+    assert [a["ticker"] for a in data["available"]] == ["AAPL", "BBB"]
+
+
+async def test_track_record_selection_is_returned_in_rank_order(api, sessionmaker):
+    _, client = api
+    await seed(sessionmaker, _ROWS)
+    data = (await client.get(
+        "/api/channels/ch1/track-record?range=all&tickers=bbb,aapl"
+    )).json()["data"]
+    # 請求是 bbb,aapl（且小寫）-> 回應照排名 AAPL(3 次) 在前
+    assert [t["ticker"] for t in data["tickers"]] == ["AAPL", "BBB"]
+
+
+async def test_track_record_unknown_ticker_falls_back_instead_of_erroring(
+    api, sessionmaker
+):
+    _, client = api
+    await seed(sessionmaker, _ROWS)
+    resp = await client.get("/api/channels/ch1/track-record?range=all&tickers=ZZZ")
+    assert resp.status_code == 200
+    assert [t["ticker"] for t in resp.json()["data"]["tickers"]] == ["AAPL", "BBB"]
+
+
+async def test_track_record_all_range_starts_at_the_selection_earliest_call(
+    api, sessionmaker
+):
+    _, client = api
+    await seed(sessionmaker, _ROWS)
+    both = (await client.get(
+        "/api/channels/ch1/track-record?range=all"
+    )).json()["data"]
+    only_bbb = (await client.get(
+        "/api/channels/ch1/track-record?range=all&tickers=BBB"
+    )).json()["data"]
+    # range=all 的起點是「選取股票中」最早的那次發言,不是全頻道最早的:
+    # 只勾 BBB(250 天前)時,起點必須晚於含 AAPL(300 天前)的那次。
+    assert only_bbb["start"] > both["start"]
+    # 因此 BBB 不再有 idle 前導段,首段直接是 buy
+    assert only_bbb["tickers"][0]["runs"][0]["state"] == "buy"

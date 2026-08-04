@@ -1,6 +1,8 @@
 from datetime import date
 
-from app.insights.track_record import Call, build_runs, call_counts, rank_tickers
+from app.insights.track_record import (
+    Call, build_runs, call_counts, parse_ticker_param, rank_tickers, resolve_selection,
+)
 
 
 def c(ticker: str, stance: str, day: str, vid: str = "v") -> Call:
@@ -150,3 +152,46 @@ def test_build_runs_repeat_does_not_move_the_open_date():
     ]
     runs, _ = build_runs(calls, date(2026, 1, 1))
     assert runs[-1]["opened_at"] == "2026-02-01"
+
+
+def test_parse_ticker_param_normalises_and_dedupes():
+    assert parse_ticker_param(" nvda , mu ,NVDA ") == ["NVDA", "MU"]
+
+
+def test_parse_ticker_param_treats_blank_as_absent():
+    assert parse_ticker_param(None) is None
+    assert parse_ticker_param("") is None
+    assert parse_ticker_param(" , , ") is None
+
+
+def test_resolve_selection_defaults_to_the_top_five():
+    counts = [(f"T{i:02d}", 20 - i) for i in range(8)]
+    assert resolve_selection(counts, None) == ["T00", "T01", "T02", "T03", "T04"]
+
+
+def test_resolve_selection_returns_rank_order_not_request_order():
+    counts = [("AAA", 3), ("BBB", 2), ("CCC", 1)]
+    # 請求順序是 CCC, AAA -> 回應仍照排名 AAA, CCC,回應才具決定性
+    assert resolve_selection(counts, ["CCC", "AAA"]) == ["AAA", "CCC"]
+
+
+def test_resolve_selection_drops_unknown_tickers_silently():
+    counts = [("AAA", 3), ("BBB", 2)]
+    # 舊書籤裡有頻道已不再提及的股票時,照常畫出剩下的比噴 422 有用
+    assert resolve_selection(counts, ["BBB", "ZZZ"]) == ["BBB"]
+
+
+def test_resolve_selection_truncates_to_the_max():
+    counts = [(f"T{i:02d}", 20 - i) for i in range(15)]
+    assert resolve_selection(counts, [t for t, _ in counts]) == [
+        f"T{i:02d}" for i in range(10)
+    ]
+
+
+def test_resolve_selection_falls_back_to_default_when_nothing_valid_remains():
+    counts = [("AAA", 3), ("BBB", 2)]
+    assert resolve_selection(counts, ["ZZZ"]) == ["AAA", "BBB"]
+
+
+def test_resolve_selection_on_an_empty_channel_is_empty():
+    assert resolve_selection([], ["AAA"]) == []
