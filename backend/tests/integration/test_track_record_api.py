@@ -176,6 +176,7 @@ async def test_track_record_neutral_only_channel_is_empty(api, sessionmaker):
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["tickers"] == []
+    assert data["available"] == []
     assert data["benchmark_closes"] == []
 
 
