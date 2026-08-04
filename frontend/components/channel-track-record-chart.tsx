@@ -299,9 +299,10 @@ export function ChannelTrackRecordChart({
           ? formatSignedPercent
           : formatIndexedPercent,
       },
-      // Seed from the latest `logScale` (via the ref, not a dependency —
-      // same technique as activeRef above); the scale-mode effect further
-      // down takes over from here for subsequent toggle clicks.
+      // Seed from the latest `logScale` (via `logScaleRef`, not a dependency —
+      // same ref-during-render technique explained where it's declared
+      // above); the scale-mode effect further down takes over from here for
+      // subsequent toggle clicks.
       rightPriceScale: {
         // Log is unavailable in the performance view: its values cross zero and
         // lightweight-charts' log scale is a signed-log transform that renders

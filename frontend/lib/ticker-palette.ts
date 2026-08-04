@@ -21,11 +21,14 @@ export const TICKER_PALETTE_DARK = [
   "#008300", "#9085e9", "#e66767", "#289fba", "#79a01d",
 ];
 
-/** Color follows the entity: slot = the ticker's all-time rank, so when toggling
- *  series visibility, the remaining lines retain their color instead of being recolored. */
-export function tickerColor(rank: number, dark: boolean): string {
+/** Color follows the slot, not the ticker's rank or position in the response:
+ *  `slot` is the index into the fixed-length selection array the caller
+ *  maintains (see channel-track-record-chart.tsx's `slots` state), so
+ *  removing one selected ticker never recolors the others — only the freed
+ *  slot's color changes hands, to whichever ticker is picked next. */
+export function tickerColor(slot: number, dark: boolean): string {
   const palette = dark ? TICKER_PALETTE_DARK : TICKER_PALETTE_LIGHT;
-  return palette[rank % palette.length];
+  return palette[slot % palette.length];
 }
 
 /** Converts "#rrggbb" to "rgba(r, g, b, a)", used for faded neutral segments and hover dimming. */

@@ -511,12 +511,15 @@ describe("ChannelTrackRecordChart", () => {
     expect(crosshairSpy).toHaveBeenCalled();
   });
 
-  it("tears down the chart when the selection changes, since that refetches", () => {
+  it("tears down the chart immediately when the selection changes, before any refetch resolves", () => {
     render(<ChannelTrackRecordChart channelId="ch1" />);
     expect(removeSpy).not.toHaveBeenCalled();
     fireEvent.click(chipFor("FFF"));
-    // Selected is drawn: dropping one necessarily rebuilds (the data behind it
-    // changed), the same path a range or view switch takes.
+    // The mocked useSWR never actually refetches here — what this pins is
+    // that `effectiveSlots` is itself a rebuild trigger (see its dependency
+    // in the chart-creation effect), so the chart rebuilds on the very same
+    // click that changes the selection, the same path a range or view switch
+    // takes, rather than waiting one round-trip for new data to arrive.
     expect(removeSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -551,8 +554,8 @@ describe("ChannelTrackRecordChart", () => {
     // fails without new data). The old bug rendered `error ? <p> : ... :
     // <div ref={containerRef}>`, which swaps the container out of the tree
     // on this transition — but the chart-creation effect's deps ([data,
-    // dark, rankOf]) haven't changed, so its cleanup never runs and the
-    // chart is orphaned on a detached node.
+    // dark, effectiveSlots, view]) haven't changed, so its cleanup never
+    // runs and the chart is orphaned on a detached node.
     swrError = new Error("network blip");
     rerender(<ChannelTrackRecordChart channelId="ch1" />);
 
