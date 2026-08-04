@@ -286,9 +286,21 @@ describe("ChannelTrackRecordChart", () => {
     const before = colorOf("EEE").color;
     expect(before).toBeTruthy();
 
-    // Drop CCC from the middle, then let the server answer with a payload that
-    // no longer carries CCC.
+    // Drop CCC from the middle. `keepPreviousData` means this click's
+    // immediate rebuild still runs against the STALE payload (CCC still in
+    // data.tickers) — it's the `slot < 0` guard in the render effect that
+    // must skip drawing it, which is what makes the line vanish on click
+    // instead of one round-trip later. Clear before the click (not after) so
+    // this rebuild's calls are the ones under test.
+    addSeriesSpy.mockClear();
     fireEvent.click(chipFor("CCC"));
+    expect(
+      addSeriesSpy.mock.calls.some(
+        (call) => (call[1] as { title?: string })?.title === "CCC",
+      ),
+    ).toBe(false);
+
+    // Now let the server answer with a payload that no longer carries CCC.
     addSeriesSpy.mockClear();
     swrData = {
       ...RESPONSE,
