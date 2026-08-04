@@ -10,6 +10,7 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxTrigger,
+  useComboboxAnchor,
 } from "@/components/ui/combobox";
 import type { TrackRecordAvailable } from "@/lib/types";
 
@@ -29,6 +30,7 @@ export function TrackRecordTickerPicker({
   onToggle: (ticker: string) => void;
 }) {
   const t = useTranslations("ChannelDetail.trackRecordChart");
+  const anchor = useComboboxAnchor();
   const full = selected.length >= max;
   const tickers = available.map((item) => item.ticker);
   const countOf = new Map(available.map((item) => [item.ticker, item.calls]));
@@ -52,21 +54,37 @@ export function TrackRecordTickerPicker({
         if (changed) onToggle(changed);
       }}
     >
-      <ComboboxTrigger
-        data-testid="track-picker-trigger"
-        render={<Button type="button" size="sm" variant="outline" />}
-      >
-        {t("picker.trigger", { n: selected.length, max })}
-      </ComboboxTrigger>
-      <ComboboxContent>
+      {/* ComboboxContent's default anchor (with no `anchor` prop) is the
+          Input — but our Input lives *inside* the popup, so anchoring to it
+          made the popup anchor to itself (unstable position, collapsed
+          width). Anchor explicitly to this wrapper around the trigger
+          instead. */}
+      <div ref={anchor} className="inline-block">
+        <ComboboxTrigger
+          data-testid="track-picker-trigger"
+          render={<Button type="button" size="sm" variant="outline" />}
+        >
+          {t("picker.trigger", { n: selected.length, max })}
+        </ComboboxTrigger>
+      </div>
+      {/* The popup's default width tracks the trigger's own (locale- and
+          content-dependent) width, which crowds long tickers ("GOOGL") against
+          the checkmark. Give it a comfortable fixed floor instead. */}
+      <ComboboxContent anchor={anchor} className="w-56">
         <ComboboxInput
           data-testid="track-picker-search"
           placeholder={t("picker.placeholder")}
+          // ComboboxInput defaults showTrigger to true, which renders its own
+          // chevron-only trigger button meant for the "input doubles as the
+          // trigger" composition. We already have a separate trigger button
+          // above, so that default renders a second, empty trigger inside the
+          // popup. Turn it off.
+          showTrigger={false}
         />
         <ComboboxEmpty data-testid="track-picker-empty">
           {t("picker.empty")}
         </ComboboxEmpty>
-        <ComboboxList>
+        <ComboboxList className="max-h-72">
           {(ticker: string) => {
             const on = selected.includes(ticker);
             const color = colorOf(ticker);
