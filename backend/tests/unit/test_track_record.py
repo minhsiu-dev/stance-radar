@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.insights.track_record import Call, build_runs, rank_tickers
+from app.insights.track_record import Call, build_runs, call_counts, rank_tickers
 
 
 def c(ticker: str, stance: str, day: str, vid: str = "v") -> Call:
@@ -31,6 +31,22 @@ def test_rank_tickers_orders_by_directional_count_then_ticker():
 def test_rank_tickers_caps_at_top_n():
     calls = [c(f"T{i:02d}", "buy", "2026-01-01") for i in range(15)]
     assert len(rank_tickers(calls)) == 10
+
+
+def test_call_counts_orders_by_count_desc_then_ticker_asc():
+    calls = [
+        c("AAA", "buy", "2026-01-01"), c("AAA", "buy", "2026-02-01"),
+        c("BBB", "sell", "2026-01-05"), c("BBB", "buy", "2026-02-05"),
+        c("CCC", "buy", "2026-01-09"),
+        c("DDD", "buy", "2026-01-09"),
+    ]
+    # 這正是線上 AMD(10) / PLTR(10) 同票數的情況：字母序決勝，且兩者都必須留在清單裡
+    assert call_counts(calls) == [("AAA", 2), ("BBB", 2), ("CCC", 1), ("DDD", 1)]
+
+
+def test_call_counts_lists_every_ticker_not_just_the_top_ten():
+    calls = [c(f"T{i:02d}", "buy", "2026-01-01") for i in range(15)]
+    assert len(call_counts(calls)) == 15
 
 
 def test_build_runs_repeat_same_stance_does_not_split():

@@ -97,6 +97,21 @@ async def test_track_record_shape_and_carry_forward(api, sessionmaker):
     assert aapl["closes"]
 
 
+async def test_track_record_lists_every_directional_ticker_in_available(
+    api, sessionmaker
+):
+    _, client = api
+    await seed(sessionmaker, _ROWS)
+    data = (await client.get("/api/channels/ch1/track-record?range=all")).json()["data"]
+    # available 是給下拉選單用的完整清單:含次數、依次數 desc、且不含價格欄位
+    assert data["available"] == [
+        {"ticker": "AAPL", "calls": 3},
+        {"ticker": "BBB", "calls": 1},
+    ]
+    # 只有中立提及的 CCC 不入列 —— 它畫不出任何立場區段
+    assert "CCC" not in [a["ticker"] for a in data["available"]]
+
+
 async def test_track_record_window_start_carries_state(api, sessionmaker):
     _, client = api
     # 唯一一次 buy 在 300 天前 -> 6m 窗內沒有任何發言，但首段必須已經是 buy

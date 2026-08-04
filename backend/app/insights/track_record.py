@@ -16,7 +16,8 @@ from app.models import Stance, Video, VideoStance
 
 logger = logging.getLogger(__name__)
 
-TRACK_RECORD_TOP_N = 10
+TRACK_RECORD_MAX_SELECTED = 10
+TRACK_RECORD_DEFAULT_N = 5
 TRACK_RECORD_BENCHMARK = "VOO"
 TRACK_RECORD_RANGES = ("6m", "1y", "all")
 _RANGE_DAYS = {"6m": 182, "1y": 365}
@@ -33,13 +34,20 @@ class Call:
     video_title: str
 
 
-def rank_tickers(calls: list[Call], top_n: int = TRACK_RECORD_TOP_N) -> list[str]:
-    """前 N 支股票，依方向性發言次數 desc、ticker asc。全時間統計，不隨觀察窗改變，
-    這樣切 range 時 chip 順序與配色都不會跳。"""
+def call_counts(calls: list[Call]) -> list[tuple[str, int]]:
+    """每支股票的方向性發言次數，依次數 desc、ticker asc。全時間統計，不隨觀察窗改變，
+    這樣切 range 時下拉選單的順序與配色都不會跳。"""
     counts: dict[str, int] = {}
     for call in calls:
         counts[call.ticker] = counts.get(call.ticker, 0) + 1
-    return sorted(counts, key=lambda t: (-counts[t], t))[:top_n]
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
+def rank_tickers(
+    calls: list[Call], top_n: int = TRACK_RECORD_MAX_SELECTED
+) -> list[str]:
+    """前 N 支股票的 ticker，排序同 call_counts。"""
+    return [ticker for ticker, _ in call_counts(calls)][:top_n]
 
 
 def build_runs(calls: list[Call], start: date) -> tuple[list[dict], list[dict]]:
@@ -140,7 +148,8 @@ async def build_track_record(
     價格層失敗不得讓端點 500（比照 /api/stocks/sparklines）：例外時所有 closes
     降級為空陣列，立場區段照常回傳。"""
     calls = await load_calls(session, channel_id)
-    tickers = rank_tickers(calls)
+    counts = call_counts(calls)
+    tickers = [ticker for ticker, _ in counts][:TRACK_RECORD_MAX_SELECTED]
     chosen = set(tickers)
     selected = [c for c in calls if c.ticker in chosen]
 
@@ -192,6 +201,9 @@ async def build_track_record(
         "benchmark": TRACK_RECORD_BENCHMARK,
         "range": range_key,
         "start": start.isoformat(),
+        # 下拉選單用的完整清單:所有有方向性發言的股票 + 次數,刻意不含價格
+        # (此頻道 53 支約 1.5 KB),所以列幾支都不影響 payload 大小。
+        "available": [{"ticker": t, "calls": n} for t, n in counts],
         "benchmark_closes": closes(TRACK_RECORD_BENCHMARK),
         "tickers": items,
     }
