@@ -166,6 +166,7 @@
     "loadMore": "載入更多",
     "attempts": "已試 {count} 次 · 最後 {date}",
     "attemptsNever": "已試 {count} 次 · 尚未重試",
+    "noneMatchFilter": "目前的篩選條件沒有符合的影片。",
     "retryFailed": "重試失敗:{message}",
     "kinds": {
       "transcript": {

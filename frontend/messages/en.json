@@ -166,6 +166,7 @@
     "loadMore": "Load more",
     "attempts": "{count} attempts · last {date}",
     "attemptsNever": "{count} attempts · not retried yet",
+    "noneMatchFilter": "No videos match the current filter.",
     "retryFailed": "Retry failed: {message}",
     "kinds": {
       "transcript": {

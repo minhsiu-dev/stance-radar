@@ -42,18 +42,26 @@ export function FailedVideosList({
       { revalidateFirstPage: false },
     );
 
-  if (error) {
-    return (
-      <p className="text-sm text-red-500">
-        {t("loadError", { message: error.message })}
-      </p>
-    );
+  if (!data) {
+    if (error) {
+      return (
+        <p className="text-sm text-red-500">
+          {t("loadError", { message: error.message })}
+        </p>
+      );
+    }
+    return <Skeleton className="h-24 w-full" />;
   }
-  if (!data) return <Skeleton className="h-24 w-full" />;
 
   const items = data.flatMap((p) => p.items);
   const total = data[0]?.total ?? 0;
   const hasMore = items.length < total;
+
+  if (items.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">{t("noneMatchFilter")}</p>
+    );
+  }
 
   return (
     <div className="space-y-1">
@@ -107,17 +115,23 @@ export function FailedVideosList({
           )}
         </div>
       ))}
-      {hasMore && (
-        <div className="pt-2 text-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={isValidating}
-            onClick={() => setSize((s) => s + 1)}
-          >
-            {t("loadMore")}
-          </Button>
-        </div>
+      {error ? (
+        <p className="pt-2 text-center text-sm text-red-500">
+          {t("loadError", { message: error.message })}
+        </p>
+      ) : (
+        hasMore && (
+          <div className="pt-2 text-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isValidating}
+              onClick={() => setSize((s) => s + 1)}
+            >
+              {t("loadMore")}
+            </Button>
+          </div>
+        )
       )}
     </div>
   );

@@ -23,6 +23,7 @@ const messages = {
     loadMore: "Load more",
     attempts: "{count} attempts · last {date}",
     attemptsNever: "{count} attempts · not retried yet",
+    noneMatchFilter: "No videos match the current filter.",
   },
 };
 
@@ -115,5 +116,44 @@ describe("FailedVideosList", () => {
     }));
     expect(await screen.findByRole("button", { name: "Load more" }))
       .toBeInTheDocument();
+  });
+
+  it("hides load more once every row is already loaded", async () => {
+    renderList(async () => ({
+      items: Array.from({ length: 5 }, (_, i) => item(`v${i}`, 1, null)),
+      total: 5,
+      page: 1,
+      page_size: 20,
+    }));
+    await screen.findByText("Title v0");
+    expect(screen.queryByRole("button", { name: "Load more" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("keeps already-loaded rows visible when a later page fails", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 20 }, (_, i) => item(`v${i}`, 1, null)),
+        total: 45,
+        page: 1,
+        page_size: 20,
+      })
+      .mockRejectedValueOnce(new Error("boom"));
+    renderList(fetcher);
+
+    await screen.findByText("Title v0");
+    await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Failed to load: boom")).toBeInTheDocument();
+    expect(screen.getByText("Title v0")).toBeInTheDocument();
+    expect(screen.getByText("Title v19")).toBeInTheDocument();
+  });
+
+  it("shows an empty-state message when the filter matches nothing", async () => {
+    renderList(async () => ({ items: [], total: 0, page: 1, page_size: 20 }));
+    expect(
+      await screen.findByText("No videos match the current filter."),
+    ).toBeInTheDocument();
   });
 });
