@@ -132,6 +132,46 @@ async def test_items_paginate(api, sessionmaker):
     assert page2["total"] == 4
 
 
+async def test_items_paginate_stable_when_published_at_ties(api, sessionmaker):
+    """Two-plus failed videos can share the same published_at (same-day
+    uploads); the retry queue pages through them by clicking a button on each
+    row, so paging must be gapless and duplicate-free even when published_at
+    alone does not fully order the rows.
+
+    Seeded out of id order (z, m, a) so that whatever order an unordered-tie
+    query happens to fall back on does NOT coincidentally match the
+    `Video.id.asc()` order asserted below. Without that tiebreaker clause,
+    SQL gives no order guarantee among rows with equal published_at, so this
+    exact sequence has no basis to hold -- passing would be an accident of
+    Postgres internals, not a query contract. (Verified directly: with the
+    `Video.id.asc()` clause removed from the query, this test fails --
+    `assert ['tie-z', 'tie-m', 'tie-a'] == ['tie-a', 'tie-m', 'tie-z']` --
+    because a plain seq scan returns insertion order for ties; with the
+    clause restored it passes.)
+    """
+    same_ts = datetime(2026, 6, 10, tzinfo=timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch-tie", title="Tie", thumbnail_url="", uploads_playlist_id="UUt"))
+        for vid_id in ("tie-z", "tie-m", "tie-a"):  # inserted out of id order on purpose
+            s.add(Video(
+                id=vid_id, channel_id="ch-tie", title=f"title {vid_id}",
+                published_at=same_ts, thumbnail_url="", duration_seconds=60,
+                status=VideoStatus.failed, transcript=None, analysis_attempts=1,
+                error_message="boom",
+            ))
+        await s.commit()
+
+    _, client = api
+    seen = []
+    for page in (1, 2, 3):
+        data = (await client.get(
+            "/api/videos/failures/items",
+            params={"channel_id": "ch-tie", "page": page, "page_size": 1},
+        )).json()["data"]
+        seen.extend(i["id"] for i in data["items"])
+    assert seen == ["tie-a", "tie-m", "tie-z"]
+
+
 async def test_items_rejects_unknown_kind(api, sessionmaker):
     _, client = api
     await seed_failures(sessionmaker)

@@ -205,7 +205,7 @@ async def failures_items(
         select(Video)
         .options(selectinload(Video.channel))
         .where(*conditions)
-        .order_by(Video.published_at.desc())
+        .order_by(Video.published_at.desc(), Video.id.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )).scalars().all()
