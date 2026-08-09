@@ -273,6 +273,26 @@ describe("FailedVideos", () => {
     });
   });
 
+  it("shows human labels on the Select triggers, not raw filter values", async () => {
+    // SelectValue only falls back to `placeholder` when the value is empty;
+    // "all" is a real value, so a missing explicit-children fix renders the
+    // literal "all" / a raw channel id instead of a translated label.
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Transcript unavailable");
+
+    expect(screen.getByText("All channels")).toBeInTheDocument();
+    expect(screen.getByText("Any attempt count")).toBeInTheDocument();
+    expect(screen.queryByText("all")).not.toBeInTheDocument();
+
+    const [channelSelect] = screen.getAllByRole("combobox");
+    await user.click(channelSelect);
+    await user.click(await screen.findByRole("option", { name: "Alpha (48)" }));
+
+    expect(await screen.findByText("Alpha")).toBeInTheDocument();
+    expect(screen.queryByText("ch-a")).not.toBeInTheDocument();
+  });
+
   it("keeps the channel dropdown visible when the selected channel currently has none", async () => {
     // Correction 2's failure mode, reproduced via a channel filter rather than
     // the global empty case test 6 above already covers: the summary's `total`

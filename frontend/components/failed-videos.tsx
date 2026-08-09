@@ -174,12 +174,26 @@ export function FailedVideos() {
   const emptyMessage =
     isEmpty && channelId !== "all" ? t("noneMatchFilter") : t("empty");
 
+  // SelectValue only falls back to `placeholder` when the value is empty; "all"
+  // is a real, non-empty value, so without explicit children base-ui renders
+  // the raw value string (the literal "all", or a channel's raw id once
+  // selected) instead of a translated label. Resolve both triggers' displayed
+  // text explicitly, the same pattern feed-list.tsx uses for its channel filter.
+  const channelTitle =
+    channelId === "all"
+      ? t("allChannels")
+      : (data.channels.find((c) => c.id === channelId)?.title ?? channelId);
+  const thresholdLabel =
+    threshold === "all"
+      ? t("thresholdAll")
+      : t("thresholdUnder", { n: Number(threshold) });
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Select value={channelId} onValueChange={(v) => setChannelId(v ?? "all")}>
           <SelectTrigger className="w-56">
-            <SelectValue placeholder={t("allChannels")} />
+            <SelectValue placeholder={t("allChannels")}>{channelTitle}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("allChannels")}</SelectItem>
@@ -192,7 +206,7 @@ export function FailedVideos() {
         </Select>
         <Select value={threshold} onValueChange={(v) => setThreshold(v ?? "all")}>
           <SelectTrigger className="w-48">
-            <SelectValue placeholder={t("thresholdAll")} />
+            <SelectValue placeholder={t("thresholdAll")}>{thresholdLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("thresholdAll")}</SelectItem>
