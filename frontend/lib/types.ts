@@ -500,3 +500,39 @@ export interface ChannelPerformanceDto {
   summary: Record<PerfFilter, PerfGroup>;
   counts: Record<PerfFilter, number>;
 }
+
+/** Derived from whether a transcript is stored: "transcript" died fetching it
+ *  from YouTube, "analysis" died in the LLM with the transcript already saved. */
+export type FailureKind = "transcript" | "analysis";
+
+export interface FailureGroup {
+  kind: FailureKind;
+  total: number;
+  /** Rows under the current attempt threshold; equals `total` when unset. */
+  retryable: number;
+}
+
+export interface FailuresSummary {
+  groups: FailureGroup[];
+  channels: { id: string; title: string; total: number }[];
+  total: number;
+}
+
+export interface FailedVideoItem {
+  id: string;
+  title: string;
+  thumbnail_url: string;
+  channel: { id: string; title: string };
+  published_at: string;
+  duration_seconds: number | null;
+  error_message: string | null;
+  analysis_attempts: number;
+  last_attempt_at: string | null;
+}
+
+export interface FailedVideosResponse {
+  items: FailedVideoItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
