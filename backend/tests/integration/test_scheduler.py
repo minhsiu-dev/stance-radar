@@ -33,6 +33,30 @@ async def test_run_once_discovers_then_analyzes_pending(api, sessionmaker):
     assert video.status == VideoStatus.analyzed
 
 
+async def test_run_once_waits_for_an_auto_started_analyze_job(api, sessionmaker):
+    """Regression: RefreshRunner auto-starts analyze when a discover finishes with
+    pending videos, so the scheduler's own start() returns created=False. run_once
+    must still wait for that in-flight job rather than returning early."""
+    app, client = api
+    await client.post("/api/channels", json={"channel_ids": "UC_fake_alpha"})
+    await wait_refresh(app)
+
+    async with sessionmaker() as s:
+        video = await s.get(Video, "alpha_vid_3")
+        video.status = VideoStatus.pending
+        await s.commit()
+
+    scheduler = AutoRefreshScheduler(
+        runner=app.state.runner, sessionmaker=sessionmaker, interval_minutes=60,
+    )
+    await scheduler.run_once()
+
+    # No wait_refresh() here on purpose: run_once() itself must have waited.
+    async with sessionmaker() as s:
+        video = await s.get(Video, "alpha_vid_3")
+    assert video.status == VideoStatus.analyzed
+
+
 async def test_start_noop_when_disabled(api, sessionmaker):
     app, _ = api
     scheduler = AutoRefreshScheduler(

@@ -59,9 +59,13 @@ class AutoRefreshScheduler:
             return
         await self._wait_current()
         if await self._has_pending_videos():
-            _, created = await self._runner.start(JobKind.analyze)
-            if created:
-                await self._wait_current()
+            # created=False here does NOT mean "nothing to wait for": RefreshRunner
+            # auto-starts an analyze job via _continue_if_pending() when a discover
+            # finishes with pending videos, so the job is already running and the DB
+            # single-job guard refuses to start a second one. Either way an analyze job
+            # is in flight, and run_once's contract is to wait for it to finish.
+            await self._runner.start(JobKind.analyze)
+            await self._wait_current()
 
     async def _wait_current(self) -> None:
         task = self._runner.current_task
