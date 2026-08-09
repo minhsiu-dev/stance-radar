@@ -130,6 +130,36 @@ describe("FailedVideosList", () => {
       .not.toBeInTheDocument();
   });
 
+  it("loads a second page and keeps rows from both pages on screen", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 20 }, (_, i) => item(`v${i}`, 1, null)),
+        total: 25,
+        page: 1,
+        page_size: 20,
+      })
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 5 }, (_, i) => item(`w${i}`, 1, null)),
+        total: 25,
+        page: 2,
+        page_size: 20,
+      });
+    renderList(fetcher);
+
+    await screen.findByText("Title v0");
+    await userEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Title w0")).toBeInTheDocument();
+    expect(screen.getByText("Title w4")).toBeInTheDocument();
+    // page 1's rows are still there, not replaced by page 2's
+    expect(screen.getByText("Title v0")).toBeInTheDocument();
+    expect(screen.getByText("Title v19")).toBeInTheDocument();
+    // 20 + 5 == total 25 -- nothing left to load
+    expect(screen.queryByRole("button", { name: "Load more" }))
+      .not.toBeInTheDocument();
+  });
+
   it("keeps already-loaded rows visible when a later page fails", async () => {
     const fetcher = vi
       .fn()
