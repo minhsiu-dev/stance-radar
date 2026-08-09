@@ -55,6 +55,10 @@ export function FailedVideos() {
   );
 
   function refresh() {
+    // Also runs when the watched job finishes (see useAnalyzeJob below), which is
+    // the only place a "queued into the running job" message can go stale -- clear
+    // it here so it doesn't linger on screen until the next retry click.
+    setMessage(null);
     mutate(
       (key) => typeof key === "string" && key.startsWith("/api/videos/failures"),
     );
