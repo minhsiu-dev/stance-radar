@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -251,23 +251,28 @@ async def retry_failures(
 ):
     if body.kind is not None and body.kind not in FAILURE_KINDS:
         return fail(f"Unknown failure kind: {body.kind}", status_code=400)
-    videos = (await session.execute(
-        select(Video).where(
+    # Select ids only -- not full Video rows -- so this doesn't pull every matched
+    # video's `transcript` JSONB into memory just to flip two columns (the
+    # analysis-class group alone is dozens of videos, each with a stored transcript).
+    ids = (await session.execute(
+        select(Video.id).where(
             *_failure_conditions(body.kind, body.channel_id, body.max_attempts)
         )
     )).scalars().all()
-    if not videos:
+    if not ids:
         return ok({"queued": 0, "job_id": None, "created": False})
-    for video in videos:
-        video.status = VideoStatus.pending
-        video.error_message = None
-        # analysis_attempts is deliberately NOT reset: it is the only record that
+    await session.execute(
+        update(Video)
+        .where(Video.id.in_(ids))
+        .values(status=VideoStatus.pending, error_message=None)
+        # analysis_attempts is deliberately NOT touched: it is the only record that
         # distinguishes "blocked once" from "blocked twelve times", which is exactly
         # what the max_attempts threshold spends.
+    )
     await session.commit()
     # created=False means a job is already running; the pending videos fold into its drain.
     job_id, created = await runner.start(JobKind.analyze)
-    return ok({"queued": len(videos), "job_id": job_id, "created": created})
+    return ok({"queued": len(ids), "job_id": job_id, "created": created})
 
 
 @router.get("/{video_id}")
