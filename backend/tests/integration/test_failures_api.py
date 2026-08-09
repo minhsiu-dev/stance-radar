@@ -178,3 +178,85 @@ async def test_items_rejects_unknown_kind(api, sessionmaker):
     resp = await client.get("/api/videos/failures/items", params={"kind": "bogus"})
     assert resp.status_code == 400
     assert resp.json()["success"] is False
+
+
+async def test_retry_requeues_only_the_matching_subset(api, session, sessionmaker):
+    from tests.conftest import wait_refresh
+
+    app, client = api
+    await seed_failures(sessionmaker)
+
+    resp = await client.post(
+        "/api/videos/failures/retry", json={"kind": "analysis"}
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["queued"] == 2      # f-a3, f-b1
+    assert data["created"] is True
+    await wait_refresh(app)
+
+    # untouched: the transcript-class failures keep their status AND their error
+    a1 = await session.get(Video, "f-a1")
+    await session.refresh(a1)
+    assert a1.status == VideoStatus.failed
+    assert a1.error_message == "boom"
+    assert a1.analysis_attempts == 1
+
+
+async def test_retry_preserves_the_attempt_counter(api, session, sessionmaker):
+    from tests.conftest import wait_refresh
+
+    app, client = api
+    await seed_failures(sessionmaker)
+
+    await client.post("/api/videos/failures/retry", json={"kind": "analysis"})
+    await wait_refresh(app)
+
+    # f-a3 started at 2; the retry itself is one more attempt -> 3, never reset to 0
+    a3 = await session.get(Video, "f-a3")
+    await session.refresh(a3)
+    assert a3.analysis_attempts == 3
+
+
+async def test_retry_honours_the_attempt_threshold(api, session, sessionmaker):
+    from tests.conftest import wait_refresh
+
+    app, client = api
+    await seed_failures(sessionmaker)
+
+    resp = await client.post(
+        "/api/videos/failures/retry", json={"kind": "transcript", "max_attempts": 2}
+    )
+    assert resp.json()["data"]["queued"] == 1   # f-a1 (1 attempt), not f-a2 (5)
+    await wait_refresh(app)
+
+    a2 = await session.get(Video, "f-a2")
+    await session.refresh(a2)
+    assert a2.analysis_attempts == 5            # the residue was left alone
+
+
+async def test_retry_matching_nothing_starts_no_job(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+
+    resp = await client.post(
+        "/api/videos/failures/retry", json={"kind": "transcript", "max_attempts": 1}
+    )
+    data = resp.json()["data"]
+    assert data == {"queued": 0, "job_id": None, "created": False}
+    assert (await client.get("/api/jobs/current")).status_code == 204
+
+
+async def test_retry_rejects_unknown_kind(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+    resp = await client.post("/api/videos/failures/retry", json={"kind": "bogus"})
+    assert resp.status_code == 400
+    assert resp.json()["success"] is False
+
+
+async def test_retry_requires_admin(locked_api, sessionmaker):
+    _, client = locked_api
+    await seed_failures(sessionmaker)
+    resp = await client.post("/api/videos/failures/retry", json={"kind": "analysis"})
+    assert resp.status_code == 401

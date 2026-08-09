@@ -232,6 +232,40 @@ async def failures_items(
     })
 
 
+class RetryFailuresRequest(BaseModel):
+    kind: str | None = None
+    channel_id: str | None = None
+    max_attempts: int | None = None
+
+
+@router.post("/failures/retry")
+async def retry_failures(
+    body: RetryFailuresRequest,
+    session: AsyncSession = Depends(get_session),
+    runner: RefreshRunner = Depends(get_runner),
+    _: None = Depends(require_admin),
+):
+    if body.kind is not None and body.kind not in FAILURE_KINDS:
+        return fail(f"Unknown failure kind: {body.kind}", status_code=400)
+    videos = (await session.execute(
+        select(Video).where(
+            *_failure_conditions(body.kind, body.channel_id, body.max_attempts)
+        )
+    )).scalars().all()
+    if not videos:
+        return ok({"queued": 0, "job_id": None, "created": False})
+    for video in videos:
+        video.status = VideoStatus.pending
+        video.error_message = None
+        # analysis_attempts is deliberately NOT reset: it is the only record that
+        # distinguishes "blocked once" from "blocked twelve times", which is exactly
+        # what the max_attempts threshold spends.
+    await session.commit()
+    # created=False means a job is already running; the pending videos fold into its drain.
+    job_id, created = await runner.start(JobKind.analyze)
+    return ok({"queued": len(videos), "job_id": job_id, "created": created})
+
+
 @router.get("/{video_id}")
 async def video_detail(
     video_id: str,
