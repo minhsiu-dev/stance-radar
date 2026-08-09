@@ -304,6 +304,12 @@ class RefreshRunner:
         deps = self._deps
         async with deps.sessionmaker() as session:
             video = await session.get(Video, video_id)
+            # Commit the attempt stamp immediately. The generic-exception path re-opens a
+            # fresh session in _mark_video_failed, so anything still uncommitted here is
+            # discarded on exactly the failures we most want counted.
+            video.analysis_attempts = (video.analysis_attempts or 0) + 1
+            video.last_attempt_at = utcnow()
+            await session.commit()
             if video.transcript:
                 # Re-analysis runs offline from the stored transcript — no YouTube fetch.
                 transcript = transcript_from_json(video.transcript)

@@ -94,3 +94,44 @@ async def test_backfill_stays_null_when_a_matching_stance_mention_is_firm(engine
     async with sessionmaker() as s:
         vs = await s.get(VideoStance, ("v2", "AMD"))
         assert vs.is_conditional is None  # a firm matching-stance mention blocks the backfill
+
+
+async def test_analysis_attempts_backfilled_for_previously_failed_videos(
+    engine, sessionmaker
+):
+    from datetime import datetime, timezone
+
+    from app.models import Channel, Video, VideoStatus
+
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch3", title="c", thumbnail_url="", uploads_playlist_id="UU3"))
+        s.add(Video(
+            id="v-failed", channel_id="ch3", title="t",
+            published_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            thumbnail_url="", duration_seconds=60,
+            status=VideoStatus.failed, error_message="claude exited -11",
+        ))
+        # never analyzed: no error_message -> must stay 0
+        s.add(Video(
+            id="v-fresh", channel_id="ch3", title="t",
+            published_at=datetime(2026, 6, 2, tzinfo=timezone.utc),
+            thumbnail_url="", duration_seconds=60,
+            status=VideoStatus.discovered,
+        ))
+        await s.commit()
+
+    await run_startup_migrations(engine)
+
+    async with sessionmaker() as s:
+        assert (await s.get(Video, "v-failed")).analysis_attempts == 1
+        assert (await s.get(Video, "v-fresh")).analysis_attempts == 0
+        # a real count must not be flattened back to 1 by a later startup
+        v = await s.get(Video, "v-failed")
+        v.analysis_attempts = 7
+        await s.commit()
+
+    await run_startup_migrations(engine)
+
+    async with sessionmaker() as s:
+        assert (await s.get(Video, "v-failed")).analysis_attempts == 7
+        assert (await s.get(Video, "v-fresh")).analysis_attempts == 0

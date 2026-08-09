@@ -88,6 +88,14 @@ class Video(Base):
     # Whole-video TL;DR bullets from the LLM (English); NULL for videos analyzed before this field existed
     tldr: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # How many times analysis has been attempted (successes included). Drives the
+    # /failed page's "retry only videos tried fewer than N times" threshold.
+    analysis_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    last_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Tickers reported by the LLM but dropped because they failed ticker validation (lets the user know something was skipped)
     dropped_tickers: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     analyzed_at: Mapped[datetime | None] = mapped_column(

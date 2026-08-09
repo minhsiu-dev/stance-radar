@@ -40,6 +40,15 @@ _STATEMENTS = (
     "   AND NOT EXISTS (SELECT 1 FROM mentions m"
     "               WHERE m.video_id = vs.video_id AND m.ticker = vs.ticker"
     "                 AND m.stance = vs.stance AND m.is_conditional IS NOT TRUE)",
+    "ALTER TABLE videos ADD COLUMN IF NOT EXISTS analysis_attempts"
+    " INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE videos ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ",
+    # Backfill: a video carrying an error_message has been attempted at least once, so
+    # showing "0 attempts" would lie. Idempotent by construction — after this runs the
+    # touched rows hold 1, so a second pass matches nothing, and it can never clobber a
+    # real count. Videos that were never analyzed have error_message NULL and stay 0.
+    "UPDATE videos SET analysis_attempts = 1"
+    " WHERE analysis_attempts = 0 AND error_message IS NOT NULL",
     # Portfolio feature removed: drop its tables + enum (no-op on fresh DBs)
     "DROP TABLE IF EXISTS portfolio_transactions",
     "DROP TABLE IF EXISTS portfolio_cash",
