@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -239,7 +239,7 @@ async def failures_items(
 class RetryFailuresRequest(BaseModel):
     kind: str | None = None
     channel_id: str | None = None
-    max_attempts: int | None = None
+    max_attempts: int | None = Field(None, ge=1)
 
 
 @router.post("/failures/retry")

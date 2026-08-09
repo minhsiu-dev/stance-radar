@@ -247,6 +247,18 @@ async def test_retry_matching_nothing_starts_no_job(api, sessionmaker):
     assert (await client.get("/api/jobs/current")).status_code == 204
 
 
+async def test_retry_rejects_non_positive_max_attempts(api, sessionmaker):
+    # Both GETs already declare `max_attempts: Query(None, ge=1)`; the POST body
+    # field must carry the same lower bound so all three agree on what a valid
+    # threshold is instead of silently returning `queued: 0` for max_attempts=0.
+    _, client = api
+    await seed_failures(sessionmaker)
+    resp = await client.post(
+        "/api/videos/failures/retry", json={"kind": "analysis", "max_attempts": 0}
+    )
+    assert resp.status_code == 422
+
+
 async def test_retry_rejects_unknown_kind(api, sessionmaker):
     _, client = api
     await seed_failures(sessionmaker)
