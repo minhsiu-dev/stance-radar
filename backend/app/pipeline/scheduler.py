@@ -9,7 +9,7 @@ import logging
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.models import JobKind, Video, VideoStatus
+from app.models import Job, JobKind, Video, VideoStatus
 from app.pipeline.refresh import RefreshRunner
 
 logger = logging.getLogger(__name__)
@@ -59,18 +59,48 @@ class AutoRefreshScheduler:
             return
         await self._wait_current()
         if await self._has_pending_videos():
-            # created=False here does NOT mean "nothing to wait for": RefreshRunner
-            # auto-starts an analyze job via _continue_if_pending() when a discover
-            # finishes with pending videos, so the job is already running and the DB
-            # single-job guard refuses to start a second one. Either way an analyze job
-            # is in flight, and run_once's contract is to wait for it to finish.
-            await self._runner.start(JobKind.analyze)
-            await self._wait_current()
+            await self._start_analyze_and_wait()
 
-    async def _wait_current(self) -> None:
+    async def _start_analyze_and_wait(self) -> None:
+        job_id, created = await self._runner.start(JobKind.analyze)
+        # Capture current_task right here, with no await in between -- it is
+        # guaranteed to correspond to job_id (see _is_analyze_job below for why
+        # that correspondence holds even when created=False).
         task = self._runner.current_task
+        if created:
+            # We just started it ourselves: task is unambiguously the analyze job.
+            await self._wait_current(task)
+            return
+        # created=False means the single global job slot (RefreshRunner allows
+        # only one job of ANY kind at a time) was already held by someone else.
+        # Often that's the analyze job RefreshRunner auto-started via
+        # _continue_if_pending() when our own discover finished with pending
+        # videos already queued -- run_once's contract is to wait for that one.
+        # But the slot is global, not per-kind: it can just as easily be an
+        # unrelated manually-triggered discover or load_older job that grabbed
+        # it in this same window. We must NOT block on that -- it can run for a
+        # long, unbounded time and has nothing to do with the analyze work we
+        # just determined is needed, and run_once would wrongly serialize an
+        # auto-refresh cycle behind it. So only wait when the job actually
+        # holding the slot is analyze.
+        if await self._is_analyze_job(job_id):
+            await self._wait_current(task)
+
+    async def _wait_current(self, task: asyncio.Task | None = None) -> None:
+        if task is None:
+            task = self._runner.current_task
         if task is not None:
             await asyncio.shield(task)
+
+    async def _is_analyze_job(self, job_id: int) -> bool:
+        # Look up job_id specifically (not "whatever is running now") so this
+        # stays correct even if, by the time this DB round-trip completes, the
+        # job has since finished and something else has taken the slot -- we
+        # still want the answer for the job `task` above was actually captured
+        # for, not a different one.
+        async with self._sessionmaker() as session:
+            job = await session.get(Job, job_id)
+        return job is not None and job.kind == JobKind.analyze.value
 
     async def _has_pending_videos(self) -> bool:
         async with self._sessionmaker() as session:
