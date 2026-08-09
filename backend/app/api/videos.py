@@ -156,6 +156,7 @@ async def _count_failures(session: AsyncSession, conditions: list) -> int:
 
 @router.get("/failures")
 async def failures_summary(
+    channel_id: str | None = Query(None),
     max_attempts: int | None = Query(None, ge=1),
     session: AsyncSession = Depends(get_session),
 ):
@@ -164,14 +165,17 @@ async def failures_summary(
         groups.append({
             "kind": kind,
             "total": await _count_failures(
-                session, _failure_conditions(kind, None, None)
+                session, _failure_conditions(kind, channel_id, None)
             ),
             "retryable": await _count_failures(
-                session, _failure_conditions(kind, None, max_attempts)
+                session, _failure_conditions(kind, channel_id, max_attempts)
             ),
         })
-    # Channel counts ignore kind/channel_id on purpose: this feeds the channel
-    # dropdown, which would collapse to a single option if it filtered itself.
+    # The channels list always ignores channel_id (and kind) on purpose: it feeds
+    # the channel dropdown, which would collapse to a single option if it filtered
+    # itself on the very selection it is meant to offer. `groups` above, by
+    # contrast, IS scoped to channel_id when given, so its totals stay consistent
+    # with what /failures/items and /failures/retry would return for the same filter.
     channel_rows = (await session.execute(
         select(Channel.id, Channel.title, func.count(Video.id))
         .join(Video, Video.channel_id == Channel.id)

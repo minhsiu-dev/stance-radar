@@ -260,3 +260,51 @@ async def test_retry_requires_admin(locked_api, sessionmaker):
     await seed_failures(sessionmaker)
     resp = await client.post("/api/videos/failures/retry", json={"kind": "analysis"})
     assert resp.status_code == 401
+
+
+async def test_summary_channel_id_scopes_group_totals(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+
+    scoped = (await client.get(
+        "/api/videos/failures", params={"channel_id": "ch-a"}
+    )).json()["data"]
+    by_kind = {g["kind"]: g for g in scoped["groups"]}
+    # ch-a only: f-a1, f-a2 (transcript); f-a3 (analysis) -- f-b1 excluded
+    assert by_kind["transcript"]["total"] == 2
+    assert by_kind["analysis"]["total"] == 1
+    assert scoped["total"] == 3
+
+    unfiltered = (await client.get("/api/videos/failures")).json()["data"]
+    by_kind_all = {g["kind"]: g for g in unfiltered["groups"]}
+    assert by_kind_all["transcript"]["total"] == 2
+    assert by_kind_all["analysis"]["total"] == 2
+
+
+async def test_summary_channels_list_does_not_collapse_when_filtered(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+
+    unfiltered = (await client.get("/api/videos/failures")).json()["data"]
+    scoped = (await client.get(
+        "/api/videos/failures", params={"channel_id": "ch-a"}
+    )).json()["data"]
+    assert scoped["channels"] == unfiltered["channels"]
+    assert [c["id"] for c in scoped["channels"]] == ["ch-a", "ch-b"]
+
+
+async def test_summary_retryable_matches_what_retry_actually_queues(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+
+    summary = (await client.get(
+        "/api/videos/failures", params={"channel_id": "ch-a", "max_attempts": 2}
+    )).json()["data"]
+    by_kind = {g["kind"]: g for g in summary["groups"]}
+    retryable = by_kind["transcript"]["retryable"]  # f-a1 (1 attempt); f-a2 (5) excluded
+
+    resp = await client.post(
+        "/api/videos/failures/retry",
+        json={"kind": "transcript", "channel_id": "ch-a", "max_attempts": 2},
+    )
+    assert resp.json()["data"]["queued"] == retryable
