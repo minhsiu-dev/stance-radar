@@ -107,6 +107,20 @@ function makeChannelAwareFetcher(channelSummary: Record<string, unknown>) {
   });
 }
 
+// Branches the summary response on the `max_attempts` query param, mirroring
+// makeChannelAwareFetcher above but for the threshold Select, so a test can drive
+// the real Select and observe the real fetch URL / retry body change with it.
+function makeThresholdAwareFetcher(thresholdSummary: Record<string, unknown>) {
+  return vi.fn(async (key: string) => {
+    if (key.startsWith("/api/videos/failures/items")) return itemsPage;
+    if (key.startsWith("/api/videos/failures")) {
+      return key.includes("max_attempts=3") ? thresholdSummary : summary;
+    }
+    if (key === "/api/jobs/current") return null;
+    throw new Error(`unexpected key ${key}`);
+  });
+}
+
 function renderPage(fetcher = makeFetcher()) {
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
@@ -269,6 +283,56 @@ describe("FailedVideos", () => {
         kind: "transcript",
         channel_id: "ch-a",
         max_attempts: null,
+      }),
+    });
+  });
+
+  it("threads a selected attempt threshold into both the summary fetch and the retry POST body", async () => {
+    // Same shape as the channel test above, but for the threshold Select: the
+    // threshold is threaded through three places (the summary key, filterFor's
+    // list filter, and the retry POST body) and the channel path only got real
+    // coverage after a real bug was found there (the summary key not carrying
+    // channel_id) -- this pins the equivalent path for max_attempts, which had
+    // no such test.
+    const thresholdSummary = {
+      groups: [
+        { kind: "transcript", total: 160, retryable: 90 },
+        { kind: "analysis", total: 53, retryable: 30 },
+      ],
+      channels: [{ id: "ch-a", title: "Alpha", total: 48 }],
+      total: 213,
+    };
+    const fetcher = makeThresholdAwareFetcher(thresholdSummary);
+    apiFetchMock.mockResolvedValue({ queued: 90, job_id: 12, created: true });
+    const user = userEvent.setup();
+    renderPage(fetcher);
+    await screen.findByText("Transcript unavailable");
+
+    const [, thresholdSelect] = screen.getAllByRole("combobox");
+    await user.click(thresholdSelect);
+    await user.click(
+      await screen.findByRole("option", { name: "Fewer than 3 attempts" }),
+    );
+
+    // The threshold-scoped summary swaps the group counts in, proving the
+    // request that produced them carried max_attempts=3 (the fetcher only
+    // returns this payload for that query string).
+    await screen.findByText("160 videos · 90 match the threshold");
+    expect(
+      fetcher.mock.calls.some(([k]) =>
+        String(k).match(/^\/api\/videos\/failures\?.*max_attempts=3/),
+      ),
+    ).toBe(true);
+
+    await user.click(
+      screen.getByRole("button", { name: "Retry this group (90)" }),
+    );
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/videos/failures/retry", {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "transcript",
+        channel_id: null,
+        max_attempts: 3,
       }),
     });
   });
