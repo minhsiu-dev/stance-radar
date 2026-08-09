@@ -294,17 +294,30 @@ async def test_summary_channels_list_does_not_collapse_when_filtered(api, sessio
 
 
 async def test_summary_retryable_matches_what_retry_actually_queues(api, sessionmaker):
+    # kind="analysis" is deliberate, not "transcript": both transcript-class
+    # failures (f-a1, f-a2) happen to live in ch-a alone, so channel_id="ch-a"
+    # would select the exact same rows as no filter at all for that kind --
+    # a no-op that can't tell a working channel_id from a hardcoded None. The
+    # analysis-class failures are split across channels (f-a3 in ch-a, f-b1
+    # in ch-b), so scoping to ch-a actually changes the count and can catch a
+    # regression back to the old hardcoded-None summary.
     _, client = api
     await seed_failures(sessionmaker)
 
-    summary = (await client.get(
-        "/api/videos/failures", params={"channel_id": "ch-a", "max_attempts": 2}
+    unscoped = (await client.get("/api/videos/failures")).json()["data"]
+    scoped = (await client.get(
+        "/api/videos/failures", params={"channel_id": "ch-a"}
     )).json()["data"]
-    by_kind = {g["kind"]: g for g in summary["groups"]}
-    retryable = by_kind["transcript"]["retryable"]  # f-a1 (1 attempt); f-a2 (5) excluded
+    unscoped_retryable = {g["kind"]: g for g in unscoped["groups"]}["analysis"]["retryable"]
+    scoped_retryable = {g["kind"]: g for g in scoped["groups"]}["analysis"]["retryable"]
+    # f-a3 + f-b1 unscoped (2) vs f-a3 alone scoped to ch-a (1): proves the
+    # channel_id param actually reaches the group calculation.
+    assert unscoped_retryable == 2
+    assert scoped_retryable == 1
+    assert scoped_retryable != unscoped_retryable
 
     resp = await client.post(
         "/api/videos/failures/retry",
-        json={"kind": "transcript", "channel_id": "ch-a", "max_attempts": 2},
+        json={"kind": "analysis", "channel_id": "ch-a"},
     )
-    assert resp.json()["data"]["queued"] == retryable
+    assert resp.json()["data"]["queued"] == scoped_retryable
