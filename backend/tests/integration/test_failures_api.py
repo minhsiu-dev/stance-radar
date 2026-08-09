@@ -83,3 +83,58 @@ async def test_summary_is_not_swallowed_by_the_video_id_route(api, sessionmaker)
     resp = await client.get("/api/videos/failures")
     assert resp.status_code == 200
     assert "groups" in resp.json()["data"]
+
+
+async def test_items_shape_and_ordering(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+
+    data = (await client.get("/api/videos/failures/items")).json()["data"]
+    assert data["total"] == 4
+    assert data["page"] == 1
+    assert [i["id"] for i in data["items"]] == ["f-b1", "f-a3", "f-a2", "f-a1"]
+    row = data["items"][0]
+    assert row["channel"] == {"id": "ch-b", "title": "Beta"}
+    assert row["error_message"] == "boom"
+    assert row["analysis_attempts"] == 1
+    assert row["last_attempt_at"] is None
+    assert row["duration_seconds"] == 600
+
+
+async def test_items_kind_and_channel_filters(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+
+    transcript = (await client.get(
+        "/api/videos/failures/items", params={"kind": "transcript"}
+    )).json()["data"]
+    assert [i["id"] for i in transcript["items"]] == ["f-a2", "f-a1"]
+
+    ch_a = (await client.get(
+        "/api/videos/failures/items", params={"channel_id": "ch-a"}
+    )).json()["data"]
+    assert ch_a["total"] == 3
+    assert {i["channel"]["id"] for i in ch_a["items"]} == {"ch-a"}
+
+
+async def test_items_paginate(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+
+    page1 = (await client.get(
+        "/api/videos/failures/items", params={"page": 1, "page_size": 2}
+    )).json()["data"]
+    page2 = (await client.get(
+        "/api/videos/failures/items", params={"page": 2, "page_size": 2}
+    )).json()["data"]
+    assert [i["id"] for i in page1["items"]] == ["f-b1", "f-a3"]
+    assert [i["id"] for i in page2["items"]] == ["f-a2", "f-a1"]
+    assert page2["total"] == 4
+
+
+async def test_items_rejects_unknown_kind(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+    resp = await client.get("/api/videos/failures/items", params={"kind": "bogus"})
+    assert resp.status_code == 400
+    assert resp.json()["success"] is False

@@ -188,6 +188,50 @@ async def failures_summary(
     })
 
 
+@router.get("/failures/items")
+async def failures_items(
+    kind: str | None = Query(None),
+    channel_id: str | None = Query(None),
+    max_attempts: int | None = Query(None, ge=1),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+):
+    if kind is not None and kind not in FAILURE_KINDS:
+        return fail(f"Unknown failure kind: {kind}", status_code=400)
+    conditions = _failure_conditions(kind, channel_id, max_attempts)
+    total = await _count_failures(session, conditions)
+    videos = (await session.execute(
+        select(Video)
+        .options(selectinload(Video.channel))
+        .where(*conditions)
+        .order_by(Video.published_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )).scalars().all()
+    return ok({
+        "items": [
+            {
+                "id": v.id,
+                "title": v.title,
+                "thumbnail_url": v.thumbnail_url,
+                "channel": {"id": v.channel.id, "title": v.channel.title},
+                "published_at": v.published_at.isoformat(),
+                "duration_seconds": v.duration_seconds,
+                "error_message": v.error_message,
+                "analysis_attempts": v.analysis_attempts,
+                "last_attempt_at": (
+                    v.last_attempt_at.isoformat() if v.last_attempt_at else None
+                ),
+            }
+            for v in videos
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    })
+
+
 @router.get("/{video_id}")
 async def video_detail(
     video_id: str,
