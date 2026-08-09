@@ -47,6 +47,11 @@ export function FailedVideos() {
       channelId: channelId === "all" ? undefined : channelId,
       maxAttempts,
     }),
+    // Changing either filter changes the key, which would otherwise blank `data`
+    // for a tick and unmount the very Select the user just interacted with
+    // (the same trap Correction 2 exists to avoid, here on a refetch rather
+    // than an empty result).
+    { keepPreviousData: true },
   );
 
   function refresh() {
@@ -113,7 +118,12 @@ export function FailedVideos() {
   }
 
   function jobLine() {
-    if (!job) return null;
+    // /api/jobs/current returns the most recent job of ANY kind once nothing is
+    // running (see backend/app/api/refresh.py) -- e.g. last night's scheduled
+    // `discover` job. This line exists to report on a retry the user just
+    // triggered, so a non-"analyze" job (nothing started here) must render
+    // nothing rather than a fabricated status about an action they never took.
+    if (!job || job.kind !== "analyze") return null;
     if (job.status === "running") {
       return (
         <p className="text-xs text-muted-foreground">
