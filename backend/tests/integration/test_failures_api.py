@@ -1,0 +1,85 @@
+from datetime import datetime, timezone
+
+from app.models import Channel, Video, VideoStatus
+
+
+async def seed_failures(sessionmaker) -> None:
+    """Two channels, five failed videos:
+      ch-a: f-a1 (no transcript, 1 attempt), f-a2 (no transcript, 5 attempts),
+            f-a3 (transcript stored, 2 attempts)
+      ch-b: f-b1 (transcript stored, 1 attempt)
+      plus one analyzed video that must never show up.
+    """
+    def vid(vid_id, ch, day, *, transcript, attempts, status=VideoStatus.failed):
+        return Video(
+            id=vid_id, channel_id=ch, title=f"title {vid_id}",
+            published_at=datetime(2026, 6, day, tzinfo=timezone.utc),
+            thumbnail_url="", duration_seconds=600, status=status,
+            transcript=transcript, analysis_attempts=attempts,
+            error_message="boom" if status == VideoStatus.failed else None,
+        )
+
+    stored = {"language": "en", "segments": [{"start": 0.0, "text": "hi"}]}
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch-a", title="Alpha", thumbnail_url="", uploads_playlist_id="UUa"))
+        s.add(Channel(id="ch-b", title="Beta", thumbnail_url="", uploads_playlist_id="UUb"))
+        s.add(vid("f-a1", "ch-a", 1, transcript=None, attempts=1))
+        s.add(vid("f-a2", "ch-a", 2, transcript=None, attempts=5))
+        s.add(vid("f-a3", "ch-a", 3, transcript=stored, attempts=2))
+        s.add(vid("f-b1", "ch-b", 4, transcript=stored, attempts=1))
+        s.add(vid("ok-1", "ch-b", 5, transcript=stored, attempts=1,
+                  status=VideoStatus.analyzed))
+        await s.commit()
+
+
+async def test_summary_splits_on_transcript_presence(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+
+    data = (await client.get("/api/videos/failures")).json()["data"]
+    by_kind = {g["kind"]: g for g in data["groups"]}
+    assert by_kind["transcript"]["total"] == 2   # f-a1, f-a2
+    assert by_kind["analysis"]["total"] == 2     # f-a3, f-b1
+    assert data["total"] == 4                    # the analyzed video is excluded
+    assert [c["id"] for c in data["channels"]] == ["ch-a", "ch-b"]  # 3 then 1
+    assert data["channels"][0] == {"id": "ch-a", "title": "Alpha", "total": 3}
+
+
+async def test_summary_returns_both_groups_even_when_one_is_empty(api, sessionmaker):
+    _, client = api
+    async with sessionmaker() as s:
+        s.add(Channel(id="ch-c", title="C", thumbnail_url="", uploads_playlist_id="UUc"))
+        s.add(Video(
+            id="only", channel_id="ch-c", title="t",
+            published_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            thumbnail_url="", duration_seconds=60, status=VideoStatus.failed,
+            transcript=None, analysis_attempts=1, error_message="boom",
+        ))
+        await s.commit()
+
+    data = (await client.get("/api/videos/failures")).json()["data"]
+    assert [g["kind"] for g in data["groups"]] == ["transcript", "analysis"]
+    assert [g["total"] for g in data["groups"]] == [1, 0]
+
+
+async def test_max_attempts_narrows_retryable_only_and_is_strict(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+
+    data = (await client.get(
+        "/api/videos/failures", params={"max_attempts": 2}
+    )).json()["data"]
+    by_kind = {g["kind"]: g for g in data["groups"]}
+    # transcript: f-a1 (1) counts, f-a2 (5) does not
+    assert by_kind["transcript"] == {"kind": "transcript", "total": 2, "retryable": 1}
+    # analysis: f-b1 (1) counts, f-a3 (2) does NOT -- strict less-than
+    assert by_kind["analysis"] == {"kind": "analysis", "total": 2, "retryable": 1}
+
+
+async def test_summary_is_not_swallowed_by_the_video_id_route(api, sessionmaker):
+    """Regression: /{video_id} is a catch-all declared later in the same router."""
+    _, client = api
+    await seed_failures(sessionmaker)
+    resp = await client.get("/api/videos/failures")
+    assert resp.status_code == 200
+    assert "groups" in resp.json()["data"]

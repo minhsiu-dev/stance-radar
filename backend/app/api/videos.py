@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_price_store, get_runner, get_session
 from app.auth import require_admin
 from app.envelope import fail, ok
-from app.models import JobKind, Mention, Stance, Video, VideoStance, VideoStatus
+from app.models import (
+    Channel, JobKind, Mention, Stance, Video, VideoStance, VideoStatus,
+)
 from app.pipeline.refresh import RefreshRunner
 from app.insights.scorecard import build_scorecard_page
 from app.market.store import PriceStore
@@ -115,6 +117,75 @@ async def skip_videos(
         video.status = VideoStatus.skipped
     await session.commit()
     return ok({"skipped": len(videos)})
+
+
+# --- Failed-video triage -------------------------------------------------------
+# NOTE: every /failures route must stay ABOVE @router.get("/{video_id}") below --
+# that catch-all would otherwise match "failures" as a video id and return 404.
+
+FAILURE_KINDS = ("transcript", "analysis")
+
+
+def _failure_conditions(
+    kind: str | None, channel_id: str | None, max_attempts: int | None
+) -> list:
+    """Shared selection rule for the summary / items / retry endpoints, so the
+    three can never disagree about which videos a filter covers.
+
+    `kind` is derived, not stored: _process_video only fetches a transcript when
+    none is saved, so "failed with no transcript" *is* "died fetching", and
+    "failed with a transcript" *is* "died in the LLM".
+    """
+    conditions = [Video.status == VideoStatus.failed]
+    if kind == "transcript":
+        conditions.append(Video.transcript.is_(None))
+    elif kind == "analysis":
+        conditions.append(Video.transcript.is_not(None))
+    if channel_id is not None:
+        conditions.append(Video.channel_id == channel_id)
+    if max_attempts is not None:
+        conditions.append(Video.analysis_attempts < max_attempts)
+    return conditions
+
+
+async def _count_failures(session: AsyncSession, conditions: list) -> int:
+    return (await session.execute(
+        select(func.count()).select_from(Video).where(*conditions)
+    )).scalar_one()
+
+
+@router.get("/failures")
+async def failures_summary(
+    max_attempts: int | None = Query(None, ge=1),
+    session: AsyncSession = Depends(get_session),
+):
+    groups = []
+    for kind in FAILURE_KINDS:
+        groups.append({
+            "kind": kind,
+            "total": await _count_failures(
+                session, _failure_conditions(kind, None, None)
+            ),
+            "retryable": await _count_failures(
+                session, _failure_conditions(kind, None, max_attempts)
+            ),
+        })
+    # Channel counts ignore kind/channel_id on purpose: this feeds the channel
+    # dropdown, which would collapse to a single option if it filtered itself.
+    channel_rows = (await session.execute(
+        select(Channel.id, Channel.title, func.count(Video.id))
+        .join(Video, Video.channel_id == Channel.id)
+        .where(Video.status == VideoStatus.failed)
+        .group_by(Channel.id, Channel.title)
+        .order_by(func.count(Video.id).desc(), Channel.title.asc())
+    )).all()
+    return ok({
+        "groups": groups,
+        "channels": [
+            {"id": cid, "title": title, "total": n} for cid, title, n in channel_rows
+        ],
+        "total": sum(g["total"] for g in groups),
+    })
 
 
 @router.get("/{video_id}")
