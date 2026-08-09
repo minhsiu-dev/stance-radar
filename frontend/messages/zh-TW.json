@@ -149,6 +149,41 @@
     "banner": "{count} 部影片待挑選",
     "bannerCta": "前往挑選"
   },
+  "Failed": {
+    "title": "失敗影片重試",
+    "link": "{count} 部失敗",
+    "empty": "目前沒有失敗的影片。",
+    "loadError": "讀取失敗:{message}",
+    "allChannels": "全部頻道",
+    "channelOption": "{title} ({count})",
+    "thresholdAll": "嘗試次數不限",
+    "thresholdUnder": "少於 {n} 次",
+    "counts": "{total} 部 · 符合門檻 {retryable} 部",
+    "retryGroup": "重試這組 ({count})",
+    "retryOne": "重試",
+    "expand": "展開清單",
+    "collapse": "收合清單",
+    "loadMore": "載入更多",
+    "attempts": "已試 {count} 次 · 最後 {date}",
+    "attemptsNever": "已試 {count} 次 · 尚未重試",
+    "retryFailed": "重試失敗:{message}",
+    "kinds": {
+      "transcript": {
+        "title": "抓不到字幕",
+        "description": "YouTube 擋下字幕請求(限流 / IP 封鎖)。重試會重新向 YouTube 抓字幕,代理若仍被擋,這一輪多半會再次失敗。"
+      },
+      "analysis": {
+        "title": "分析崩潰",
+        "description": "字幕已存在資料庫,Claude 分析時崩潰。重試完全離線重跑,不會再打 YouTube,成功率高。"
+      }
+    },
+    "job": {
+      "running": "分析中 {done} / {total}",
+      "partial": "上一次重試:{total} 部中 {failed} 部再次失敗",
+      "failed": "上一次重試全部失敗:{message}",
+      "queued": "已排入目前進行中的工作"
+    }
+  },
   "ChannelDetail": {
     "loadError": "讀取失敗:{message}",
     "added": "加入時間:{date}",
