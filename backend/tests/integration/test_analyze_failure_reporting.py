@@ -108,3 +108,43 @@ async def test_no_transcript_is_not_a_failure(api, session):
     job = await _analyze_job(session)
     assert job.status == JobStatus.done
     assert job.progress["videos_failed"] == 0
+
+
+async def test_attempt_counted_even_when_processing_blows_up(api, session, monkeypatch):
+    """The generic-exception path re-opens a fresh session in _mark_video_failed, so the
+    attempt stamp only survives if _process_video commits it up front. This is the exact
+    shape of the YouTube IP-block failures the /failed page exists for."""
+    app, client = api
+    await client.post("/api/channels", json={"channel_ids": "UC_fake_alpha"})
+    await wait_refresh(app)
+
+    async def blocked(video_id: str):
+        raise RuntimeError("IpBlocked: youtube said no")
+
+    monkeypatch.setattr(app.state.runner._deps.transcripts, "fetch", blocked)
+
+    await client.post("/api/videos/analyze", json={"video_ids": ["alpha_vid_3"]})
+    await wait_refresh(app)
+
+    v = await session.get(Video, "alpha_vid_3")
+    await session.refresh(v)
+    assert v.status == VideoStatus.failed
+    assert v.analysis_attempts == 1
+    assert v.last_attempt_at is not None
+
+
+async def test_attempt_increments_on_each_retry(api, session):
+    app, client = api
+    await client.post("/api/channels", json={"channel_ids": "UC_fake_alpha"})
+    await wait_refresh(app)
+
+    await client.post("/api/videos/analyze", json={"video_ids": ["alpha_vid_3"]})
+    await wait_refresh(app)
+    v = await session.get(Video, "alpha_vid_3")
+    await session.refresh(v)
+    assert v.analysis_attempts == 1
+
+    await client.post("/api/videos/analyze", json={"video_ids": ["alpha_vid_3"]})
+    await wait_refresh(app)
+    await session.refresh(v)
+    assert v.analysis_attempts == 2

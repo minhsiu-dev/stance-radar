@@ -1,20 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
-import useSWR from "swr";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAdmin } from "@/components/admin-provider";
+import { useAnalyzeJob } from "@/components/use-analyze-job";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { JobInfo } from "@/lib/types";
 
 /**
- * Re-analyze this video: set it back to pending and trigger an analyze job, then poll
- * /api/jobs/current until "our job" finishes, then call onDone to re-fetch the video detail.
- * Comparing the job id (rather than just a running→done transition) is needed to cover the case
- * where, under the fake adapter, the job finishes instantly and is already done on the first poll.
+ * Re-analyze this video: set it back to pending, trigger an analyze job, then wait for
+ * that specific job id to finish and re-fetch the video detail via onDone.
  */
 export function ReanalyzeButton({
   videoId,
@@ -27,33 +24,22 @@ export function ReanalyzeButton({
   const { authenticated, handleAuthError } = useAdmin();
   const [active, setActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const startedJobId = useRef<number | null>(null);
-
-  useSWR<JobInfo | null>(active ? "/api/jobs/current" : null, apiFetch, {
-    refreshInterval: (latest) => (latest?.status === "running" ? 1500 : 0),
-    onSuccess: (latest) => {
-      if (
-        startedJobId.current != null &&
-        latest?.id === startedJobId.current &&
-        latest.status !== "running"
-      ) {
-        startedJobId.current = null;
-        setActive(false);
-        onDone();
-      }
-    },
+  const { watch } = useAnalyzeJob(() => {
+    setActive(false);
+    onDone();
   });
 
   async function trigger() {
     setError(null);
+    setActive(true);
     try {
       const res = await apiFetch<{ job_id: number; created: boolean }>(
         "/api/videos/analyze",
         { method: "POST", body: JSON.stringify({ video_ids: [videoId] }) },
       );
-      startedJobId.current = res.job_id;
-      setActive(true);
+      watch(res.job_id);
     } catch (err) {
+      setActive(false);
       handleAuthError(err);
       setError(err instanceof Error ? err.message : t("reanalyzeFailed"));
     }

@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
-from sqlalchemy import select
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_price_store, get_runner, get_session
 from app.auth import require_admin
 from app.envelope import fail, ok
-from app.models import JobKind, Mention, Stance, Video, VideoStance, VideoStatus
+from app.models import (
+    Channel, JobKind, Mention, Stance, Video, VideoStance, VideoStatus,
+)
 from app.pipeline.refresh import RefreshRunner
 from app.insights.scorecard import build_scorecard_page
 from app.market.store import PriceStore
@@ -115,6 +117,162 @@ async def skip_videos(
         video.status = VideoStatus.skipped
     await session.commit()
     return ok({"skipped": len(videos)})
+
+
+# --- Failed-video triage -------------------------------------------------------
+# NOTE: every /failures route must stay ABOVE @router.get("/{video_id}") below --
+# that catch-all would otherwise match "failures" as a video id and return 404.
+
+FAILURE_KINDS = ("transcript", "analysis")
+
+
+def _failure_conditions(
+    kind: str | None, channel_id: str | None, max_attempts: int | None
+) -> list:
+    """Shared selection rule for the summary / items / retry endpoints, so the
+    three can never disagree about which videos a filter covers.
+
+    `kind` is derived, not stored: _process_video only fetches a transcript when
+    none is saved, so "failed with no transcript" *is* "died fetching", and
+    "failed with a transcript" *is* "died in the LLM".
+    """
+    conditions = [Video.status == VideoStatus.failed]
+    if kind == "transcript":
+        conditions.append(Video.transcript.is_(None))
+    elif kind == "analysis":
+        conditions.append(Video.transcript.is_not(None))
+    if channel_id is not None:
+        conditions.append(Video.channel_id == channel_id)
+    if max_attempts is not None:
+        conditions.append(Video.analysis_attempts < max_attempts)
+    return conditions
+
+
+async def _count_failures(session: AsyncSession, conditions: list) -> int:
+    return (await session.execute(
+        select(func.count()).select_from(Video).where(*conditions)
+    )).scalar_one()
+
+
+@router.get("/failures")
+async def failures_summary(
+    channel_id: str | None = Query(None),
+    max_attempts: int | None = Query(None, ge=1),
+    session: AsyncSession = Depends(get_session),
+):
+    groups = []
+    for kind in FAILURE_KINDS:
+        groups.append({
+            "kind": kind,
+            "total": await _count_failures(
+                session, _failure_conditions(kind, channel_id, None)
+            ),
+            "retryable": await _count_failures(
+                session, _failure_conditions(kind, channel_id, max_attempts)
+            ),
+        })
+    # The channels list always ignores channel_id (and kind) on purpose: it feeds
+    # the channel dropdown, which would collapse to a single option if it filtered
+    # itself on the very selection it is meant to offer. `groups` above, by
+    # contrast, IS scoped to channel_id when given, so its totals stay consistent
+    # with what /failures/items and /failures/retry would return for the same filter.
+    channel_rows = (await session.execute(
+        select(Channel.id, Channel.title, func.count(Video.id))
+        .join(Video, Video.channel_id == Channel.id)
+        .where(Video.status == VideoStatus.failed)
+        .group_by(Channel.id, Channel.title)
+        .order_by(func.count(Video.id).desc(), Channel.title.asc())
+    )).all()
+    return ok({
+        "groups": groups,
+        "channels": [
+            {"id": cid, "title": title, "total": n} for cid, title, n in channel_rows
+        ],
+        "total": sum(g["total"] for g in groups),
+    })
+
+
+@router.get("/failures/items")
+async def failures_items(
+    kind: str | None = Query(None),
+    channel_id: str | None = Query(None),
+    max_attempts: int | None = Query(None, ge=1),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+):
+    if kind is not None and kind not in FAILURE_KINDS:
+        return fail(f"Unknown failure kind: {kind}", status_code=400)
+    conditions = _failure_conditions(kind, channel_id, max_attempts)
+    total = await _count_failures(session, conditions)
+    videos = (await session.execute(
+        select(Video)
+        .options(selectinload(Video.channel))
+        .where(*conditions)
+        .order_by(Video.published_at.desc(), Video.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )).scalars().all()
+    return ok({
+        "items": [
+            {
+                "id": v.id,
+                "title": v.title,
+                "thumbnail_url": v.thumbnail_url,
+                "channel": {"id": v.channel.id, "title": v.channel.title},
+                "published_at": v.published_at.isoformat(),
+                "duration_seconds": v.duration_seconds,
+                "error_message": v.error_message,
+                "analysis_attempts": v.analysis_attempts,
+                "last_attempt_at": (
+                    v.last_attempt_at.isoformat() if v.last_attempt_at else None
+                ),
+            }
+            for v in videos
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    })
+
+
+class RetryFailuresRequest(BaseModel):
+    kind: str | None = None
+    channel_id: str | None = None
+    max_attempts: int | None = Field(None, ge=1)
+
+
+@router.post("/failures/retry")
+async def retry_failures(
+    body: RetryFailuresRequest,
+    session: AsyncSession = Depends(get_session),
+    runner: RefreshRunner = Depends(get_runner),
+    _: None = Depends(require_admin),
+):
+    if body.kind is not None and body.kind not in FAILURE_KINDS:
+        return fail(f"Unknown failure kind: {body.kind}", status_code=400)
+    # Select ids only -- not full Video rows -- so this doesn't pull every matched
+    # video's `transcript` JSONB into memory just to flip two columns (the
+    # analysis-class group alone is dozens of videos, each with a stored transcript).
+    ids = (await session.execute(
+        select(Video.id).where(
+            *_failure_conditions(body.kind, body.channel_id, body.max_attempts)
+        )
+    )).scalars().all()
+    if not ids:
+        return ok({"queued": 0, "job_id": None, "created": False})
+    await session.execute(
+        update(Video)
+        .where(Video.id.in_(ids))
+        .values(status=VideoStatus.pending, error_message=None)
+        # analysis_attempts is deliberately NOT touched: it is the only record that
+        # distinguishes "blocked once" from "blocked twelve times", which is exactly
+        # what the max_attempts threshold spends.
+    )
+    await session.commit()
+    # created=False means a job is already running; the pending videos fold into its drain.
+    job_id, created = await runner.start(JobKind.analyze)
+    return ok({"queued": len(ids), "job_id": job_id, "created": created})
 
 
 @router.get("/{video_id}")
