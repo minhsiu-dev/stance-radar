@@ -267,7 +267,14 @@ def test_build_worker_adapters_real_path_never_imports_yfinance():
     against this test process's own sys.modules: other tests in this same suite (e.g.
     tests/unit/test_market_client.py) legitimately `import yfinance` for real, so an
     in-process assertion here would pass or fail depending on test collection order
-    rather than on what build_worker_adapters() itself actually does."""
+    rather than on what build_worker_adapters() itself actually does.
+
+    The ticker_validator type check closes a hole found in review: fetch_proxy_url=""
+    here means YFinanceMarketClient.__init__ (which only imports yfinance `if
+    proxy_url:`) wouldn't actually import it either, so copying main.py's
+    build_adapters() to wire TickerValidator(YFinanceMarketClient()) in by mistake would
+    still pass the 'market' and heavy-imports assertions below undetected -- only
+    asserting the adapter is actually HttpTickerValidator catches that regression."""
     script = (
         "import sys\n"
         "from app.config import Settings\n"
@@ -276,6 +283,8 @@ def test_build_worker_adapters_real_path_never_imports_yfinance():
         "adapters = build_worker_adapters(settings)\n"
         "assert 'market' not in adapters, "
         "'build_worker_adapters must not build a market client'\n"
+        "assert type(adapters['ticker_validator']).__name__ == 'HttpTickerValidator', "
+        "type(adapters['ticker_validator']).__name__\n"
         "heavy = [m for m in sys.modules "
         "if m.split('.')[0] in ('yfinance', 'pandas', 'numpy', 'scipy', 'lxml')]\n"
         "assert not heavy, heavy\n"

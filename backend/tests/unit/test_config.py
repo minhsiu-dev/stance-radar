@@ -22,6 +22,14 @@ def test_missing_claude_binary_raises_with_install_hint(monkeypatch):
     assert "YOUTUBE_API_KEY" not in message
 
 
+def test_require_claude_false_skips_claude_binary_check(monkeypatch):
+    # The api process (app/main.py) passes require_claude=False: it never spawns
+    # `claude` itself (the worker container does), so it must not demand the binary.
+    monkeypatch.setattr("app.config.shutil.which", lambda _: None)
+    settings = Settings(youtube_api_key="yt-key", _env_file=None)
+    settings.validate_required_keys(require_claude=False)  # should not raise
+
+
 def test_fake_adapters_mode_skips_validation(monkeypatch):
     # Even with neither YouTube key nor claude binary, fake mode must pass.
     monkeypatch.setattr("app.config.shutil.which", lambda _: None)

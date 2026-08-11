@@ -44,6 +44,14 @@ class AutoRefreshScheduler:
             pass
         self._task = None
 
+    async def wait(self) -> None:
+        """Await the background loop's task; a no-op when auto refresh is disabled
+        (the default) and start() never created one. Lets callers race the scheduler's
+        task against something else (app/worker.py's _run_until_failure) without
+        reaching into the task this class privately tracks."""
+        if self._task is not None:
+            await self._task
+
     async def _loop(self) -> None:
         while True:
             await asyncio.sleep(self._interval_minutes * 60)

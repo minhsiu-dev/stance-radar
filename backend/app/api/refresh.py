@@ -30,7 +30,7 @@ async def trigger_refresh(
     runner: RefreshRunner = Depends(get_runner),
     _: None = Depends(require_admin),
 ):
-    job_id, created = await runner.start(JobKind.discover)
+    job_id, created = await runner.enqueue(JobKind.discover)
     return ok({"job_id": job_id, "created": created})
 
 

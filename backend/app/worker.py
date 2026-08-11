@@ -123,13 +123,15 @@ async def _run_until_failure(worker: JobWorker, scheduler: AutoRefreshScheduler)
     the except clause added to scheduler.py) still does not reach main() on its own,
     because asyncio never propagates a sibling task's exception into a coroutine that
     isn't awaiting it; nothing awaited scheduler's task at all before this existed.
-    AutoRefreshScheduler exposes no public handle to it, so this reaches into the
-    attribute it privately tracks -- when auto refresh is disabled (the default) that
-    attribute stays None and only the poll loop is watched, same as before this existed.
+    scheduler.wait() owns the await (and the None-when-disabled check) instead of this
+    function reaching into the task the scheduler privately tracks -- when auto refresh
+    is disabled (the default) it returns immediately and only the poll loop is watched,
+    same as before this existed.
     """
-    tasks = [asyncio.create_task(worker.run_forever())]
-    if scheduler._task is not None:
-        tasks.append(scheduler._task)
+    tasks = [
+        asyncio.create_task(worker.run_forever()),
+        asyncio.create_task(scheduler.wait()),
+    ]
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
     if pending:
         # Mirrors refresh.py's own sibling-cancellation idiom for an infrastructure

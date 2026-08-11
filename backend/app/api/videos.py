@@ -95,7 +95,7 @@ async def analyze_videos(
         video.error_message = None
     await session.commit()
     # created=False means a job is already running; videos just set to pending will be picked up by the next analyze job
-    job_id, created = await runner.start(JobKind.analyze)
+    job_id, created = await runner.enqueue(JobKind.analyze)
     return ok({"job_id": job_id, "created": created, "queued": len(videos)})
 
 
@@ -271,7 +271,7 @@ async def retry_failures(
     )
     await session.commit()
     # created=False means a job is already running; the pending videos fold into its drain.
-    job_id, created = await runner.start(JobKind.analyze)
+    job_id, created = await runner.enqueue(JobKind.analyze)
     return ok({"queued": len(ids), "job_id": job_id, "created": created})
 
 

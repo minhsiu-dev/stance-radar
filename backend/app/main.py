@@ -11,9 +11,7 @@ from app.db_migrations import run_startup_migrations
 from app.market.client import FakeMarketClient, YFinanceMarketClient
 from app.market.store import PriceStore
 from app.net.proxy import ProxyRotator
-from app.pipeline.jobs import fail_orphan_jobs
 from app.pipeline.refresh import RefreshDeps, RefreshRunner
-from app.pipeline.scheduler import AutoRefreshScheduler
 from app.transcripts.client import FakeTranscriptClient, YouTubeTranscriptApiClient
 from app.youtube.client import DataAPIYouTubeClient, FakeYouTubeClient
 
@@ -46,14 +44,14 @@ def build_adapters(settings: Settings) -> dict:
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     settings = get_settings()
-    settings.validate_required_keys()
+    # The `worker` container is the one that spawns `claude` now (see app/worker.py);
+    # the api process itself never does, so it has no reason to require the binary on PATH.
+    settings.validate_required_keys(require_claude=False)
     engine, sessionmaker = create_engine_and_sessionmaker(settings.database_url)
-    scheduler: AutoRefreshScheduler | None = None
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         await run_startup_migrations(engine)
-        await fail_orphan_jobs(sessionmaker)
         adapters = build_adapters(settings)
         application.state.engine = engine
         application.state.sessionmaker = sessionmaker
@@ -61,6 +59,10 @@ async def lifespan(application: FastAPI):
         application.state.ticker_validator = TickerValidator(adapters["market"])
         application.state.price_store = PriceStore(sessionmaker, adapters["market"])
         application.state.youtube = adapters["youtube"]
+        # The api only enqueues jobs; the worker container claims and runs them (see
+        # app/worker.py). RefreshDeps still needs every field filled in -- get_runner's
+        # dependency injection and the test fixtures both expect a full RefreshRunner --
+        # but api routes call only its enqueue().
         application.state.runner = RefreshRunner(RefreshDeps(
             sessionmaker=sessionmaker,
             youtube=adapters["youtube"],
@@ -69,17 +71,8 @@ async def lifespan(application: FastAPI):
             ticker_validator=application.state.ticker_validator,
             settings=settings,
         ))
-        scheduler = AutoRefreshScheduler(
-            runner=application.state.runner,
-            sessionmaker=sessionmaker,
-            interval_minutes=settings.auto_refresh_minutes,
-        )
-        scheduler.start()
-        application.state.scheduler = scheduler
         yield
     finally:
-        if scheduler is not None:
-            await scheduler.stop()
         await engine.dispose()
 
 

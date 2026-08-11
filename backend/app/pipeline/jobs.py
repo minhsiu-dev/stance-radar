@@ -19,13 +19,15 @@ async def enqueue_job(
     a status it doesn't know. claimed_at is the single source of truth for "is someone
     actually executing this row right now" -- not "was it created by a worker's claim":
     pass claimed=True when the caller is about to run the job in-process immediately
-    (RefreshRunner.start(), used by every api route and by _continue_if_pending today), so
-    the row is never `running` with `claimed_at IS NULL` while genuinely in flight. Getting
-    this wrong bites twice: fail_orphan_jobs would ignore a crash mid-run because it only
-    matches claimed_at IS NOT NULL, and a separate worker's claim_next_job() (same
-    claimed_at IS NULL filter) could pick up and re-run the same job concurrently. Leave
-    claimed=False (the default) when creating a row purely for a worker to claim later
-    (RefreshRunner.enqueue()).
+    (RefreshRunner.start(), used by _continue_if_pending and by AutoRefreshScheduler --
+    both already running inside the worker process), so the row is never `running` with
+    `claimed_at IS NULL` while genuinely in flight. Getting this wrong bites twice:
+    fail_orphan_jobs would ignore a crash mid-run because it only matches claimed_at IS
+    NOT NULL, and a separate worker's claim_next_job() (same claimed_at IS NULL filter)
+    could pick up and re-run the same job concurrently. Leave claimed=False (the
+    default) when creating a row purely for a worker to claim later -- every api route
+    does this via RefreshRunner.enqueue(), since the api process itself no longer runs
+    jobs at all.
     """
     existing = await get_running_job(session)
     if existing is not None:

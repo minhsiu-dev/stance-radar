@@ -133,7 +133,7 @@ async def add_channels(
 
     job_id = None
     if added:
-        job_id, _ = await runner.start(JobKind.discover)
+        job_id, _ = await runner.enqueue(JobKind.discover)
 
     data = {"added": added, "skipped": skipped, "failed": failed, "job_id": job_id}
     if failed:
@@ -401,7 +401,7 @@ async def load_older(
 ):
     if await session.get(Channel, channel_id) is None:
         return fail(f"Channel {channel_id} not found", status_code=404)
-    job_id, created = await runner.start(JobKind.load_older, channel_id=channel_id)
+    job_id, created = await runner.enqueue(JobKind.load_older, channel_id=channel_id)
     return ok({"job_id": job_id, "created": created})
 
 
