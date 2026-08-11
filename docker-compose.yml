@@ -25,11 +25,44 @@ services:
       USE_FAKE_ADAPTERS: ${USE_FAKE_ADAPTERS:-false}
     ports:
       - "8000:8000"
+    healthcheck:
+      # Only reports healthy once the lifespan (create_all + run_startup_migrations) has
+      # finished -- ASGI servers hold off accepting connections until lifespan.startup
+      # completes, so a 200 here is also the worker's "schema exists" signal below.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build: ./backend
+    command: python -m app.worker
+    # The whole point of the split: if this process ever degrades to where it can't spawn
+    # children, it exits and Docker hands us a clean one.
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://stance:stance@db:5432/stance_radar
+      USE_FAKE_ADAPTERS: ${USE_FAKE_ADAPTERS:-false}
+      API_BASE_URL: http://api:8000
     volumes:
-      # Read-only mount of the host's Claude Code credentials so non-fake-data 'claude -p' analysis works
+      # Read-only mount of the host's Claude Code credentials so 'claude -p' analysis works
       - ${HOME}/.claude:/root/.claude:ro
     depends_on:
       db:
+        condition: service_healthy
+      api:
+        # Not service_started: that only waits for the api container to start, not for its
+        # lifespan (create_all + run_startup_migrations) to finish. On a cold stack the
+        # worker's first fail_orphan_jobs would hit an undefined `jobs` table otherwise.
+        # api's healthcheck above only turns healthy once lifespan.startup has completed,
+        # so this is the actual "schema exists" gate.
         condition: service_healthy
 
   frontend:

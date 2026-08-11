@@ -2,3 +2,6 @@ services:
   api:
     environment:
       USE_FAKE_ADAPTERS: "true"
+  worker:
+    environment:
+      USE_FAKE_ADAPTERS: "true"

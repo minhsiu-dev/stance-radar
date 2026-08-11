@@ -6,25 +6,60 @@ testing.
 
 ## Architecture
 
-Three containers: Next.js (:3000) → FastAPI (:8000) → Postgres (:5432), defined in
-`docker-compose.yml`.
+Four containers: Next.js (:3000) → FastAPI (:8000) + a `worker` container →
+Postgres (:5432), defined in `docker-compose.yml`.
+
+The `api` container serves HTTP and only *enqueues* analysis jobs (a `jobs` row,
+`status=running`, `claimed_at` NULL); it never runs them. The `worker` container
+(`python -m app.worker`, `backend/app/worker.py`) polls the `jobs` table with
+`FOR UPDATE SKIP LOCKED`, claims one, and runs the actual discover/transcript/LLM
+pipeline — including spawning the `claude` CLI child process. It has
+`restart: unless-stopped` and exits non-zero on an `AnalysisInfrastructureError`
+(a `claude` child killed by a signal) instead of retrying in-process.
+
+This split exists because a long-lived uvicorn process was observed degrading
+until every child it forked died with SIGSEGV before `exec` — reproduced even
+with `/bin/true`, so it wasn't the `claude` binary's fault, just something about
+that process after enough time/forks. The failure latches: once it starts, every
+subsequent spawn dies until the process restarts, and it burned 159 videos in 6
+minutes before this was caught. Keeping the process that spawns `claude` separate
+from the one that loads heavy native extensions (pandas/numpy/scipy-OpenBLAS/lxml,
+pulled in by the market-data layer) was the fix, and `restart: unless-stopped`
+turns a recurrence into a clean restart instead of a wedge that silently fails
+every job. **Standing constraint: `app/worker.py` and everything it imports must
+never import yfinance** (or pandas/numpy/scipy/lxml transitively) — ticker
+validation in the worker goes over HTTP to the api (`HttpTickerValidator`)
+instead of touching the market client directly, specifically to keep those
+packages out of the worker's address space. If you add an import to
+`app/worker.py` or its dependency chain, check `docker compose exec worker
+python -c "import sys, app.worker; print([m for m in ('pandas','numpy','scipy','yfinance','lxml') if m in sys.modules])"` still prints `[]`.
+
+The api's healthcheck (`GET /api/health`) only turns healthy once its lifespan
+(`Base.metadata.create_all` + `run_startup_migrations`) has finished — ASGI
+servers hold off accepting connections until `lifespan.startup` completes. The
+worker depends on `api: condition: service_healthy` (not the default
+`service_started`) specifically so a cold stack (fresh volume) doesn't crash-loop
+the worker's first `fail_orphan_jobs` against a not-yet-created `jobs` table.
 
 External services (YouTube Data API / youtube-transcript-api / Claude Code CLI /
-yfinance) all go through an adapter interface, wired up in `build_adapters()` in
-`backend/app/main.py`: when `USE_FAKE_ADAPTERS=true` they are swapped for
-deterministic fake data (`FakeYouTubeClient` / `FakeTranscriptClient` /
-`FakeLLMClient` / `FakeMarketClient`), otherwise the real clients are used. Both
-the tests and playing around with fake data rely on this switch.
+yfinance) all go through an adapter interface. The api wires up its adapters in
+`build_adapters()` in `backend/app/main.py`; the worker wires up its own
+(pandas-free) set in `build_worker_adapters()` in `backend/app/worker.py`. When
+`USE_FAKE_ADAPTERS=true` both are swapped for deterministic fake data
+(`FakeYouTubeClient` / `FakeTranscriptClient` / `FakeLLMClient` /
+`FakeMarketClient`), otherwise the real clients are used. Both the tests and
+playing around with fake data rely on this switch.
 
 ## Backend test flow
 
 The backend code is `COPY`-ed into the image at build time (see
 `backend/Dockerfile`, there is **no** source bind-mount), so after changing code
-you must **rebuild first** before running the tests:
+you must **rebuild first** before running the tests. `api` and `worker` share the
+same image (`build: ./backend`), so rebuild both:
 
 ```bash
 cd /workspace
-docker compose build api && docker compose up -d api
+docker compose build api worker && docker compose up -d api
 docker exec -w /srv \
   -e TEST_DATABASE_URL=postgresql+asyncpg://stance:stance@db:5432/stance_radar_test \
   workspace-api-1 sh -c 'unset BACKFILL_LIMIT ANALYSIS_CONCURRENCY AUTO_REFRESH_MINUTES SHORTS_MAX_SECONDS ADMIN_SESSION_MINUTES ADMIN_COOKIE_SECURE ADMIN_PASSWORD CLAUDE_MODEL CLAUDE_BIN && python -m pytest tests/ -q --no-cov'
