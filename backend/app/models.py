@@ -166,6 +166,13 @@ class Job(Base):
     )
     progress: Mapped[dict] = mapped_column(JSONB, default=dict)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set when a worker picks the job up. NULL means "enqueued, still waiting" — orphan
+    # recovery must skip those or an api-created job dies before any worker sees it.
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Job arguments that must survive the api -> worker process hop (e.g. load_older's channel_id)
+    params: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class PriceBar(Base):

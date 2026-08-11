@@ -53,6 +53,9 @@ _STATEMENTS = (
     "DROP TABLE IF EXISTS portfolio_transactions",
     "DROP TABLE IF EXISTS portfolio_cash",
     "DROP TYPE IF EXISTS transaction_side",
+    # Worker split: a worker process claims a job row the api enqueued.
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS params JSONB",
 )
 
 

@@ -9,15 +9,47 @@ async def get_running_job(session: AsyncSession) -> Job | None:
     return result.scalars().first()
 
 
-async def start_job(session: AsyncSession, kind: str = "discover") -> tuple[Job, bool]:
-    """Return (job, created). If a running job already exists, return it with created=False."""
+async def enqueue_job(
+    session: AsyncSession, kind: str = "discover", params: dict | None = None
+) -> tuple[Job, bool]:
+    """Return (job, created). If a job is already running, return it with created=False.
+
+    The row is created as `running` (not a new `queued` status) so the frontend never sees
+    a status it doesn't know; `claimed_at IS NULL` is what marks it as not-yet-picked-up.
+    """
     existing = await get_running_job(session)
     if existing is not None:
         return existing, False
-    job = Job(status=JobStatus.running, kind=kind, progress={"stage": "starting"})
+    job = Job(
+        status=JobStatus.running, kind=kind, params=params,
+        progress={"stage": "starting"},
+    )
     session.add(job)
     await session.commit()
     return job, True
+
+
+async def claim_next_job(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> tuple[int, str, dict] | None:
+    """Claim the oldest unclaimed running job. Returns (job_id, kind, params) or None.
+
+    SKIP LOCKED keeps this correct if a second worker is ever added.
+    """
+    async with sessionmaker() as session:
+        row = (await session.execute(
+            select(Job)
+            .where(Job.status == JobStatus.running, Job.claimed_at.is_(None))
+            .order_by(Job.id)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )).scalars().first()
+        if row is None:
+            return None
+        row.claimed_at = utcnow()
+        claimed = (row.id, row.kind, dict(row.params or {}))
+        await session.commit()
+    return claimed
 
 
 async def update_progress(
@@ -49,11 +81,14 @@ async def finish_job(
 
 
 async def fail_orphan_jobs(sessionmaker: async_sessionmaker[AsyncSession]) -> int:
-    """On API restart, mark interrupted running jobs as failed. Returns the number cleaned up."""
+    """On worker restart, mark interrupted claimed jobs as failed. Returns the number cleaned up.
+
+    Unclaimed jobs are left alone: they are enqueued work still waiting for a worker.
+    """
     async with sessionmaker() as session:
         result = await session.execute(
             update(Job)
-            .where(Job.status == JobStatus.running)
+            .where(Job.status == JobStatus.running, Job.claimed_at.is_not(None))
             .values(
                 status=JobStatus.failed,
                 finished_at=utcnow(),

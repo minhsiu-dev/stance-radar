@@ -60,25 +60,59 @@ class RefreshRunner:
         self._start_lock = asyncio.Lock()
         self.current_task: asyncio.Task | None = None
 
+    async def enqueue(
+        self, kind: JobKind = JobKind.discover, channel_id: str | None = None
+    ) -> tuple[int, bool]:
+        """Create the job row only. Return (job_id, created); created=False means one is running."""
+        async with self._start_lock:
+            return await self._enqueue_locked(kind, channel_id)
+
+    async def _enqueue_locked(
+        self, kind: JobKind, channel_id: str | None
+    ) -> tuple[int, bool]:
+        params = {"channel_id": channel_id} if channel_id else None
+        async with self._deps.sessionmaker() as session:
+            job, created = await jobs.enqueue_job(
+                session, kind=kind.value, params=params
+            )
+            return job.id, created
+
+    async def run_job(
+        self, job_id: int, kind: JobKind, params: dict | None = None
+    ) -> None:
+        """Execute an already-created job row to completion. Raises on infrastructure failure."""
+        if kind is JobKind.discover:
+            run = self._run_discover
+        elif kind is JobKind.load_older:
+            run = functools.partial(
+                self._run_load_older, channel_id=(params or {}).get("channel_id")
+            )
+        else:
+            run = self._run_analyze
+        await self._run_safely(job_id, run)
+
     async def start(
         self, kind: JobKind = JobKind.discover, channel_id: str | None = None
     ) -> tuple[int, bool]:
-        """Return (job_id, created). created=False means a job is already running."""
+        """In-process convenience used by tests and _continue_if_pending: enqueue + run in a task.
+
+        _start_lock must span both the enqueue and the create_task (not just the enqueue,
+        as a naive `enqueue()` + `create_task()` split would do): AutoRefreshScheduler
+        (scheduler.py:_start_analyze_and_wait) reads self.current_task right after calling
+        start(), with no await in between, relying on it already corresponding to the
+        job_id start() returned -- including when created=False, i.e. this call lost the
+        race to a concurrent start(). If the lock only covered the enqueue, this caller
+        could observe created=False before the winner has set current_task yet (stale or
+        None), breaking that guarantee. Holding the lock across both closes that window;
+        the winner's create_task always happens before the lock is released, so a loser
+        never observes stale state.
+        """
         async with self._start_lock:
-            async with self._deps.sessionmaker() as session:
-                job, created = await jobs.start_job(session, kind=kind.value)
-                job_id = job.id
+            job_id, created = await self._enqueue_locked(kind, channel_id)
             if created:
-                if kind is JobKind.discover:
-                    run = self._run_discover
-                elif kind is JobKind.load_older:
-                    run = functools.partial(
-                        self._run_load_older, channel_id=channel_id
-                    )
-                else:
-                    run = self._run_analyze
+                params = {"channel_id": channel_id} if channel_id else None
                 self.current_task = asyncio.create_task(
-                    self._run_safely(job_id, run)
+                    self.run_job(job_id, kind, params)
                 )
         return job_id, created
 
