@@ -330,80 +330,95 @@ class RefreshRunner:
             video.analysis_attempts = (video.analysis_attempts or 0) + 1
             video.last_attempt_at = utcnow()
             await session.commit()
-            if video.transcript:
-                # Re-analysis runs offline from the stored transcript — no YouTube fetch.
-                transcript = transcript_from_json(video.transcript)
-            else:
-                try:
-                    transcript = await deps.transcripts.fetch(video_id)
-                except TranscriptNotAvailable:
-                    video.status = VideoStatus.no_transcript
-                    video.error_message = None
-                    await session.commit()
-                    return None
-                video.transcript = transcript_to_json(transcript)
+            # From here on, the attempt above is durably committed but the video hasn't
+            # reached a real per-video outcome yet. If a sibling's infrastructure abort
+            # cancels us anywhere in here (observed cancelling mid-flight inside our own
+            # deps.llm.analyze() at production's default analysis_concurrency=2), we were
+            # never actually analyzed, so give the attempt back -- same as the
+            # AnalysisInfrastructureError branch below, just triggered from outside rather
+            # than by our own LLM call.
             try:
-                result = await deps.llm.analyze(
-                    video_id=video_id, video_title=video.title, transcript=transcript
+                if video.transcript:
+                    # Re-analysis runs offline from the stored transcript — no YouTube fetch.
+                    transcript = transcript_from_json(video.transcript)
+                else:
+                    try:
+                        transcript = await deps.transcripts.fetch(video_id)
+                    except TranscriptNotAvailable:
+                        video.status = VideoStatus.no_transcript
+                        video.error_message = None
+                        await session.commit()
+                        return None
+                    video.transcript = transcript_to_json(transcript)
+                try:
+                    result = await deps.llm.analyze(
+                        video_id=video_id, video_title=video.title, transcript=transcript
+                    )
+                except AnalysisInfrastructureError:
+                    # The process is broken, not the video. Give the attempt back (it was
+                    # committed up-front) and leave the video pending so a fresh worker retries it.
+                    video.analysis_attempts = max((video.analysis_attempts or 1) - 1, 0)
+                    await session.commit()
+                    raise
+                except AnalysisError as exc:
+                    video.status = VideoStatus.failed
+                    video.error_message = str(exc)
+                    await session.commit()
+                    return str(exc)
+
+                # Idempotent: when reprocessing a failed video, clear leftover data first
+                await session.execute(delete(Mention).where(Mention.video_id == video_id))
+                await session.execute(
+                    delete(VideoStance).where(VideoStance.video_id == video_id)
                 )
-            except AnalysisInfrastructureError:
-                # The process is broken, not the video. Give the attempt back (it was
-                # committed up-front) and leave the video pending so a fresh worker retries it.
+                tickers = {m.ticker for m in result.mentions} | {
+                    s.ticker for s in result.stances
+                }
+                valid: set[str] = set()
+                dropped: list[str] = []
+                for ticker in tickers:
+                    if await deps.ticker_validator.is_valid(ticker):
+                        valid.add(ticker)
+                    else:
+                        dropped.append(ticker)
+                        logger.warning(
+                            "dropping unknown ticker %s from video %s", ticker, video_id
+                        )
+                for m in result.mentions:
+                    if m.ticker in valid:
+                        excerpt = excerpt_around(
+                            transcript.segments, start_seconds=m.start_seconds,
+                        )
+                        session.add(Mention(
+                            video_id=video_id, ticker=m.ticker,
+                            start_seconds=m.start_seconds, quote=m.quote,
+                            stance=Stance(m.stance), reasoning=m.reasoning,
+                            excerpt=excerpt,
+                            confidence=m.confidence, time_horizon=m.time_horizon,
+                            is_conditional=m.is_conditional, condition=m.condition,
+                        ))
+                for s in result.stances:
+                    if s.ticker in valid:
+                        session.add(VideoStance(
+                            video_id=video_id, ticker=s.ticker,
+                            stance=Stance(s.stance), summary=s.summary,
+                            confidence=s.confidence,
+                            is_conditional=s.is_conditional,
+                        ))
+                video.dropped_tickers = sorted(dropped) or None
+                video.tldr = list(result.tldr) if result.tldr else None
+                video.transcript_language = transcript.language
+                video.status = VideoStatus.analyzed
+                video.error_message = None
+                video.analyzed_at = utcnow()
+                await session.commit()
+            except asyncio.CancelledError:
+                # Mid-flight cancellation from a sibling's abort (see comment above the
+                # try). Give the attempt back, then let the cancellation keep propagating
+                # -- never swallow it.
                 video.analysis_attempts = max((video.analysis_attempts or 1) - 1, 0)
                 await session.commit()
                 raise
-            except AnalysisError as exc:
-                video.status = VideoStatus.failed
-                video.error_message = str(exc)
-                await session.commit()
-                return str(exc)
-
-            # Idempotent: when reprocessing a failed video, clear leftover data first
-            await session.execute(delete(Mention).where(Mention.video_id == video_id))
-            await session.execute(
-                delete(VideoStance).where(VideoStance.video_id == video_id)
-            )
-            tickers = {m.ticker for m in result.mentions} | {
-                s.ticker for s in result.stances
-            }
-            valid: set[str] = set()
-            dropped: list[str] = []
-            for ticker in tickers:
-                if await deps.ticker_validator.is_valid(ticker):
-                    valid.add(ticker)
-                else:
-                    dropped.append(ticker)
-                    logger.warning(
-                        "dropping unknown ticker %s from video %s", ticker, video_id
-                    )
-            for m in result.mentions:
-                if m.ticker in valid:
-                    excerpt = excerpt_around(
-                        transcript.segments, start_seconds=m.start_seconds,
-                    )
-                    session.add(Mention(
-                        video_id=video_id, ticker=m.ticker,
-                        start_seconds=m.start_seconds, quote=m.quote,
-                        stance=Stance(m.stance), reasoning=m.reasoning,
-                        excerpt=excerpt,
-                        confidence=m.confidence, time_horizon=m.time_horizon,
-                        is_conditional=m.is_conditional, condition=m.condition,
-                    ))
-            for s in result.stances:
-                if s.ticker in valid:
-                    session.add(VideoStance(
-                        video_id=video_id, ticker=s.ticker,
-                        stance=Stance(s.stance), summary=s.summary,
-                        confidence=s.confidence,
-                        is_conditional=s.is_conditional,
-                    ))
-            video.dropped_tickers = sorted(dropped) or None
-            video.tldr = list(result.tldr) if result.tldr else None
-            video.transcript_language = transcript.language
-            video.status = VideoStatus.analyzed
-            video.error_message = None
-            video.analyzed_at = utcnow()
-            await session.commit()
 
     async def _mark_video_failed(self, video_id: str, error: str) -> None:
         async with self._deps.sessionmaker() as session:
