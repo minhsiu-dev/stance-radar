@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.analysis.context import excerpt_around
 from app.analysis.llm import AnalysisError, AnalysisInfrastructureError, LLMClient
-from app.analysis.tickers import TickerValidator
+from app.analysis.tickers import TickerValidatorLike
 from app.config import Settings
 from app.models import (
     Channel, JobKind, Mention, Stance, Video, VideoStance, VideoStatus, utcnow,
@@ -48,7 +48,7 @@ class RefreshDeps:
     youtube: YouTubeClient
     transcripts: TranscriptClient
     llm: LLMClient
-    ticker_validator: TickerValidator
+    ticker_validator: TickerValidatorLike
     settings: Settings
 
 

@@ -45,3 +45,5 @@ def test_defaults():
     assert settings.admin_password == ""
     assert settings.admin_session_minutes == 30
     assert settings.admin_cookie_secure is False
+    assert settings.worker_poll_seconds == 1.0
+    assert settings.api_base_url == "http://api:8000"

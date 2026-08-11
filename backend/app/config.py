@@ -34,8 +34,12 @@ class Settings(BaseSettings):
     # Opt-in VPN proxy (set by docker-compose.vpn.yml); empty = fetch directly
     fetch_proxy_url: str = ""
     gluetun_control_url: str = ""
+    # Worker: how often to poll the jobs table for enqueued work
+    worker_poll_seconds: float = 1.0
+    # Worker -> api base URL, used for ticker validation (the worker never imports yfinance)
+    api_base_url: str = "http://api:8000"
 
-    def validate_required_keys(self) -> None:
+    def validate_required_keys(self, *, require_claude: bool = True) -> None:
         if self.use_fake_adapters:
             return
         problems: list[str] = []
@@ -44,11 +48,11 @@ class Settings(BaseSettings):
                 "Missing required environment variable: YOUTUBE_API_KEY. "
                 "Copy .env.example to .env and fill it in."
             )
-        if shutil.which(self.claude_bin) is None:
+        if require_claude and shutil.which(self.claude_bin) is None:
             problems.append(
                 f"Claude Code CLI binary '{self.claude_bin}' not found in PATH. "
                 "Install it with `npm i -g @anthropic-ai/claude-code` and run "
-                "`claude login`; if running in docker, mount ~/.claude into the api "
+                "`claude login`; if running in docker, mount ~/.claude into the worker "
                 "container so the auth token is visible."
             )
         if problems:

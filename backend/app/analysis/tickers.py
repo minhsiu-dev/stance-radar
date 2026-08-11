@@ -1,4 +1,10 @@
+from typing import Protocol
+
 from app.market.client import MarketClient
+
+
+class TickerValidatorLike(Protocol):
+    async def is_valid(self, ticker: str) -> bool: ...
 
 
 class TickerValidator:
