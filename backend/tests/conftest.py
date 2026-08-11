@@ -75,7 +75,7 @@ async def api(engine, monkeypatch):
         # unclaimed row now. One JobWorker for the whole fixture lifetime -- same as the
         # real worker process holds exactly one across its run -- so wait_refresh() below
         # can call poll_once() repeatedly and have its continuation-chain bookkeeping
-        # (_drain_continuations' _last_continuation) stay correct across calls.
+        # (drain_continuations' _last_continuation) stay correct across calls.
         app.state.job_worker = JobWorker(app.state.runner, app.state.sessionmaker)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -136,15 +136,14 @@ async def wait_refresh(app) -> None:
     it in-process) instead of running jobs themselves, so tests need to actually play
     the worker's role: poll to a fixed point using the app's JobWorker (app.state.
     job_worker, built once by the `api` fixture above) -- the same poll_once() the real
-    worker container's run_forever() calls in a loop. poll_once() already drains
-    same-call continuations via _drain_continuations() (see app/worker.py); the explicit
-    call below catches continuations started by a direct runner.start() -- a few tests,
-    and scheduler.py, still call that themselves -- which poll_once() never sees because
-    there was nothing left to claim.
+    worker container's run_forever() calls in a loop. poll_once() unconditionally drains
+    continuations via drain_continuations() (see app/worker.py) even on the "nothing to
+    claim" path, so this catches continuations started by a direct runner.start() -- a
+    few tests, and scheduler.py, still call that themselves -- without a second explicit
+    drain call here.
     """
     worker = app.state.job_worker
     while True:
         ran = await worker.poll_once()
-        await worker._drain_continuations()
         if not ran:
             break

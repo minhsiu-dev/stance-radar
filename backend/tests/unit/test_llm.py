@@ -166,6 +166,27 @@ async def test_signal_death_raises_infrastructure_error_without_retrying():
     assert len(calls) == 1, "must not retry a signal death"
 
 
+async def test_oom_kill_signal_retries_and_burns_attempts_instead_of_aborting():
+    """SIGKILL (-9, e.g. the OOM killer on an oversized transcript) must NOT be treated
+    as the pre-exec crash signature: it is indistinguishable from a one-off resource
+    problem with this video, and classifying it as infrastructure would hand the attempt
+    back forever (refresh.py's AnalysisInfrastructureError branch), defeating
+    max_attempts for exactly the videos that legitimately got OOM-killed. It must fall
+    through to the ordinary AnalysisError retry-then-fail path instead."""
+    transcript = Transcript("zh-TW", (TranscriptSegment(1.0, "x"),))
+    calls = []
+
+    async def runner(args, stdin_data):
+        calls.append(args)
+        return -9, b"", b""
+
+    client = ClaudeCLIClient(model="m", runner=runner, sleep=_no_sleep)
+    with pytest.raises(AnalysisError) as excinfo:
+        await client.analyze(video_id="v1", video_title="t", transcript=transcript)
+    assert not isinstance(excinfo.value, AnalysisInfrastructureError)
+    assert len(calls) == 3, "must retry like a normal non-zero exit, not abort on attempt 1"
+
+
 async def test_nonzero_exit_still_retries_and_raises_plain_analysis_error():
     """A normal non-zero exit is a content/CLI problem: keep the existing retry behaviour."""
     transcript = Transcript("zh-TW", (TranscriptSegment(1.0, "x"),))

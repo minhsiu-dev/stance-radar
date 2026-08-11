@@ -2,6 +2,7 @@ import asyncio
 import functools
 import json
 import logging
+import signal
 from collections import Counter
 from typing import Awaitable, Callable, Protocol
 
@@ -28,14 +29,27 @@ class AnalysisError(Exception):
 
 
 class AnalysisInfrastructureError(AnalysisError):
-    """The claude child was killed by a signal — the spawning process is broken, not the video.
+    """The claude child died with the specific pre-exec crash signature — the spawning
+    process is broken, not the video.
 
     Observed as `claude exited -11` (SIGSEGV) with empty stderr, ~15ms after exec: a
     long-lived uvicorn process can degrade until every child it forks dies before exec
     (reproduced with /bin/true, so it is not specific to the claude binary). The breakage
     latches, so retrying inside this process is pointless — the caller must abort and let a
     fresh process take over.
+
+    Deliberately narrow: only SIGSEGV/SIGBUS/SIGILL/SIGABRT (crash-before-exec signatures)
+    raise this. SIGKILL (-9, e.g. the OOM killer on a very large transcript) and SIGTERM
+    (-15) are indistinguishable from a one-off resource problem with THIS video, not proof
+    the process can no longer spawn children — treating them the same way would hand the
+    attempt back forever (see refresh.py's AnalysisInfrastructureError branch) and defeat
+    the max_attempts circuit breaker for videos that just legitimately got OOM-killed.
     """
+
+
+_INFRASTRUCTURE_SIGNALS = frozenset(
+    {signal.SIGSEGV, signal.SIGBUS, signal.SIGILL, signal.SIGABRT}
+)
 
 
 class LLMClient(Protocol):
@@ -298,7 +312,7 @@ class ClaudeCLIClient:
         for attempt in range(self._max_retries):
             try:
                 code, stdout, stderr = await self._run(self._args(), stdin_payload)
-                if code < 0:
+                if code < 0 and -code in _INFRASTRUCTURE_SIGNALS:
                     raise AnalysisInfrastructureError(
                         f"claude was killed by signal {-code} for {video_id}; "
                         "the worker process can no longer spawn children"

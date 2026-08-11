@@ -49,7 +49,7 @@ with its timestamp.
 - A [YouTube Data API v3 key](https://developers.google.com/youtube/v3/getting-started)
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code/quickstart) logged
   in locally (`claude login`). Analysis runs through the Claude Code CLI
-  (`claude -p`) — no `ANTHROPIC_API_KEY` is required. The api container mounts
+  (`claude -p`) — no `ANTHROPIC_API_KEY` is required. The worker container mounts
   `~/.claude` read-only to reuse your local login.
 
 ## Quick start
@@ -66,7 +66,7 @@ select get analyzed. Later, **Check for new videos** lists new uploads per chann
 for you to pick the same way; skipped videos can be re-analyzed from the channel
 page at any time.
 
-The api container reads your local Claude Code credentials via a read-only mount
+The worker container reads your local Claude Code credentials via a read-only mount
 (`~/.claude`), so you must `claude login` on the host first.
 
 ### Try it without real keys (fake-data mode)
@@ -96,12 +96,17 @@ cd e2e && npm install && npx playwright install chromium && npm test
 
 ## Architecture
 
-Three containers: Next.js (`:3000`) → FastAPI (`:8000`) → Postgres (`:5432`).
-External services (YouTube Data API, youtube-transcript-api, the Claude Code CLI,
-yfinance) all sit behind an adapter interface; `USE_FAKE_ADAPTERS=true` injects
-deterministic fakes for tests and demos. Daily candles are persisted incrementally
-to Postgres (yfinance is only hit for gaps); real-time quotes, intraday, search,
-financials, and analyst data use in-memory TTL caches.
+Four containers: Next.js (`:3000`) → FastAPI (`:8000`) + a `worker` container →
+Postgres (`:5432`). The `api` container serves HTTP and only *enqueues* analysis
+jobs; a separate `worker` container polls for them and runs the actual
+discover/transcript/LLM pipeline, including spawning the `claude` CLI child
+process — keeping the process that shells out to `claude` free of the heavy
+native dependencies (pandas/numpy/yfinance) that live in the api's market-data
+layer. External services (YouTube Data API, youtube-transcript-api, the Claude
+Code CLI, yfinance) all sit behind an adapter interface; `USE_FAKE_ADAPTERS=true`
+injects deterministic fakes for tests and demos. Daily candles are persisted
+incrementally to Postgres (yfinance is only hit for gaps); real-time quotes,
+intraday, search, financials, and analyst data use in-memory TTL caches.
 
 ## License
 

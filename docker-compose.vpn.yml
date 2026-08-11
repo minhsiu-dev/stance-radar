@@ -26,3 +26,15 @@ services:
     depends_on:
       gluetun:
         condition: service_healthy
+
+  # Transcript fetching (YouTubeTranscriptApiClient) runs in the worker container, not
+  # api -- without this block it would fetch direct and unproxied, silently bypassing
+  # the VPN for exactly the traffic most likely to get IP-blocked. yfinance stays in
+  # api, so leaving this off only half-breaks the setup, which is easy to miss.
+  worker:
+    environment:
+      FETCH_PROXY_URL: http://gluetun:8888
+      GLUETUN_CONTROL_URL: http://gluetun:8000
+    depends_on:
+      gluetun:
+        condition: service_healthy

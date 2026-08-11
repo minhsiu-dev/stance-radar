@@ -1,4 +1,4 @@
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models import Job, JobStatus, utcnow
@@ -28,7 +28,21 @@ async def enqueue_job(
     default) when creating a row purely for a worker to claim later -- every api route
     does this via RefreshRunner.enqueue(), since the api process itself no longer runs
     jobs at all.
+
+    Before the worker split, every caller of this function lived in one process and was
+    serialized by RefreshRunner._start_lock (an asyncio.Lock -- process-local). Now the
+    api's enqueue() and the worker's start() run in different processes with no shared
+    lock, so a plain READ COMMITTED check-then-insert has a race window where both could
+    read "no running job" and each insert one, breaking the single-running-job invariant
+    (get_running_job has no ordering, so which one wins is arbitrary, and the worker could
+    end up running two analyze jobs concurrently against the same pending set). A
+    transaction-scoped advisory lock closes that window across processes without any
+    schema change; it is released automatically on commit OR rollback, so the early
+    return below (no commit) still releases it.
     """
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext('stance_radar_jobs'))")
+    )
     existing = await get_running_job(session)
     if existing is not None:
         return existing, False
@@ -47,7 +61,11 @@ async def claim_next_job(
 ) -> tuple[int, str, dict] | None:
     """Claim the oldest unclaimed running job. Returns (job_id, kind, params) or None.
 
-    SKIP LOCKED keeps this correct if a second worker is ever added.
+    SKIP LOCKED only prevents two workers from claiming the SAME row concurrently --
+    it is not an invitation to run a second worker. Running two is not supported today:
+    fail_orphan_jobs() (called on every worker startup) fails *any* claimed running row
+    regardless of which worker claimed it, so a second worker starting up would kill the
+    first worker's in-flight job.
     """
     async with sessionmaker() as session:
         row = (await session.execute(

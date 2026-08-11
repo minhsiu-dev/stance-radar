@@ -69,21 +69,27 @@ class JobWorker:
 
     async def poll_once(self) -> bool:
         """Claim and run one job (plus any continuation it silently chains into).
-        Returns True if a job ran.
+        Returns True if a job was claimed and run here.
+
+        Continuations are drained even when nothing was claimed (queue empty): a
+        continuation the scheduler fired via RefreshRunner.start() -- not this method --
+        can still be sitting on runner.current_task with nothing left for claim_next_job()
+        to find, and it must still be adopted here rather than left for whatever polls
+        next. Found in review: with the drain gated behind the "something was claimed"
+        branch, an idle poll loop silently abandoned it.
 
         AnalysisInfrastructureError is deliberately NOT caught: the caller exits the
         process so a fresh one takes over.
         """
         claimed = await jobs.claim_next_job(self._sessionmaker)
-        if claimed is None:
-            return False
-        job_id, kind, params = claimed
-        logger.info("claimed job %s (%s)", job_id, kind)
-        await self._runner.run_job(job_id, JobKind(kind), params)
-        await self._drain_continuations()
-        return True
+        if claimed is not None:
+            job_id, kind, params = claimed
+            logger.info("claimed job %s (%s)", job_id, kind)
+            await self._runner.run_job(job_id, JobKind(kind), params)
+        await self.drain_continuations()
+        return claimed is not None
 
-    async def _drain_continuations(self) -> None:
+    async def drain_continuations(self) -> None:
         """A clean finish can silently keep the pipeline going: RefreshRunner
         ._continue_if_pending() fires a follow-up job via asyncio.create_task and stores
         it on runner.current_task WITHOUT awaiting it (run_job() above only awaits the
@@ -189,6 +195,15 @@ async def main() -> int:
                 # same non-zero exit either way, but let's not leave that to chance.
                 pass
         await engine.dispose()
+    # Unreachable today: _run_until_failure races two infinite loops (run_forever's
+    # `while True` and the scheduler's own loop) and only ever returns by raising, which
+    # the `except` above catches. But this function is annotated -> int specifically so
+    # `sys.exit(asyncio.run(main()))` below always exits non-zero on the way this process
+    # is meant to end; falling off the end would silently return None -> exit code 0,
+    # which is the wrong default for a process whose entire contract is "exit non-zero
+    # so Docker can restart us clean." If the loop above ever legitimately returns
+    # instead of raising, that is itself unexpected, so still exit non-zero.
+    return 1
 
 
 if __name__ == "__main__":

@@ -34,6 +34,22 @@ packages out of the worker's address space. If you add an import to
 `app/worker.py` or its dependency chain, check `docker compose exec worker
 python -c "import sys, app.worker; print([m for m in ('pandas','numpy','scipy','yfinance','lxml') if m in sys.modules])"` still prints `[]`.
 
+**Known limitation: no recovery path for an unclaimed `running` job if the worker can't
+start.** `main.py` no longer runs `fail_orphan_jobs` (that moved to the worker, correct —
+see above), and the worker's own `fail_orphan_jobs` only touches rows with `claimed_at IS
+NOT NULL` (also correct — an unclaimed row is enqueued work waiting for a worker, not a
+crash). But nothing ever clears a `running` row that stays unclaimed forever, and there is
+no cancel/clear endpoint. If the worker container is crash-looping (e.g. a broken `claude`
+install — `validate_required_keys(require_claude=False)` means the api stays healthy-looking
+even then), every `/api/jobs/current` poll is pinned at `{"stage": "starting"}` and every
+new trigger returns `created=False` forever. `docker compose restart api` — the old
+universal unwedge — no longer helps, because the api can't touch an unclaimed row either.
+**The fix is `docker compose restart worker`**: once a healthy worker starts polling, it
+claims the oldest unclaimed `running` row itself (same as any other enqueued job) — but if
+the worker keeps crash-looping, restarting it won't help until the underlying cause (e.g.
+the broken `claude` install) is fixed first. A timeout-based staleness sweep would close
+this gap properly; deferred as a design decision for later rather than bolted on here.
+
 The api's healthcheck (`GET /api/health`) only turns healthy once its lifespan
 (`Base.metadata.create_all` + `run_startup_migrations`) has finished — ASGI
 servers hold off accepting connections until `lifespan.startup` completes. The
@@ -59,7 +75,7 @@ same image (`build: ./backend`), so rebuild both:
 
 ```bash
 cd /workspace
-docker compose build api worker && docker compose up -d api
+docker compose build api worker && docker compose up -d api worker
 docker exec -w /srv \
   -e TEST_DATABASE_URL=postgresql+asyncpg://stance:stance@db:5432/stance_radar_test \
   workspace-api-1 sh -c 'unset BACKFILL_LIMIT ANALYSIS_CONCURRENCY AUTO_REFRESH_MINUTES SHORTS_MAX_SECONDS ADMIN_SESSION_MINUTES ADMIN_COOKIE_SECURE ADMIN_PASSWORD CLAUDE_MODEL CLAUDE_BIN && python -m pytest tests/ -q --no-cov'
