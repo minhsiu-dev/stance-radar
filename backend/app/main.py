@@ -58,6 +58,7 @@ async def lifespan(application: FastAPI):
         application.state.engine = engine
         application.state.sessionmaker = sessionmaker
         application.state.market = adapters["market"]
+        application.state.ticker_validator = TickerValidator(adapters["market"])
         application.state.price_store = PriceStore(sessionmaker, adapters["market"])
         application.state.youtube = adapters["youtube"]
         application.state.runner = RefreshRunner(RefreshDeps(
@@ -65,7 +66,7 @@ async def lifespan(application: FastAPI):
             youtube=adapters["youtube"],
             transcripts=adapters["transcripts"],
             llm=adapters["llm"],
-            ticker_validator=TickerValidator(adapters["market"]),
+            ticker_validator=application.state.ticker_validator,
             settings=settings,
         ))
         scheduler = AutoRefreshScheduler(
@@ -83,7 +84,9 @@ async def lifespan(application: FastAPI):
 
 
 def create_app() -> FastAPI:
-    from app.api import admin, channels, feed, insights, markets, refresh, stocks, videos
+    from app.api import (
+        admin, channels, feed, insights, internal, markets, refresh, stocks, videos,
+    )
 
     app = FastAPI(title="Stance Radar API", lifespan=lifespan)
     app.include_router(admin.router)
@@ -94,6 +97,7 @@ def create_app() -> FastAPI:
     app.include_router(videos.router)
     app.include_router(insights.router)
     app.include_router(markets.router)
+    app.include_router(internal.router)
 
     from fastapi.responses import JSONResponse
 
