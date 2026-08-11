@@ -8,7 +8,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.analysis.context import excerpt_around
-from app.analysis.llm import AnalysisError, LLMClient
+from app.analysis.llm import AnalysisError, AnalysisInfrastructureError, LLMClient
 from app.analysis.tickers import TickerValidator
 from app.config import Settings
 from app.models import (
@@ -96,6 +96,12 @@ class RefreshRunner:
             # pipeline does not immediately queue itself another round.
             await jobs.finish_job(self._deps.sessionmaker, job_id, error=str(exc))
             return
+        except AnalysisInfrastructureError as exc:
+            # Record the verdict, then let it escape: the worker that owns this runner
+            # exits the process so Docker restarts it with a clean address space.
+            logger.error("aborting job %s: %s", job_id, exc)
+            await jobs.finish_job(self._deps.sessionmaker, job_id, error=str(exc))
+            raise
         except Exception as exc:
             logger.exception("job %s failed", job_id)
             await jobs.finish_job(
@@ -146,6 +152,8 @@ class RefreshRunner:
             async with semaphore:
                 try:
                     error = await self._process_video(video_id)
+                except AnalysisInfrastructureError:
+                    raise
                 except Exception as exc:  # one video failing shouldn't take down the whole job
                     logger.exception("video %s processing failed", video_id)
                     error = str(exc)
@@ -173,7 +181,19 @@ class RefreshRunner:
                 break
             seen.update(batch)
             await self._report_analyze(job_id, done, failed)
-            await asyncio.gather(*(process(vid) for vid in batch))
+            # Explicit tasks (not a bare gather over coroutines) so an infrastructure
+            # abort can cancel the rest of the batch. asyncio.gather's default
+            # return_exceptions=False re-raises the first exception without touching
+            # its siblings, which would otherwise keep burning attempts against a
+            # process that can no longer spawn children (the 159-video incident).
+            tasks = [asyncio.create_task(process(vid)) for vid in batch]
+            try:
+                await asyncio.gather(*tasks)
+            except AnalysisInfrastructureError:
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                raise
 
         # Judged across the whole run, drain batches included.
         if done > 0 and failed == done:
@@ -326,6 +346,12 @@ class RefreshRunner:
                 result = await deps.llm.analyze(
                     video_id=video_id, video_title=video.title, transcript=transcript
                 )
+            except AnalysisInfrastructureError:
+                # The process is broken, not the video. Give the attempt back (it was
+                # committed up-front) and leave the video pending so a fresh worker retries it.
+                video.analysis_attempts = max((video.analysis_attempts or 1) - 1, 0)
+                await session.commit()
+                raise
             except AnalysisError as exc:
                 video.status = VideoStatus.failed
                 video.error_message = str(exc)
