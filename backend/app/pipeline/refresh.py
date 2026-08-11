@@ -63,19 +63,28 @@ class RefreshRunner:
     async def enqueue(
         self, kind: JobKind = JobKind.discover, channel_id: str | None = None
     ) -> tuple[int, bool]:
-        """Create the job row only. Return (job_id, created); created=False means one is running."""
+        """Create the job row only, unclaimed. Return (job_id, created); created=False
+        means one is already running.
+
+        claimed_at is left NULL: nothing is executing this job yet, so a worker's
+        claim_next_job() can pick it up later. Contrast with start() below, which runs the
+        job in-process right away and so must claim its own row up front.
+        """
         async with self._start_lock:
-            return await self._enqueue_locked(kind, channel_id)
+            job_id, created, _params = await self._enqueue_locked(
+                kind, channel_id, claimed=False
+            )
+            return job_id, created
 
     async def _enqueue_locked(
-        self, kind: JobKind, channel_id: str | None
-    ) -> tuple[int, bool]:
+        self, kind: JobKind, channel_id: str | None, *, claimed: bool
+    ) -> tuple[int, bool, dict | None]:
         params = {"channel_id": channel_id} if channel_id else None
         async with self._deps.sessionmaker() as session:
             job, created = await jobs.enqueue_job(
-                session, kind=kind.value, params=params
+                session, kind=kind.value, params=params, claimed=claimed
             )
-            return job.id, created
+            return job.id, created, params
 
     async def run_job(
         self, job_id: int, kind: JobKind, params: dict | None = None
@@ -108,9 +117,10 @@ class RefreshRunner:
         never observes stale state.
         """
         async with self._start_lock:
-            job_id, created = await self._enqueue_locked(kind, channel_id)
+            job_id, created, params = await self._enqueue_locked(
+                kind, channel_id, claimed=True
+            )
             if created:
-                params = {"channel_id": channel_id} if channel_id else None
                 self.current_task = asyncio.create_task(
                     self.run_job(job_id, kind, params)
                 )

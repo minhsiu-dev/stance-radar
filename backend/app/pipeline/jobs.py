@@ -10,12 +10,22 @@ async def get_running_job(session: AsyncSession) -> Job | None:
 
 
 async def enqueue_job(
-    session: AsyncSession, kind: str = "discover", params: dict | None = None
+    session: AsyncSession, kind: str = "discover", params: dict | None = None,
+    claimed: bool = False,
 ) -> tuple[Job, bool]:
     """Return (job, created). If a job is already running, return it with created=False.
 
     The row is created as `running` (not a new `queued` status) so the frontend never sees
-    a status it doesn't know; `claimed_at IS NULL` is what marks it as not-yet-picked-up.
+    a status it doesn't know. claimed_at is the single source of truth for "is someone
+    actually executing this row right now" -- not "was it created by a worker's claim":
+    pass claimed=True when the caller is about to run the job in-process immediately
+    (RefreshRunner.start(), used by every api route and by _continue_if_pending today), so
+    the row is never `running` with `claimed_at IS NULL` while genuinely in flight. Getting
+    this wrong bites twice: fail_orphan_jobs would ignore a crash mid-run because it only
+    matches claimed_at IS NOT NULL, and a separate worker's claim_next_job() (same
+    claimed_at IS NULL filter) could pick up and re-run the same job concurrently. Leave
+    claimed=False (the default) when creating a row purely for a worker to claim later
+    (RefreshRunner.enqueue()).
     """
     existing = await get_running_job(session)
     if existing is not None:
@@ -23,6 +33,7 @@ async def enqueue_job(
     job = Job(
         status=JobStatus.running, kind=kind, params=params,
         progress={"stage": "starting"},
+        claimed_at=utcnow() if claimed else None,
     )
     session.add(job)
     await session.commit()
