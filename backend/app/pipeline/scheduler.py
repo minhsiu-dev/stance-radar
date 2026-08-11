@@ -9,6 +9,7 @@ import logging
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.analysis.llm import AnalysisInfrastructureError
 from app.models import Job, JobKind, Video, VideoStatus
 from app.pipeline.refresh import RefreshRunner
 
@@ -48,6 +49,12 @@ class AutoRefreshScheduler:
             await asyncio.sleep(self._interval_minutes * 60)
             try:
                 await self.run_once()
+            except AnalysisInfrastructureError:
+                # Unlike any other failure here, this one must NOT be swallowed: it means
+                # the process that spawns `claude` is broken and needs to exit so Docker
+                # can restart it with a clean address space (worker.py is what actually
+                # observes this task's outcome and acts on it).
+                raise
             except Exception:  # a single failed round shouldn't stop the scheduler
                 logger.exception("auto refresh cycle failed")
 

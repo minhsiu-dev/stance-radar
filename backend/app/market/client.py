@@ -124,6 +124,16 @@ class MarketClient(Protocol):
     async def get_earnings(self, ticker: str) -> EarningsDates: ...
 
 
+# Every `import yfinance` in this class is deliberately method-local (never at module
+# scope) -- LOAD-BEARING, not a style choice. app/worker.py must never import
+# pandas/numpy/OpenBLAS/lxml (see its module docstring for the incident that motivated
+# the split), and it imports this module transitively (worker.py -> app.pipeline.refresh
+# -> app.analysis.tickers -> app.market.client, for the MarketClient Protocol and
+# FakeMarketClient). A module-level `import yfinance` here would defeat that regardless
+# of build_worker_adapters() never constructing this class -- the import would fire the
+# moment this file is imported, not when a client is built. Keep every yfinance import
+# (and any other pandas/numpy-backed dependency this class picks up) inside method
+# bodies; tests/integration/test_worker_loop.py has a regression test for this.
 class YFinanceMarketClient:
     def __init__(self, proxy_url: str = "", rotator: ProxyRotator | None = None) -> None:
         self._proxy_url = proxy_url

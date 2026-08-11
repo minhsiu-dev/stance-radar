@@ -1,9 +1,17 @@
 import asyncio
 
+import pytest
 from sqlalchemy import select
 
-from app.models import Job, JobKind, Video, VideoStatus
+from app.analysis.llm import AnalysisInfrastructureError
+from app.analysis.tickers import TickerValidator
+from app.config import Settings
+from app.market.client import FakeMarketClient
+from app.models import Channel, Job, JobKind, Video, VideoStatus, utcnow
+from app.pipeline.refresh import RefreshDeps, RefreshRunner
 from app.pipeline.scheduler import AutoRefreshScheduler
+from app.transcripts.client import FakeTranscriptClient
+from app.youtube.client import FakeYouTubeClient
 from tests.conftest import wait_refresh
 
 
@@ -126,3 +134,68 @@ async def test_start_noop_when_disabled(api, sessionmaker):
     scheduler.start()
     assert scheduler._task is None
     await scheduler.stop()
+
+
+class CrashingLLM:
+    async def analyze(self, *, video_id, video_title, transcript):
+        raise AnalysisInfrastructureError("claude was killed by signal 11")
+
+
+async def test_loop_reraises_infrastructure_failure_instead_of_swallowing_it(
+    sessionmaker,
+):
+    """Regression for the review finding: _loop()'s except Exception used to swallow
+    AnalysisInfrastructureError along with every other failure, so AUTO_REFRESH_MINUTES
+    (a supported production mode) could never make the worker process exit and get a
+    clean address space. run_once() is monkeypatched here purely to isolate _loop()'s own
+    except clause from run_once()'s internals -- see the test right below this one for an
+    end-to-end version that exercises a real crashing analyze job."""
+    scheduler = AutoRefreshScheduler(
+        runner=None, sessionmaker=sessionmaker, interval_minutes=0,
+    )
+
+    async def boom() -> None:
+        raise AnalysisInfrastructureError("claude was killed by signal 11")
+
+    scheduler.run_once = boom
+
+    # wait_for as a safety net, not a behavioral requirement: if the except clause were
+    # ever lost again, _loop() would swallow-and-loop forever instead of raising, and
+    # this test should fail promptly rather than hang.
+    with pytest.raises(AnalysisInfrastructureError):
+        await asyncio.wait_for(scheduler._loop(), timeout=5)
+
+
+async def test_loop_reraises_infrastructure_failure_from_a_real_scheduler_cycle(
+    api, sessionmaker
+):
+    """End-to-end: a crashing analyze job started internally by run_once() (via
+    _start_analyze_and_wait -> _wait_current's asyncio.shield) must still make it out of
+    _loop(). asyncio.shield only protects the outer await from a cancellation coming from
+    ABOVE it -- it does not, and cannot, suppress an exception the shielded task itself
+    raises; that always propagates through the shield to whoever awaited it. This test is
+    the empirical confirmation of that for the review report, not just a reading of the
+    docs."""
+    app, client = api
+    await client.post("/api/channels", json={"channel_ids": "UC_fake_alpha"})
+    await wait_refresh(app)
+
+    async with sessionmaker() as s:
+        video = await s.get(Video, "alpha_vid_3")
+        video.status = VideoStatus.pending
+        await s.commit()
+
+    crashing_runner = RefreshRunner(RefreshDeps(
+        sessionmaker=sessionmaker,
+        youtube=FakeYouTubeClient(),
+        transcripts=FakeTranscriptClient(),
+        llm=CrashingLLM(),
+        ticker_validator=TickerValidator(FakeMarketClient()),
+        settings=Settings(analysis_concurrency=1),
+    ))
+    scheduler = AutoRefreshScheduler(
+        runner=crashing_runner, sessionmaker=sessionmaker, interval_minutes=0,
+    )
+
+    with pytest.raises(AnalysisInfrastructureError):
+        await asyncio.wait_for(scheduler._loop(), timeout=10)
