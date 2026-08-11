@@ -27,6 +27,17 @@ class AnalysisError(Exception):
     pass
 
 
+class AnalysisInfrastructureError(AnalysisError):
+    """The claude child was killed by a signal — the spawning process is broken, not the video.
+
+    Observed as `claude exited -11` (SIGSEGV) with empty stderr, ~15ms after exec: a
+    long-lived uvicorn process can degrade until every child it forks dies before exec
+    (reproduced with /bin/true, so it is not specific to the claude binary). The breakage
+    latches, so retrying inside this process is pointless — the caller must abort and let a
+    fresh process take over.
+    """
+
+
 class LLMClient(Protocol):
     async def analyze(
         self, *, video_id: str, video_title: str, transcript: Transcript
@@ -287,13 +298,24 @@ class ClaudeCLIClient:
         for attempt in range(self._max_retries):
             try:
                 code, stdout, stderr = await self._run(self._args(), stdin_payload)
+                if code < 0:
+                    raise AnalysisInfrastructureError(
+                        f"claude was killed by signal {-code} for {video_id}; "
+                        "the worker process can no longer spawn children"
+                    )
                 if code != 0:
                     raise AnalysisError(
                         f"claude exited {code}: {stderr.decode('utf-8', 'replace')[:300]}"
                     )
                 return parse_cli_stdout(stdout)
+            except AnalysisInfrastructureError:
+                raise
             except Exception as exc:
                 last_error = exc
+                logger.warning(
+                    "claude analysis attempt %s/%s failed for %s: %s",
+                    attempt + 1, self._max_retries, video_id, exc,
+                )
                 if attempt < self._max_retries - 1:
                     await self._sleep(2**attempt)
         raise AnalysisError(

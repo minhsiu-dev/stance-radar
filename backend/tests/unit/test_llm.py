@@ -4,6 +4,7 @@ import pytest
 
 from app.analysis.llm import (
     AnalysisError,
+    AnalysisInfrastructureError,
     ClaudeCLIClient,
     FakeLLMClient,
     _default_runner,
@@ -20,6 +21,10 @@ def _wrap(result_text: str) -> bytes:
 
 def _wrap_payload(payload: dict) -> bytes:
     return _wrap(json.dumps(payload, ensure_ascii=False))
+
+
+async def _no_sleep(_seconds: float) -> None:
+    return None
 
 
 # ---- parse_analysis_payload (pure dict parsing) ----
@@ -140,6 +145,41 @@ async def test_cli_client_raises_after_max_retries():
     )
     with pytest.raises(AnalysisError):
         await client.analyze(video_id="v1", video_title="t", transcript=transcript)
+
+
+async def test_signal_death_raises_infrastructure_error_without_retrying():
+    """A child killed by a signal means the spawning process is broken, not the video.
+
+    Retrying is pointless (the breakage latches) so it must raise on the first attempt.
+    """
+    transcript = Transcript("zh-TW", (TranscriptSegment(1.0, "x"),))
+    calls = []
+
+    async def runner(args, stdin_data):
+        calls.append(args)
+        return -11, b"", b""
+
+    client = ClaudeCLIClient(model="m", runner=runner, sleep=_no_sleep)
+    with pytest.raises(AnalysisInfrastructureError) as excinfo:
+        await client.analyze(video_id="v1", video_title="t", transcript=transcript)
+    assert "signal 11" in str(excinfo.value)
+    assert len(calls) == 1, "must not retry a signal death"
+
+
+async def test_nonzero_exit_still_retries_and_raises_plain_analysis_error():
+    """A normal non-zero exit is a content/CLI problem: keep the existing retry behaviour."""
+    transcript = Transcript("zh-TW", (TranscriptSegment(1.0, "x"),))
+    calls = []
+
+    async def runner(args, stdin_data):
+        calls.append(args)
+        return 1, b"", b"boom"
+
+    client = ClaudeCLIClient(model="m", runner=runner, sleep=_no_sleep)
+    with pytest.raises(AnalysisError) as excinfo:
+        await client.analyze(video_id="v1", video_title="t", transcript=transcript)
+    assert not isinstance(excinfo.value, AnalysisInfrastructureError)
+    assert len(calls) == 3
 
 
 async def test_cli_client_sends_full_prompt_to_stdin():
