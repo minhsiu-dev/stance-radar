@@ -1,6 +1,13 @@
 services:
+  # Every service carries `restart: unless-stopped` so the stack comes back by itself when
+  # the Docker daemon restarts (in the dev sandbox the daemon shares its lifetime with the
+  # workspace container, so "container restarted" == "daemon restarted"). Caveat: the daemon
+  # does *not* honour depends_on when it restores containers on boot, so api/worker may exit
+  # and be restarted a few times until db is accepting connections. That converges on its own
+  # -- it is the same self-healing path worker already relied on, not a failure.
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: stance
       POSTGRES_PASSWORD: stance
@@ -17,6 +24,7 @@ services:
 
   api:
     build: ./backend
+    restart: unless-stopped
     env_file:
       - path: .env
         required: false
@@ -70,6 +78,7 @@ services:
       context: ./frontend
       args:
         API_URL: http://api:8000
+    restart: unless-stopped
     ports:
       - "3000:3000"
     depends_on:
