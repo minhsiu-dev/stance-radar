@@ -8,6 +8,7 @@ from app.api.channels import channel_ticker_stance_mix
 from app.api.deps import get_price_store, get_session
 from app.envelope import fail, ok
 from app.insights.channel_perf_sql import score_channel_calls_lean
+from app.insights.channel_win_rates import WIN_RATE_WINDOW_DAYS
 from app.insights.scorecard import (
     SCORECARD_BENCHMARK,
     _SUMMARY_HORIZONS,
@@ -24,7 +25,9 @@ from app.models import Channel, Stance, Video, VideoStance
 
 router = APIRouter(prefix="/api")
 
-_PERFORMANCE_WINDOW_DAYS = 180
+# Same window the /stocks watch score's win-rate cache uses (channel_win_rates.py):
+# imported rather than redefined so the two can't drift apart.
+_PERFORMANCE_WINDOW_DAYS = WIN_RATE_WINDOW_DAYS
 
 _EMPTY_PERF = {
     s: {"win_rate": None, "avg_alpha": None, "avg_return": None, "n": 0, "pending": 0}

@@ -12,6 +12,21 @@ TEST_DATABASE_URL = os.environ.get(
 _DB = urlsplit(TEST_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"))
 
 
+@pytest.fixture(autouse=True)
+def _reset_channel_win_rate_cache():
+    """get_channel_win_rates (app/insights/channel_win_rates.py) caches its result in a
+    module-level global with a 300s TTL. A follow-up task makes weighted=true the
+    trending endpoint's default, so most tests in this suite will end up exercising
+    it while `engine` rebuilds the database per test -- without this, a cache
+    populated by one test would leak stale win rates into the next test's
+    assertions. Autouse + suite-wide (not just this module's own tests) so nothing
+    has to opt in, now or once that wiring lands."""
+    from app.insights.channel_win_rates import reset_cache
+
+    reset_cache()
+    yield
+
+
 async def _ensure_test_database() -> None:
     conn = await asyncpg.connect(
         user=_DB.username, password=_DB.password, database="postgres",
