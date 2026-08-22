@@ -68,6 +68,64 @@ def _alpha(ret: float | None, bench_ret: float | None) -> float | None:
     return round(ret - bench_ret, 2)
 
 
+# Same legs as _SCORE_SQL, minus the channel filter and plus channel_id in the
+# projection, so one pass scores every channel. Measured 2026-08-22 on the live db:
+# 18 channels / 2691 directional calls / 461k price_bars -> 29.8ms, all buffer hits.
+_SCORE_ALL_SQL = text("""
+WITH calls AS (
+    SELECT v.channel_id, vs.ticker, vs.stance, (v.published_at AT TIME ZONE 'UTC')::date AS d
+    FROM video_stances vs
+    JOIN videos v ON vs.video_id = v.id
+    WHERE vs.stance <> 'neutral' AND v.published_at >= :cutoff
+)
+SELECT c.channel_id, c.stance,
+    se.ec AS entry,
+    (SELECT pb.close FROM price_bars pb WHERE pb.ticker = c.ticker
+     ORDER BY pb.date DESC LIMIT 1)                                              AS now_c,
+    (SELECT pb.close FROM price_bars pb WHERE pb.ticker = c.ticker AND pb.date >= se.ed + 30
+     ORDER BY pb.date LIMIT 1)                                                   AS e30,
+    (SELECT pb.close FROM price_bars pb WHERE pb.ticker = c.ticker AND pb.date >= se.ed + 90
+     ORDER BY pb.date LIMIT 1)                                                   AS e90,
+    ve.ec AS voo_entry,
+    (SELECT pb.close FROM price_bars pb WHERE pb.ticker = :bench
+     ORDER BY pb.date DESC LIMIT 1)                                             AS voo_now,
+    (SELECT pb.close FROM price_bars pb WHERE pb.ticker = :bench AND pb.date >= ve.ed + 30
+     ORDER BY pb.date LIMIT 1)                                                  AS voo30,
+    (SELECT pb.close FROM price_bars pb WHERE pb.ticker = :bench AND pb.date >= ve.ed + 90
+     ORDER BY pb.date LIMIT 1)                                                  AS voo90
+FROM calls c
+LEFT JOIN LATERAL (
+    SELECT pb.date AS ed, pb.close AS ec FROM price_bars pb
+    WHERE pb.ticker = c.ticker AND pb.date >= c.d ORDER BY pb.date LIMIT 1
+) se ON true
+LEFT JOIN LATERAL (
+    SELECT pb.date AS ed, pb.close AS ec FROM price_bars pb
+    WHERE pb.ticker = :bench AND pb.date >= c.d ORDER BY pb.date LIMIT 1
+) ve ON true
+""")
+
+
+def _row_to_call(r) -> CallScore:
+    """Shared by both paths so the float math cannot drift between them."""
+    entry = _f(r.entry)
+    voo_entry = _f(r.voo_entry)
+    ret_now = _ret(_f(r.now_c), entry)
+    ret_30 = _ret(_f(r.e30), entry)
+    ret_90 = _ret(_f(r.e90), entry)
+    voo_now = _ret(_f(r.voo_now), voo_entry)
+    voo_30 = _ret(_f(r.voo30), voo_entry)
+    voo_90 = _ret(_f(r.voo90), voo_entry)
+    stance = r.stance.value if hasattr(r.stance, "value") else r.stance
+    return CallScore(
+        video_id="", video_title="", ticker="", stance=stance,
+        confidence=None, summary="", published_at="",
+        returns={30: ret_30, 90: ret_90},
+        alpha={30: _alpha(ret_30, voo_30), 90: _alpha(ret_90, voo_90)},
+        now_return=ret_now,
+        now_alpha=_alpha(ret_now, voo_now),
+    )
+
+
 async def score_channel_calls_lean(
     session: AsyncSession,
     channel_id: str,
@@ -84,21 +142,21 @@ async def score_channel_calls_lean(
     )).all()
     calls: list[CallScore] = []
     for r in rows:
-        entry = _f(r.entry)
-        voo_entry = _f(r.voo_entry)
-        ret_now = _ret(_f(r.now_c), entry)
-        ret_30 = _ret(_f(r.e30), entry)
-        ret_90 = _ret(_f(r.e90), entry)
-        voo_now = _ret(_f(r.voo_now), voo_entry)
-        voo_30 = _ret(_f(r.voo30), voo_entry)
-        voo_90 = _ret(_f(r.voo90), voo_entry)
-        stance = r.stance.value if hasattr(r.stance, "value") else r.stance
-        calls.append(CallScore(
-            video_id="", video_title="", ticker="", stance=stance,
-            confidence=None, summary="", published_at="",
-            returns={30: ret_30, 90: ret_90},
-            alpha={30: _alpha(ret_30, voo_30), 90: _alpha(ret_90, voo_90)},
-            now_return=ret_now,
-            now_alpha=_alpha(ret_now, voo_now),
-        ))
+        calls.append(_row_to_call(r))
     return calls
+
+
+async def score_all_channel_calls_lean(
+    session: AsyncSession,
+    cutoff: datetime,
+    benchmark: str = SCORECARD_BENCHMARK,
+) -> dict[str, list[CallScore]]:
+    """score_channel_calls_lean for EVERY channel in one pass, keyed by channel_id.
+    Channels with no directional call in the window are absent from the result."""
+    rows = (await session.execute(
+        _SCORE_ALL_SQL, {"cutoff": cutoff, "bench": benchmark}
+    )).all()
+    out: dict[str, list[CallScore]] = {}
+    for r in rows:
+        out.setdefault(r.channel_id, []).append(_row_to_call(r))
+    return out

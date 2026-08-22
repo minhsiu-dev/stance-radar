@@ -104,3 +104,53 @@ async def test_lean_matches_build_channel_performance(session):
     # AAA(150) + BBB(100) matured to 90; CCC(20) did not; DDD has no data
     assert old["summary"]["all"]["90"]["n"] >= 1
     assert old["summary"]["all"]["now"]["n"] >= 1
+
+
+async def test_batch_matches_per_channel_bit_for_bit(session):
+    """score_all_channel_calls_lean must be indistinguishable from calling
+    score_channel_calls_lean once per channel. If these ever diverge, the /stocks
+    page and the channel page would show two different "win rates" for the same
+    channel."""
+    from app.insights.channel_perf_sql import score_all_channel_calls_lean
+
+    await _seed(session)
+    # a second channel with its own calls, so the batch has something to group by
+    session.add(Channel(id="ch2", title="c2", thumbnail_url="", uploads_playlist_id="UU2"))
+    session.add(Video(
+        id="v2_aaa", channel_id="ch2", title="t",
+        published_at=_NOW - timedelta(days=120), thumbnail_url="",
+        duration_seconds=60, status=VideoStatus.analyzed,
+    ))
+    session.add(VideoStance(video_id="v2_aaa", ticker="BBB", stance=Stance.buy, summary="s"))
+    await session.commit()
+
+    cutoff = _NOW - timedelta(days=180)
+    batch = await score_all_channel_calls_lean(session, cutoff)
+    assert set(batch) == {"ch1", "ch2"}
+
+    for cid in ("ch1", "ch2"):
+        single = await score_channel_calls_lean(session, cid, cutoff)
+        # sentinel keeps this a total order: some calls (e.g. the DDD ticker with no
+        # price_bars) have all-None returns, and None/float aren't comparable with <
+        _none = float("-inf")
+        key = lambda c: (
+            c.stance,
+            c.now_return if c.now_return is not None else _none,
+            c.returns.get(30) if c.returns.get(30) is not None else _none,
+            c.returns.get(90) if c.returns.get(90) is not None else _none,
+        )
+        assert sorted(batch[cid], key=key) == sorted(single, key=key)
+        # and the thing we actually consume survives the round trip
+        assert (summarize_channel_calls(batch[cid])["summary"]["buy"]["90"]
+                == summarize_channel_calls(single)["summary"]["buy"]["90"])
+
+
+async def test_batch_omits_channels_with_no_directional_calls(session):
+    from app.insights.channel_perf_sql import score_all_channel_calls_lean
+
+    await _seed(session)
+    session.add(Channel(id="quiet", title="q", thumbnail_url="", uploads_playlist_id="UUq"))
+    await session.commit()
+
+    batch = await score_all_channel_calls_lean(session, _NOW - timedelta(days=180))
+    assert "quiet" not in batch
