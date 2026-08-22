@@ -101,7 +101,7 @@ async def stocks_trending(
 ):
     """`days` = freshness: only include stocks with a video stance within this window.
     `count_days` (defaults to days) = the window for counting channels and stances.
-    Sort key = distinct channel count -> most recent mention -> ticker.
+    Sort key = distinct channel count -> most recent video stance -> ticker.
     `min_channels`/`max_channels` (optional, inclusive) keep only tickers whose
     distinct-channel count falls within the band; applied after ranking and before
     pagination, so `offset`/`limit` page within the filtered set.
