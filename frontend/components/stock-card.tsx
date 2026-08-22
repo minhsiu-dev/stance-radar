@@ -69,12 +69,14 @@ export function StockCard({
           </span>
         )}
       </div>
-      {showScore && s.last_buy_at && (
+      {showScore && (
         <p data-testid="score-breakdown" className="text-xs text-muted-foreground">
-          {t("scoreBreakdown", {
-            channels: s.channel_count,
-            days: daysSince(s.last_buy_at),
-          })}
+          {s.last_buy_at
+            ? t("scoreBreakdown", {
+                channels: s.buy_channel_count,
+                days: daysSince(s.last_buy_at),
+              })
+            : t("scoreBreakdownNoBuys")}
         </p>
       )}
       <StanceMiniBar stances={s.stances} />

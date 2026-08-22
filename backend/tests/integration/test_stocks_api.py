@@ -808,6 +808,35 @@ async def test_trending_score_ignores_sell_and_neutral(api, sessionmaker):
 
 
 @pytest.mark.asyncio
+async def test_trending_buy_channel_count_excludes_sell_and_neutral(api, sessionmaker):
+    """buy_channel_count must diverge from channel_count whenever sentiment is mixed —
+    channel_count counts every channel that took ANY stance, buy_channel_count only
+    those with >=1 buy, which is the set watch_score is actually computed from."""
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Stance, Video, VideoStance, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        for i, stance in enumerate(
+            (Stance.buy, Stance.buy, Stance.buy, Stance.sell, Stance.sell)
+        ):
+            s.add(Channel(id=f"cmx{i}", title=f"cmx{i}", thumbnail_url="",
+                          uploads_playlist_id=f"UUmx{i}"))
+            s.add(Video(id=f"vmx{i}", channel_id=f"cmx{i}", title="t",
+                        published_at=now - timedelta(days=1), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(VideoStance(video_id=f"vmx{i}", ticker="MIXED",
+                              stance=stance, summary="s"))
+        await s.commit()
+
+    rows = (await client.get("/api/stocks/trending?sort=score&limit=50")).json()["data"]
+    row = next(r for r in rows if r["ticker"] == "MIXED")
+    assert row["channel_count"] == 5
+    assert row["buy_channel_count"] == 3
+
+
+@pytest.mark.asyncio
 async def test_trending_rejects_unknown_sort(api):
     _, client = api
     assert (await client.get("/api/stocks/trending?sort=bogus")).status_code == 422

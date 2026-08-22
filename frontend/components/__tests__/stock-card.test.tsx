@@ -9,6 +9,7 @@ const messages = {
     recentStocks: {
       channelCount: "{count} channels",
       scoreBreakdown: "{channels} channels · {days}d ago",
+      scoreBreakdownNoBuys: "No buy calls yet",
     },
   },
   Stock: {
@@ -27,6 +28,10 @@ const zone = (count: number) => ({
 const BASE: TrendingStock = {
   ticker: "NVDA",
   channel_count: 4,
+  // Deliberately different from channel_count: catches a regression where the
+  // breakdown line reads the wrong field (it must describe watch_score, which is
+  // buy-only, not every channel that took any stance).
+  buy_channel_count: 3,
   video_count: 4,
   watch_score: 3.7994,
   last_mentioned_at: "2026-08-21T00:00:00Z",
@@ -55,13 +60,19 @@ describe("StockCard", () => {
     wrap(BASE, true);
     expect(screen.getByTestId("watch-score")).toHaveTextContent("3.8");
     const breakdown = screen.getByTestId("score-breakdown");
-    expect(breakdown).toHaveTextContent("4 channels");
+    // buy_channel_count (3), not channel_count (4) — the breakdown describes the
+    // score, and the score only counts channels that bought.
+    expect(breakdown).toHaveTextContent("3 channels");
+    expect(breakdown).not.toHaveTextContent("4 channels");
     expect(breakdown).toHaveTextContent("6d ago");
   });
 
-  it("omits the breakdown when nothing has been recommended", () => {
+  it("still renders the breakdown line, with an explanatory string, when nothing has been recommended", () => {
     wrap({ ...BASE, watch_score: 0, last_buy_at: null }, true);
     expect(screen.getByTestId("watch-score")).toHaveTextContent("0.0");
-    expect(screen.queryByTestId("score-breakdown")).toBeNull();
+    // The paragraph must always render when showScore is true (never conditionally
+    // on last_buy_at) — otherwise cards with/without a buy call get different
+    // heights inside the grid, since the card root stacks children top-down.
+    expect(screen.getByTestId("score-breakdown")).toHaveTextContent("No buy calls yet");
   });
 });

@@ -82,6 +82,12 @@ def _trending_item(
     return {
         "ticker": ticker,
         "channel_count": len(entry["channels"]),
+        # Distinct channels with >=1 BUY in the count window — the same set watch_score
+        # is computed from. Deliberately not len(entry["channels"]) (counts every stance,
+        # including sell/neutral) and not stances["buy"]["count"] (buckets each channel by
+        # its MOST RECENT stance, so a channel that bought then later sold would be
+        # missing here despite still contributing to the score).
+        "buy_channel_count": len(entry["buy_by_channel"]),
         "video_count": entry["count"],
         "watch_score": round(score.score, 4),
         "last_mentioned_at": last.isoformat(),

@@ -249,6 +249,10 @@ export interface StanceBucket {
 export interface TrendingStock {
   ticker: string;
   channel_count: number;
+  // Distinct channels with >=1 buy in the count window — the set watch_score is
+  // computed from. Diverges from channel_count whenever sentiment is mixed (that
+  // counts every channel with ANY stance, buy/sell/neutral).
+  buy_channel_count: number;
   video_count: number;
   watch_score: number;
   last_mentioned_at: string;
