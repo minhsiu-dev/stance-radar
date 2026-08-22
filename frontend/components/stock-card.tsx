@@ -8,6 +8,13 @@ import { StanceMiniBar, ZONES } from "@/components/stance-mini-bar";
 import { StanceTrendChart } from "@/components/stance-trend-chart";
 import type { TrendingStock, StanceZone, SparklinePoint } from "@/lib/types";
 
+// Whole days since the most recent BUY. Deliberately not last_mentioned_at, which
+// also counts sell/neutral — the breakdown line describes the score, and the score
+// only counts buys.
+function daysSince(iso: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400_000));
+}
+
 function AvatarGroup({ zone, color }: { zone: StanceZone; color: string }) {
   if (zone.count === 0) return null;
   const extra = zone.count - zone.avatars.length;
@@ -30,10 +37,14 @@ export function StockCard({
   s,
   yMax,
   closes,
+  showScore = false,
 }: {
   s: TrendingStock;
   yMax?: number;
   closes?: SparklinePoint[];
+  // Only /stocks ranks by the score; the homepage / search / strip still rank by
+  // channel count, so showing them a score they aren't sorted by would mislead.
+  showScore?: boolean;
 }) {
   const t = useTranslations("Dashboard.recentStocks");
   return (
@@ -45,10 +56,27 @@ export function StockCard({
     >
       <div className="flex items-baseline justify-between">
         <span className="font-mono font-semibold tracking-tight">{s.ticker}</span>
-        <span className="tabular-nums text-xs font-medium text-muted-foreground">
-          {t("channelCount", { count: s.channel_count })}
-        </span>
+        {showScore ? (
+          <span
+            data-testid="watch-score"
+            className="tabular-nums text-xs font-semibold text-foreground"
+          >
+            {s.watch_score.toFixed(1)}
+          </span>
+        ) : (
+          <span className="tabular-nums text-xs font-medium text-muted-foreground">
+            {t("channelCount", { count: s.channel_count })}
+          </span>
+        )}
       </div>
+      {showScore && s.last_buy_at && (
+        <p data-testid="score-breakdown" className="text-xs text-muted-foreground">
+          {t("scoreBreakdown", {
+            channels: s.channel_count,
+            days: daysSince(s.last_buy_at),
+          })}
+        </p>
+      )}
       <StanceMiniBar stances={s.stances} />
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {ZONES.map(({ key, color }) => (

@@ -116,7 +116,7 @@ export function TrendingStocksPage() {
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((s) => (
-              <StockCard key={s.ticker} s={s} yMax={yMax} closes={sparklines[s.ticker]} />
+              <StockCard key={s.ticker} s={s} yMax={yMax} closes={sparklines[s.ticker]} showScore />
             ))}
           </div>
           {hasMore && <div ref={sentinelRef} data-testid="trending-load-more" className="h-4" />}
