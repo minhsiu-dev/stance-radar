@@ -1048,3 +1048,62 @@ async def test_trending_counts_videos_not_mentions(api, sessionmaker):
     # one video -> exactly one "new" bar, no repeats
     assert sum(b["buy_new"] for b in row["buckets"]) == 1
     assert sum(b["buy_repeat"] for b in row["buckets"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_trending_excludes_held_when_unlocked(api, sessionmaker):
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Stance, Video, VideoStance, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        for i, ticker in enumerate(("OWNED", "UNOWNED")):
+            s.add(Channel(id=f"chd{i}", title=f"chd{i}", thumbnail_url="",
+                          uploads_playlist_id=f"UUhd{i}"))
+            s.add(Video(id=f"vhd{i}", channel_id=f"chd{i}", title="t",
+                        published_at=now - timedelta(days=1), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(VideoStance(video_id=f"vhd{i}", ticker=ticker,
+                              stance=Stance.buy, summary="s"))
+        await s.commit()
+    await client.post("/api/holdings", json={"tickers": "OWNED"})
+
+    rows = (await client.get("/api/stocks/trending?limit=200")).json()["data"]
+    by_ticker = {r["ticker"]: r for r in rows}
+    assert by_ticker["OWNED"]["held"] is True
+    assert by_ticker["UNOWNED"]["held"] is False
+
+    rows = (await client.get(
+        "/api/stocks/trending?limit=200&exclude_held=true"
+    )).json()["data"]
+    tickers = {r["ticker"] for r in rows}
+    assert "OWNED" not in tickers
+    assert "UNOWNED" in tickers
+
+
+@pytest.mark.asyncio
+async def test_trending_hides_held_when_locked(locked_api, sessionmaker):
+    """A locked (i.e. public) visitor must not learn what the operator owns —
+    held comes back null and exclude_held is ignored rather than erroring."""
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Holding, Stance, Video, VideoStance, VideoStatus
+
+    _, client = locked_api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Holding(ticker="SECRET"))
+        s.add(Channel(id="chl", title="chl", thumbnail_url="",
+                      uploads_playlist_id="UUhl"))
+        s.add(Video(id="vhl", channel_id="chl", title="t",
+                    published_at=now - timedelta(days=1), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(VideoStance(video_id="vhl", ticker="SECRET",
+                          stance=Stance.buy, summary="s"))
+        await s.commit()
+
+    rows = (await client.get(
+        "/api/stocks/trending?limit=200&exclude_held=true"
+    )).json()["data"]
+    row = next(r for r in rows if r["ticker"] == "SECRET")
+    assert row["held"] is None  # not False — "we're not telling you"

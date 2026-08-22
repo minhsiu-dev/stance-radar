@@ -3,18 +3,19 @@ from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_market, get_price_store, get_session
+from app.auth import is_admin
 from app.envelope import fail, ok
 from app.insights.channel_win_rates import ChannelWinRate, get_channel_win_rates
 from app.insights.scorecard import PriceSeries, _to_series
 from app.insights.watch_score import ChannelBuys, WatchScore, compute_watch_score
 from app.market.client import RANGE_TO_FETCH, MarketClient, StockNotFound
 from app.market.store import PriceStore
-from app.models import Channel, Mention, Video, VideoStance
+from app.models import Channel, Holding, Mention, Video, VideoStance
 from app.api.stance_buckets import bucket_channel_stances
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,12 @@ async def stock_search(
 
 
 def _trending_item(
-    ticker: str, entry: dict, now: datetime, span_days: int, score: WatchScore
+    ticker: str,
+    entry: dict,
+    now: datetime,
+    span_days: int,
+    score: WatchScore,
+    held: bool | None,
 ) -> dict:
     """Build a trending payload row. Channels are bucketed into their most-recent
     stance (within the count window). `last` is the newest video stance in the count
@@ -96,11 +102,14 @@ def _trending_item(
         "last_buy_at": entry["last_buy"].isoformat() if entry["last_buy"] else None,
         "stances": stances,
         "buckets": bucket_channel_stances(entry["bucket_rows"], now, span_days),
+        "held": held,
     }
 
 
 @router.get("/trending")
 async def stocks_trending(
+    request: Request,
+    response: Response,
     limit: int = Query(12, ge=1, le=200),
     offset: int = Query(0, ge=0),
     days: int = Query(90, ge=1, le=365),
@@ -108,6 +117,7 @@ async def stocks_trending(
     min_channels: int | None = Query(None, ge=1),
     sort: Literal["channels", "score"] = Query("channels"),
     weighted: bool = Query(True),
+    exclude_held: bool = Query(False),
     session: AsyncSession = Depends(get_session),
 ):
     """`days` = freshness: only include stocks with a video stance within this window.
@@ -122,6 +132,9 @@ async def stocks_trending(
     `weighted` (default true) multiplies each recommending channel's contribution by
     its 90d buy win rate, shrunk by sample size; `weighted=false` gives every channel
     weight 1.0, i.e. pure momentum x breadth.
+    `exclude_held` drops tickers in the (admin-only) holdings list. Both it and the
+    `held` field require an unlocked session: a locked visitor gets held=null and
+    exclude_held is ignored, so the public site never leaks what the operator owns.
     `offset`/`limit` paginate the ranked list for infinite scroll."""
     now = datetime.now(timezone.utc)
     fresh_cutoff = now - timedelta(days=days)
@@ -214,9 +227,19 @@ async def stocks_trending(
         )
     if min_channels is not None:
         fresh = [te for te in fresh if len(te[1]["channels"]) >= min_channels]
+    admin = is_admin(request, response)
+    held_tickers: set[str] = set()
+    if admin:
+        held_tickers = set((await session.execute(select(Holding.ticker))).scalars().all())
+        if exclude_held:
+            fresh = [te for te in fresh if te[0] not in held_tickers]
     span = count_days or days
     return ok([
-        _trending_item(t, e, now, span, scores[t]) for t, e in fresh[offset:offset + limit]
+        _trending_item(
+            t, e, now, span, scores[t],
+            (t in held_tickers) if admin else None,
+        )
+        for t, e in fresh[offset:offset + limit]
     ])
 
 
