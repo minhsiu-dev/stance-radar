@@ -26,14 +26,13 @@ with its timestamp.
 - **Channel scoreboard** — actual price change 7 / 30 / 90 days after each
   buy/sell call, with excess return vs the market; per-channel detail plus a
   cross-channel leaderboard.
-- **Portfolio** — record buy/sell transactions; it computes holdings (shares /
-  cost / market value / unrealized P&L / weight) and benchmarks total return
-  against VOO and QQQ.
+- **Watch score** — the trending list ranks by recency momentum x cross-channel
+  breadth x each channel's 90-day buy win rate, with the breakdown shown on every
+  card so the ranking stays explainable.
+- **Holdings** — an admin-only list of tickers you own, so the trending list can
+  filter out what you already hold.
 - **Homepage performance cards** — portfolio vs VOO / QQQ return across several
   ranges (1d / 5d / 1m / 3m / 6m / ytd / 1y).
-- **Privacy mask** — a gear-menu toggle hides portfolio amounts (value, shares,
-  cost) while keeping public market prices visible. The gear menu also holds dark
-  mode and language switching.
 - **Feed filtering** — filter the homepage video feed by channel / stock / stance.
 - **Stock fundamentals** — latest-quarter revenue / margin growth, a margin-trend
   chart, and analyst targets (low / mean / high, upside, rating distribution).

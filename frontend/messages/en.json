@@ -24,7 +24,19 @@
     "min3": "3 or more",
     "min5": "5 or more",
     "empty": "No stocks discussed in this window",
-    "weighted": "Weight by win rate"
+    "weighted": "Weight by win rate",
+    "excludeHeld": "Exclude held"
+  },
+  "Holdings": {
+    "manage": "Manage holdings",
+    "title": "My holdings",
+    "placeholder": "Paste symbols, separated by spaces or commas",
+    "add": "Add",
+    "empty": "No holdings recorded yet",
+    "remove": "Remove",
+    "added": "Added: {names}",
+    "skipped": "Already there: {names}",
+    "failed": "Could not add"
   },
   "Footer": {
     "disclaimer": "Stance Radar — for research only, not investment advice",

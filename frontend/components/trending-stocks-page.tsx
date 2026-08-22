@@ -13,6 +13,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StockCard } from "@/components/stock-card";
+import { useAdmin } from "@/components/admin-provider";
+import { HoldingsDialog } from "@/components/holdings-dialog";
 import { maxBucketTotal } from "@/lib/stance-buckets";
 import { useSparklines } from "@/lib/use-sparklines";
 import type { TrendingStock } from "@/lib/types";
@@ -44,10 +46,12 @@ const PAGE_SIZE = 20;
 
 export function TrendingStocksPage() {
   const t = useTranslations("Trending");
+  const { authenticated } = useAdmin();
   const [fresh, setFresh] = useState(30);
   const [count, setCount] = useState(90);
   const [minChannels, setMinChannels] = useState<MinChannelsKey>("all");
   const [weighted, setWeighted] = useState(true);
+  const [excludeHeld, setExcludeHeld] = useState(false);
 
   // Infinite scroll: fetch the ranked list PAGE_SIZE at a time via offset pagination.
   // A short page (< PAGE_SIZE) means we've reached the end, so getKey returns null.
@@ -55,16 +59,21 @@ export function TrendingStocksPage() {
     (pageIndex: number, previous: TrendingStock[] | null) => {
       if (previous && previous.length < PAGE_SIZE) return null;
       const url = `/api/stocks/trending?limit=${PAGE_SIZE}&offset=${pageIndex * PAGE_SIZE}&days=${fresh}&count_days=${count}&sort=score`;
-      return url + minChannelsParam(minChannels) + (weighted ? "" : "&weighted=false");
+      return (
+        url +
+        minChannelsParam(minChannels) +
+        (weighted ? "" : "&weighted=false") +
+        (authenticated && excludeHeld ? "&exclude_held=true" : "")
+      );
     },
-    [fresh, count, minChannels, weighted],
+    [fresh, count, minChannels, weighted, authenticated, excludeHeld],
   );
   const { data: pages, isLoading, setSize } = useSWRInfinite<TrendingStock[]>(getKey);
 
   // Reset to the first page when the filters change.
   useEffect(() => {
     setSize(1);
-  }, [fresh, count, minChannels, weighted, setSize]);
+  }, [fresh, count, minChannels, weighted, excludeHeld, setSize]);
 
   const items = (pages ?? []).flat();
   const yMax = maxBucketTotal(items);
@@ -118,6 +127,18 @@ export function TrendingStocksPage() {
             {t("weighted")}
             <Switch checked={weighted} onCheckedChange={setWeighted} className="mt-1" />
           </label>
+          {authenticated && (
+            <div className="flex items-end gap-1">
+              {/* No aria-label here either, for the same reason as the weighted
+                  switch above: the wrapping <label> already supplies the
+                  accessible name. */}
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                {t("excludeHeld")}
+                <Switch checked={excludeHeld} onCheckedChange={setExcludeHeld} className="mt-1" />
+              </label>
+              <HoldingsDialog />
+            </div>
+          )}
         </div>
       </div>
       {isLoading ? (

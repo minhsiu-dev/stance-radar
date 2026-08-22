@@ -24,7 +24,19 @@
     "min3": "≥ 3 個",
     "min5": "≥ 5 個",
     "empty": "這個區間沒有被討論的股票",
-    "weighted": "勝率加權"
+    "weighted": "勝率加權",
+    "excludeHeld": "排除已持有"
+  },
+  "Holdings": {
+    "manage": "管理持股",
+    "title": "我的持股",
+    "placeholder": "貼上代號,用空白或逗號分隔",
+    "add": "新增",
+    "empty": "還沒有記錄任何持股",
+    "remove": "移除",
+    "added": "已新增:{names}",
+    "skipped": "已存在:{names}",
+    "failed": "新增失敗"
   },
   "Footer": {
     "disclaimer": "Stance Radar — 僅供研究參考,非投資建議",

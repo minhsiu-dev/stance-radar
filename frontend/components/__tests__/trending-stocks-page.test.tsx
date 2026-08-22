@@ -1,8 +1,16 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
 import { TrendingStocksPage, minChannelsParam } from "@/components/trending-stocks-page";
+
+const useAdmin = vi.fn();
+vi.mock("@/components/admin-provider", () => ({ useAdmin: () => useAdmin() }));
+vi.mock("@/components/holdings-dialog", () => ({ HoldingsDialog: () => null }));
+
+beforeEach(() => {
+  useAdmin.mockReturnValue({ authenticated: true, handleAuthError: vi.fn() });
+});
 
 const messages = {
   Trending: {
@@ -14,6 +22,7 @@ const messages = {
     minAll: "Any", min2: "2 or more", min3: "3 or more", min5: "5 or more",
     empty: "No stocks",
     weighted: "Weight by win rate",
+    excludeHeld: "Exclude held",
   },
   Dashboard: { recentStocks: { channelCount: "{count} channels", scoreBreakdown: "{channels} channels · {days}d ago" } },
   Stock: { stance: { buy: "Buy", neutral: "Neutral", sell: "Sell", new: "New", repeat: "Repeat" } },
@@ -27,6 +36,7 @@ const STOCK = {
   last_mentioned_at: "2026-06-11T00:00:00Z", last_buy_at: "2026-06-11T00:00:00Z",
   channel_win_rate_avg: null,
   stances: { buy: zone(3), neutral: zone(0), sell: zone(0) }, buckets: [],
+  held: null,
 };
 
 function wrap(fetcher: (url: string) => Promise<unknown>) {
@@ -93,6 +103,25 @@ describe("TrendingStocksPage", () => {
     fireEvent.click(screen.getByRole("switch", { name: "Weight by win rate" }));
     await waitFor(() =>
       expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("weighted=false"))).toBe(true),
+    );
+  });
+
+  it("hides the exclude-held toggle while locked", async () => {
+    useAdmin.mockReturnValue({ authenticated: false, handleAuthError: vi.fn() });
+    const fetcher = vi.fn().mockResolvedValue([STOCK]);
+    wrap(fetcher);
+    await screen.findByTestId("recent-stock-card");
+    expect(screen.queryByRole("switch", { name: "Exclude held" })).toBeNull();
+    expect(fetcher.mock.calls.every(([u]: string[]) => !u.includes("exclude_held"))).toBe(true);
+  });
+
+  it("sends exclude_held when the toggle is on", async () => {
+    const fetcher = vi.fn().mockResolvedValue([STOCK]);
+    wrap(fetcher);
+    await screen.findByTestId("recent-stock-card");
+    fireEvent.click(screen.getByRole("switch", { name: "Exclude held" }));
+    await waitFor(() =>
+      expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("exclude_held=true"))).toBe(true),
     );
   });
 

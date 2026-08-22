@@ -40,6 +40,7 @@ const BASE: TrendingStock = {
   channel_win_rate_avg: null,
   stances: { buy: zone(4), neutral: zone(0), sell: zone(0) },
   buckets: [],
+  held: null,
 };
 
 function wrap(s: TrendingStock, showScore?: boolean) {

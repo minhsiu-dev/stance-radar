@@ -264,6 +264,20 @@ export interface TrendingStock {
     sell: StanceZone;
   };
   buckets: StanceBucket[];
+  // null for a locked (anonymous) session -- the public site never leaks what the
+  // operator owns.
+  held: boolean | null;
+}
+
+export interface Holding {
+  ticker: string;
+  added_at: string;
+  note: string | null;
+}
+
+export interface AddHoldingsResult {
+  added: string[];
+  skipped: string[];
 }
 
 export interface SearchHit {

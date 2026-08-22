@@ -21,6 +21,7 @@ const stock = (buckets: StanceBucket[]): TrendingStock => ({
     sell: { count: 0, avatars: [] },
   },
   buckets,
+  held: null,
 });
 
 describe("bucketTotal", () => {
