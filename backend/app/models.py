@@ -154,6 +154,18 @@ class VideoStance(Base):
     video: Mapped[Video] = relationship(back_populates="stances")
 
 
+class Holding(Base):
+    """Tickers the operator owns. Deliberately just a list — the full portfolio
+    feature (shares / cost / P&L) was removed on 2026-07-07 and is not coming back;
+    this exists only so /stocks can filter out what you already hold."""
+
+    __tablename__ = "holdings"
+
+    ticker: Mapped[str] = mapped_column(String(10), primary_key=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class Job(Base):
     __tablename__ = "jobs"
 
