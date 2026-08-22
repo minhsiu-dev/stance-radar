@@ -10,6 +10,7 @@ const messages = {
       channelCount: "{count} channels",
       scoreBreakdown: "{channels} channels · {days}d ago",
       scoreBreakdownNoBuys: "No buy calls yet",
+      scoreBreakdownWeighted: "{channels} channels · {days}d ago · {winRate}% win rate",
     },
   },
   Stock: {
@@ -36,6 +37,7 @@ const BASE: TrendingStock = {
   watch_score: 3.7994,
   last_mentioned_at: "2026-08-21T00:00:00Z",
   last_buy_at: new Date(Date.now() - 6 * 86400_000).toISOString(),
+  channel_win_rate_avg: null,
   stances: { buy: zone(4), neutral: zone(0), sell: zone(0) },
   buckets: [],
 };
@@ -74,5 +76,15 @@ describe("StockCard", () => {
     // on last_buy_at) — otherwise cards with/without a buy call get different
     // heights inside the grid, since the card root stacks children top-down.
     expect(screen.getByTestId("score-breakdown")).toHaveTextContent("No buy calls yet");
+  });
+
+  it("adds the weighted win rate to the breakdown when present", () => {
+    wrap({ ...BASE, channel_win_rate_avg: 61.4 }, true);
+    expect(screen.getByTestId("score-breakdown")).toHaveTextContent("61% win rate");
+  });
+
+  it("omits the win rate from the breakdown when there is none", () => {
+    wrap({ ...BASE, channel_win_rate_avg: null }, true);
+    expect(screen.getByTestId("score-breakdown")).not.toHaveTextContent("%");
   });
 });

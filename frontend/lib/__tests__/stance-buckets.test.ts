@@ -12,8 +12,9 @@ const B = (over: Partial<StanceBucket>): StanceBucket => ({
 });
 
 const stock = (buckets: StanceBucket[]): TrendingStock => ({
-  ticker: "T", channel_count: 1, video_count: 1, score: 1,
-  last_mentioned_at: "2026-06-11T00:00:00Z",
+  ticker: "T", channel_count: 1, buy_channel_count: 1, video_count: 1, watch_score: 1,
+  last_mentioned_at: "2026-06-11T00:00:00Z", last_buy_at: "2026-06-11T00:00:00Z",
+  channel_win_rate_avg: null,
   stances: {
     buy: { count: 0, avatars: [] },
     neutral: { count: 0, avatars: [] },

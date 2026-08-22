@@ -15,6 +15,26 @@ function daysSince(iso: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400_000));
 }
 
+// Three states: no buy call yet, a buy call with no weighted win rate (backend
+// omits it when weighted=false or there's no data to weight), and a buy call
+// with a win rate to show. Kept as an early-return helper rather than a nested
+// ternary so each state stays readable on its own line.
+function scoreBreakdownText(
+  t: ReturnType<typeof useTranslations<"Dashboard.recentStocks">>,
+  s: TrendingStock,
+): string {
+  if (!s.last_buy_at) return t("scoreBreakdownNoBuys");
+  const days = daysSince(s.last_buy_at);
+  if (s.channel_win_rate_avg === null) {
+    return t("scoreBreakdown", { channels: s.buy_channel_count, days });
+  }
+  return t("scoreBreakdownWeighted", {
+    channels: s.buy_channel_count,
+    days,
+    winRate: Math.round(s.channel_win_rate_avg),
+  });
+}
+
 function AvatarGroup({ zone, color }: { zone: StanceZone; color: string }) {
   if (zone.count === 0) return null;
   const extra = zone.count - zone.avatars.length;
@@ -71,12 +91,7 @@ export function StockCard({
       </div>
       {showScore && (
         <p data-testid="score-breakdown" className="text-xs text-muted-foreground">
-          {s.last_buy_at
-            ? t("scoreBreakdown", {
-                channels: s.buy_channel_count,
-                days: daysSince(s.last_buy_at),
-              })
-            : t("scoreBreakdownNoBuys")}
+          {scoreBreakdownText(t, s)}
         </p>
       )}
       <StanceMiniBar stances={s.stances} />

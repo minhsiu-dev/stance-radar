@@ -257,6 +257,7 @@ export interface TrendingStock {
   watch_score: number;
   last_mentioned_at: string;
   last_buy_at: string | null;
+  channel_win_rate_avg: number | null;
   stances: {
     buy: StanceZone;
     neutral: StanceZone;

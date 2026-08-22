@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StockCard } from "@/components/stock-card";
 import { maxBucketTotal } from "@/lib/stance-buckets";
@@ -46,6 +47,7 @@ export function TrendingStocksPage() {
   const [fresh, setFresh] = useState(30);
   const [count, setCount] = useState(90);
   const [minChannels, setMinChannels] = useState<MinChannelsKey>("all");
+  const [weighted, setWeighted] = useState(true);
 
   // Infinite scroll: fetch the ranked list PAGE_SIZE at a time via offset pagination.
   // A short page (< PAGE_SIZE) means we've reached the end, so getKey returns null.
@@ -53,16 +55,16 @@ export function TrendingStocksPage() {
     (pageIndex: number, previous: TrendingStock[] | null) => {
       if (previous && previous.length < PAGE_SIZE) return null;
       const url = `/api/stocks/trending?limit=${PAGE_SIZE}&offset=${pageIndex * PAGE_SIZE}&days=${fresh}&count_days=${count}&sort=score`;
-      return url + minChannelsParam(minChannels);
+      return url + minChannelsParam(minChannels) + (weighted ? "" : "&weighted=false");
     },
-    [fresh, count, minChannels],
+    [fresh, count, minChannels, weighted],
   );
   const { data: pages, isLoading, setSize } = useSWRInfinite<TrendingStock[]>(getKey);
 
   // Reset to the first page when the filters change.
   useEffect(() => {
     setSize(1);
-  }, [fresh, count, minChannels, setSize]);
+  }, [fresh, count, minChannels, weighted, setSize]);
 
   const items = (pages ?? []).flat();
   const yMax = maxBucketTotal(items);
@@ -106,6 +108,16 @@ export function TrendingStocksPage() {
             onChange={setMinChannels}
             t={t}
           />
+          {/* No aria-label here: Base UI's Switch.Root auto-detects the wrapping
+              <label> and points aria-labelledby at it, which already supplies the
+              accessible name from this text node. Adding a redundant aria-label
+              with the same string doubles the computed name ("Weight by win
+              rateWeight by win rate" per the ARIA accname algorithm), which then
+              fails an exact-match `getByRole(..., { name })` lookup. */}
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {t("weighted")}
+            <Switch checked={weighted} onCheckedChange={setWeighted} className="mt-1" />
+          </label>
         </div>
       </div>
       {isLoading ? (

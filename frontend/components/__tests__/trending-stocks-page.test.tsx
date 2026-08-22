@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -13,6 +13,7 @@ const messages = {
     week: "1W", month: "1M", quarter: "3M",
     minAll: "Any", min2: "2 or more", min3: "3 or more", min5: "5 or more",
     empty: "No stocks",
+    weighted: "Weight by win rate",
   },
   Dashboard: { recentStocks: { channelCount: "{count} channels", scoreBreakdown: "{channels} channels · {days}d ago" } },
   Stock: { stance: { buy: "Buy", neutral: "Neutral", sell: "Sell", new: "New", repeat: "Repeat" } },
@@ -24,6 +25,7 @@ function zone(n: number) {
 const STOCK = {
   ticker: "NVDA", channel_count: 3, buy_channel_count: 3, video_count: 5, watch_score: 2.5,
   last_mentioned_at: "2026-06-11T00:00:00Z", last_buy_at: "2026-06-11T00:00:00Z",
+  channel_win_rate_avg: null,
   stances: { buy: zone(3), neutral: zone(0), sell: zone(0) }, buckets: [],
 };
 
@@ -79,6 +81,19 @@ describe("TrendingStocksPage", () => {
       .filter((u: string) => u.includes("/api/stocks/trending"));
     expect(trendingUrls.length).toBeGreaterThan(0);
     expect(trendingUrls.every((u: string) => u.includes("sort=score"))).toBe(true);
+  });
+
+  it("requests weighting by default and drops it when toggled off", async () => {
+    const fetcher = vi.fn().mockResolvedValue([STOCK]);
+    wrap(fetcher);
+    await screen.findByTestId("recent-stock-card");
+    // the API default is weighted=true, so the URL should not carry an override
+    expect(fetcher.mock.calls.every(([u]: string[]) => !u.includes("weighted=false"))).toBe(true);
+
+    fireEvent.click(screen.getByRole("switch", { name: "Weight by win rate" }));
+    await waitFor(() =>
+      expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("weighted=false"))).toBe(true),
+    );
   });
 
   it("shows the empty state when no stocks come back", async () => {
