@@ -14,6 +14,14 @@ router = APIRouter(prefix="/api/holdings")
 
 _SPLIT = re.compile(r"[\s,;]+")
 
+# Matches Holding.ticker's String(10) column -- validate before INSERT instead of letting an
+# over-length token surface as an uncaught Postgres DataError (500) on commit.
+_MAX_TICKER_LEN = Holding.__table__.c.ticker.type.length
+
+# Admin-only endpoint, but this host is publicly tunnelled -- cap the request so a pasted wall
+# of text can't build an unbounded IN(...) / insert loop.
+_MAX_TICKERS_PER_REQUEST = 200
+
 
 def parse_tickers(raw: str) -> list[str]:
     """Whitespace/comma/semicolon separated -> uppercased, de-duplicated, order kept."""
@@ -50,6 +58,20 @@ async def add_holdings(
     tickers = parse_tickers(body.tickers)
     if not tickers:
         return fail("tickers must contain at least one symbol", status_code=422)
+    if len(tickers) > _MAX_TICKERS_PER_REQUEST:
+        return fail(
+            f"too many tickers in one request ({len(tickers)} > {_MAX_TICKERS_PER_REQUEST} max)",
+            status_code=422,
+        )
+    too_long = [t for t in tickers if len(t) > _MAX_TICKER_LEN]
+    if too_long:
+        # Reject the whole request rather than partially applying it: nothing below this point
+        # has touched the session yet, so one bad token in a pasted list can't silently drop
+        # the good ones or leave a half-committed batch.
+        return fail(
+            f"ticker(s) longer than {_MAX_TICKER_LEN} characters: {', '.join(too_long)}",
+            status_code=422,
+        )
     existing = set((await session.execute(
         select(Holding.ticker).where(Holding.ticker.in_(tickers))
     )).scalars().all())

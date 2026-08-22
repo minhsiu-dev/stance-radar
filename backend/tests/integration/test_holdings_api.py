@@ -38,7 +38,34 @@ async def test_empty_input_is_rejected(api):
 
 async def test_deleting_an_absent_ticker_404s(api):
     _, client = api
-    assert (await client.delete("/api/holdings/NOPE")).status_code == 404
+    resp = await client.delete("/api/holdings/NOPE")
+    assert resp.status_code == 404
+    # Body, not just status: FastAPI's own unmatched-route 404 ({"detail": "Not Found"}) would
+    # also satisfy a status-only assertion, so this has to check the handler's fail() envelope,
+    # which is the only path that can produce this message.
+    assert resp.json()["error"] == "NOPE is not in your holdings"
+
+
+async def test_overlong_ticker_is_rejected_and_nothing_is_committed(api):
+    _, client = api
+    resp = await client.post(
+        "/api/holdings", json={"tickers": "AAPL, THISTICKERISWAYTOOLONG"}
+    )
+    assert resp.status_code == 422
+    assert "THISTICKERISWAYTOOLONG" in resp.json()["error"]
+    # Whole request rejected, not partially applied: AAPL (valid) must not have been committed.
+    rows = (await client.get("/api/holdings")).json()["data"]
+    assert rows == []
+
+
+async def test_too_many_tickers_in_one_request_is_rejected(api):
+    _, client = api
+    tickers = " ".join(f"T{i}" for i in range(201))
+    resp = await client.post("/api/holdings", json={"tickers": tickers})
+    assert resp.status_code == 422
+    assert "too many" in resp.json()["error"].lower()
+    rows = (await client.get("/api/holdings")).json()["data"]
+    assert rows == []
 
 
 async def test_reads_and_writes_are_admin_gated(locked_api):
