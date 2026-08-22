@@ -1,6 +1,7 @@
 import logging
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_market, get_price_store, get_session
 from app.envelope import fail, ok
 from app.insights.scorecard import PriceSeries, _to_series
+from app.insights.watch_score import ChannelBuys, WatchScore, compute_watch_score
 from app.market.client import RANGE_TO_FETCH, MarketClient, StockNotFound
 from app.market.store import PriceStore
 from app.models import Channel, Mention, Video, VideoStance
@@ -56,10 +58,9 @@ async def stock_search(
     return ok([asdict(h) for h in hits])
 
 
-_TRENDING_HALF_LIFE_DAYS = 7.0
-
-
-def _trending_item(ticker: str, entry: dict, now: datetime, span_days: int) -> dict:
+def _trending_item(
+    ticker: str, entry: dict, now: datetime, span_days: int, score: WatchScore
+) -> dict:
     """Build a trending payload row. Channels are bucketed into their most-recent
     stance (within the count window). `last` is the newest video stance in the count
     window, falling back to the freshness window when the count window is empty.
@@ -82,8 +83,9 @@ def _trending_item(ticker: str, entry: dict, now: datetime, span_days: int) -> d
         "ticker": ticker,
         "channel_count": len(entry["channels"]),
         "video_count": entry["count"],
-        "score": round(entry["score"], 4),
+        "watch_score": round(score.score, 4),
         "last_mentioned_at": last.isoformat(),
+        "last_buy_at": entry["last_buy"].isoformat() if entry["last_buy"] else None,
         "stances": stances,
         "buckets": bucket_channel_stances(entry["bucket_rows"], now, span_days),
     }
@@ -96,15 +98,18 @@ async def stocks_trending(
     days: int = Query(90, ge=1, le=365),
     count_days: int | None = Query(None, ge=1, le=365),
     min_channels: int | None = Query(None, ge=1),
-    max_channels: int | None = Query(None, ge=1),
+    sort: Literal["channels", "score"] = Query("channels"),
     session: AsyncSession = Depends(get_session),
 ):
     """`days` = freshness: only include stocks with a video stance within this window.
     `count_days` (defaults to days) = the window for counting channels and stances.
-    Sort key = distinct channel count -> most recent video stance -> ticker.
-    `min_channels`/`max_channels` (optional, inclusive) keep only tickers whose
-    distinct-channel count falls within the band; applied after ranking and before
-    pagination, so `offset`/`limit` page within the filtered set.
+    `sort=channels` (default) ranks by distinct channel count -> most recent ->
+    ticker; `sort=score` ranks by watch_score (recency x breadth, buy-only) -> most
+    recent -> ticker. The default is unchanged so the homepage / search / strip
+    consumers keep their existing ordering.
+    `min_channels` (optional, inclusive) keeps only tickers with at least that many
+    distinct channels; applied after ranking and before pagination, so `offset`/`limit`
+    page within the filtered set.
     `offset`/`limit` paginate the ranked list for infinite scroll."""
     now = datetime.now(timezone.utc)
     fresh_cutoff = now - timedelta(days=days)
@@ -128,7 +133,7 @@ async def stocks_trending(
     for ticker, stance, channel_id, ch_title, ch_thumb, published_at in rows:
         entry = stats.setdefault(
             ticker,
-            {"count": 0, "score": 0.0, "last": None, "fresh_last": None,
+            {"count": 0, "last": None, "fresh_last": None,
              "channels": {}, "bucket_rows": [], "buy_by_channel": {}, "last_buy": None},
         )
         if published_at >= fresh_cutoff:
@@ -137,10 +142,8 @@ async def stocks_trending(
                 else max(entry["fresh_last"], published_at)
             )
         if published_at >= count_cutoff:
-            age_days = max((now - published_at).total_seconds() / 86400, 0.0)
             entry["count"] += 1
             entry["bucket_rows"].append((channel_id, stance.value, published_at))
-            entry["score"] += 0.5 ** (age_days / _TRENDING_HALF_LIFE_DAYS)
             entry["last"] = (
                 published_at if entry["last"] is None
                 else max(entry["last"], published_at)
@@ -161,19 +164,37 @@ async def stocks_trending(
                 }
     # only tickers that were mentioned within the freshness window
     fresh = [(t, e) for t, e in stats.items() if e["fresh_last"] is not None]
-    fresh.sort(
-        key=lambda te: (
-            -len(te[1]["channels"]),
-            -(te[1]["last"] or te[1]["fresh_last"]).timestamp(),
-            te[0],
-        ),
-    )
+    scores = {
+        t: compute_watch_score(
+            [ChannelBuys(channel_id=cid, published_ats=tuple(ts))
+             for cid, ts in e["buy_by_channel"].items()],
+            now,
+            weighted=False,
+        )
+        for t, e in fresh
+    }
+    if sort == "score":
+        fresh.sort(
+            key=lambda te: (
+                -scores[te[0]].score,
+                -(te[1]["last"] or te[1]["fresh_last"]).timestamp(),
+                te[0],
+            ),
+        )
+    else:
+        fresh.sort(
+            key=lambda te: (
+                -len(te[1]["channels"]),
+                -(te[1]["last"] or te[1]["fresh_last"]).timestamp(),
+                te[0],
+            ),
+        )
     if min_channels is not None:
         fresh = [te for te in fresh if len(te[1]["channels"]) >= min_channels]
-    if max_channels is not None:
-        fresh = [te for te in fresh if len(te[1]["channels"]) <= max_channels]
     span = count_days or days
-    return ok([_trending_item(t, e, now, span) for t, e in fresh[offset:offset + limit]])
+    return ok([
+        _trending_item(t, e, now, span, scores[t]) for t, e in fresh[offset:offset + limit]
+    ])
 
 
 _SPARKLINE_MAX_TICKERS = 50

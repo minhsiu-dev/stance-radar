@@ -721,39 +721,96 @@ async def test_trending_filters_by_channel_count(api, sessionmaker):
                                   stance=Stance.buy, summary="s"))
         await s.commit()
 
-    # 1) min+max band returns only the 2- and 3-channel tickers
-    rows = (await client.get(
-        "/api/stocks/trending?min_channels=2&max_channels=3&limit=50"
-    )).json()["data"]
-    assert {r["ticker"] for r in rows} == {"TWO", "THREE"}
-
     # 2a) min_channels alone: >= 3 channels -> THREE, FOUR, SEVEN
     rows = (await client.get(
         "/api/stocks/trending?min_channels=3&limit=50"
     )).json()["data"]
     assert {r["ticker"] for r in rows} == {"THREE", "FOUR", "SEVEN"}
 
-    # 2b) max_channels alone: <= 2 channels -> ONE, TWO
-    rows = (await client.get(
-        "/api/stocks/trending?max_channels=2&limit=50"
-    )).json()["data"]
-    assert {r["ticker"] for r in rows} == {"ONE", "TWO"}
+    # min_channels + pagination: the band is applied before offset/limit, so pages
+    # walk the filtered set rather than punching holes in it
+    p1 = (await client.get("/api/stocks/trending?min_channels=3&limit=1&offset=0")).json()["data"]
+    p2 = (await client.get("/api/stocks/trending?min_channels=3&limit=1&offset=1")).json()["data"]
+    assert len(p1) == 1 and len(p2) == 1
+    assert p1[0]["ticker"] != p2[0]["ticker"]
+    assert {p1[0]["ticker"], p2[0]["ticker"]} <= {"THREE", "FOUR", "SEVEN"}
 
-    # 3) pagination operates WITHIN the filtered set.
-    # In-band (2..3 channels) ranked by channel_count desc -> [THREE, TWO]
-    page0 = (await client.get(
-        "/api/stocks/trending?min_channels=2&max_channels=3&limit=1&offset=0"
+
+@pytest.mark.asyncio
+async def test_trending_sort_by_score_prefers_recent_breadth(api, sessionmaker):
+    """sort=score ranks by momentum x breadth; the default sort still ranks by
+    distinct channel count, so the other trending consumers are unaffected."""
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Stance, Video, VideoStance, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        # SPREAD: 3 channels, 1 buy video each, all 2 days old
+        for i in range(3):
+            s.add(Channel(id=f"csp{i}", title=f"csp{i}", thumbnail_url="",
+                          uploads_playlist_id=f"UUsp{i}"))
+            s.add(Video(id=f"vsp{i}", channel_id=f"csp{i}", title="t",
+                        published_at=now - timedelta(days=2), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(VideoStance(video_id=f"vsp{i}", ticker="SPREAD",
+                              stance=Stance.buy, summary="s"))
+        # STALE: 4 channels (MORE than SPREAD), 1 buy video each, but 70 days old
+        for i in range(4):
+            s.add(Channel(id=f"cst{i}", title=f"cst{i}", thumbnail_url="",
+                          uploads_playlist_id=f"UUst{i}"))
+            s.add(Video(id=f"vst{i}", channel_id=f"cst{i}", title="t",
+                        published_at=now - timedelta(days=70), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(VideoStance(video_id=f"vst{i}", ticker="STALE",
+                              stance=Stance.buy, summary="s"))
+        await s.commit()
+
+    scored = (await client.get(
+        "/api/stocks/trending?sort=score&days=90&count_days=90&limit=50"
     )).json()["data"]
-    page1 = (await client.get(
-        "/api/stocks/trending?min_channels=2&max_channels=3&limit=1&offset=1"
+    order = [r["ticker"] for r in scored if r["ticker"] in {"SPREAD", "STALE"}]
+    assert order == ["SPREAD", "STALE"]  # recency wins despite fewer channels
+
+    # default sort is unchanged: more channels wins
+    default = (await client.get(
+        "/api/stocks/trending?days=90&count_days=90&limit=50"
     )).json()["data"]
-    assert [r["ticker"] for r in page0] == ["THREE"]
-    assert [r["ticker"] for r in page1] == ["TWO"]
-    # offset past the filtered count -> empty page
-    page2 = (await client.get(
-        "/api/stocks/trending?min_channels=2&max_channels=3&limit=1&offset=2"
-    )).json()["data"]
-    assert page2 == []
+    order = [r["ticker"] for r in default if r["ticker"] in {"SPREAD", "STALE"}]
+    assert order == ["STALE", "SPREAD"]
+
+
+@pytest.mark.asyncio
+async def test_trending_score_ignores_sell_and_neutral(api, sessionmaker):
+    """Only buy counts toward the score, per the spec. A ticker everyone is
+    bearish on still appears in the list, but scores zero."""
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Stance, Video, VideoStance, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        for i, stance in enumerate((Stance.sell, Stance.neutral, Stance.sell)):
+            s.add(Channel(id=f"cbe{i}", title=f"cbe{i}", thumbnail_url="",
+                          uploads_playlist_id=f"UUbe{i}"))
+            s.add(Video(id=f"vbe{i}", channel_id=f"cbe{i}", title="t",
+                        published_at=now - timedelta(days=1), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(VideoStance(video_id=f"vbe{i}", ticker="BEARS",
+                              stance=stance, summary="s"))
+        await s.commit()
+
+    rows = (await client.get("/api/stocks/trending?sort=score&limit=50")).json()["data"]
+    row = next(r for r in rows if r["ticker"] == "BEARS")
+    assert row["watch_score"] == 0.0
+    assert row["last_buy_at"] is None
+    assert row["channel_count"] == 3  # still visible, still shows its 3 channels
+
+
+@pytest.mark.asyncio
+async def test_trending_rejects_unknown_sort(api):
+    _, client = api
+    assert (await client.get("/api/stocks/trending?sort=bogus")).status_code == 422
 
 
 async def test_stock_earnings_for_stock_and_empty_for_etf(api):
