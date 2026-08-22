@@ -62,7 +62,7 @@
   "Dashboard": {
     "latest": "Latest videos",
     "viewAll": "View all",
-    "recentStocks": { "title": "Recently discussed", "week": "This week", "month": "This month", "quarter": "3M", "empty": "No stocks discussed in this period", "channelCount": "{count, plural, one {# channel} other {# channels}}", "scoreBreakdown": "{channels, plural, one {# channel} other {# channels}} · {days}d ago", "scoreBreakdownNoBuys": "No buy calls yet", "scoreBreakdownWeighted": "{channels} channels · {days}d ago · {winRate}% win rate", "viewAll": "View all" },
+    "recentStocks": { "title": "Recently discussed", "week": "This week", "month": "This month", "quarter": "3M", "empty": "No stocks discussed in this period", "channelCount": "{count, plural, one {# channel} other {# channels}}", "scoreBreakdown": "{channels, plural, one {# channel} other {# channels}} · {days}d ago", "scoreBreakdownNoBuys": "No buy calls yet", "scoreBreakdownWeighted": "{channels, plural, one {# channel} other {# channels}} · {days}d ago · {winRate}% win rate", "viewAll": "View all" },
     "benchmarks": {
       "title": "Benchmarks",
       "loadError": "Failed to load benchmarks: {message}"

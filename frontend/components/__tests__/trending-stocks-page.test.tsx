@@ -167,6 +167,29 @@ describe("TrendingStocksPage", () => {
     expect(sparkUrl).toContain("tickers=NVDA");
     expect(sparkUrl).toContain("days=90"); // count window default
   });
+
+  // Regression for F1: HoldingsDialog used to try reaching this page's useSWRInfinite cache
+  // via a filter-mutate predicate, which SWR silently skips for $inf$-prefixed keys -- so
+  // adding/removing a holding never refetched the grid. HoldingsDialog is mocked out above,
+  // so this fires the "holdings:changed" window event directly, the same signal the real
+  // dialog dispatches after add()/remove().
+  it("revalidates the trending grid when a holdings:changed event fires", async () => {
+    const fetcher = vi.fn().mockResolvedValue([STOCK]);
+    wrap(fetcher);
+    await screen.findByTestId("recent-stock-card");
+    const callsBefore = fetcher.mock.calls.filter(
+      ([u]: string[]) => typeof u === "string" && u.includes("/api/stocks/trending"),
+    ).length;
+
+    fireEvent(window, new Event("holdings:changed"));
+
+    await waitFor(() => {
+      const callsAfter = fetcher.mock.calls.filter(
+        ([u]: string[]) => typeof u === "string" && u.includes("/api/stocks/trending"),
+      ).length;
+      expect(callsAfter).toBeGreaterThan(callsBefore);
+    });
+  });
 });
 
 describe("minChannelsParam", () => {

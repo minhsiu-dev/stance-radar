@@ -68,12 +68,23 @@ export function TrendingStocksPage() {
     },
     [fresh, count, minChannels, weighted, authenticated, excludeHeld],
   );
-  const { data: pages, isLoading, setSize } = useSWRInfinite<TrendingStock[]>(getKey);
+  const { data: pages, isLoading, setSize, mutate: revalidatePages } =
+    useSWRInfinite<TrendingStock[]>(getKey);
 
   // Reset to the first page when the filters change.
   useEffect(() => {
     setSize(1);
   }, [fresh, count, minChannels, weighted, excludeHeld, setSize]);
+
+  // HoldingsDialog can't reach this hook's $inf$-prefixed cache key through the global
+  // filter-mutate (SWR skips $inf$/$sub$ keys before the predicate ever runs), so it fires
+  // this window event instead; revalidate every currently loaded page in response. Mirrors
+  // channel-manager.tsx's "channels:changed" listener for add-channel-dialog.tsx.
+  useEffect(() => {
+    const handler = () => revalidatePages();
+    window.addEventListener("holdings:changed", handler);
+    return () => window.removeEventListener("holdings:changed", handler);
+  }, [revalidatePages]);
 
   const items = (pages ?? []).flat();
   const yMax = maxBucketTotal(items);

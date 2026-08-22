@@ -87,4 +87,61 @@ describe("HoldingsDialog", () => {
       ),
     );
   });
+
+  // F5: add()'s error-surfacing branch (the >10-char 422 the backend returns for a pasted
+  // URL fragment) had no coverage -- only the success path did.
+  it("surfaces the backend's rejection when a pasted token is over the ticker length limit", async () => {
+    envelopeSpy.mockResolvedValue({
+      status: 422,
+      body: { success: false, data: null, error: "ticker(s) longer than 10 characters: HTTPSWWWEXAMPLECOM" },
+    });
+    wrap(vi.fn().mockResolvedValue([]));
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage holdings" }));
+    fireEvent.change(screen.getByPlaceholderText(/Paste symbols/i), {
+      target: { value: "httpswwwexamplecom" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(
+      await screen.findByText("ticker(s) longer than 10 characters: HTTPSWWWEXAMPLECOM"),
+    ).toBeInTheDocument();
+  });
+
+  // F5: the 401 -> handleAuthError path, copied from add-channel-dialog.test.tsx's equivalent
+  // test for the sibling dialog.
+  it("routes a 401 response back through handleAuthError", async () => {
+    const handleAuthError = vi.fn();
+    useAdmin.mockReturnValue({ authenticated: true, handleAuthError });
+    envelopeSpy.mockResolvedValue({ status: 401, body: { success: false, data: null, error: "Unauthorized" } });
+    wrap(vi.fn().mockResolvedValue([]));
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage holdings" }));
+    fireEvent.change(screen.getByPlaceholderText(/Paste symbols/i), {
+      target: { value: "aapl" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => {
+      expect(handleAuthError).toHaveBeenCalledTimes(1);
+    });
+    const [err] = handleAuthError.mock.calls[0];
+    expect(err).toMatchObject({ status: 401 });
+  });
+
+  // F4 regression: remove() used to treat any non-401 status as success and never look at
+  // body.error, so a failing delete (e.g. a 404 for an already-removed ticker) produced no
+  // feedback at all.
+  it("surfaces the backend's error message when removing a holding fails", async () => {
+    envelopeSpy.mockResolvedValue({
+      status: 404,
+      body: { success: false, data: null, error: "GOOG is not in your holdings" },
+    });
+    wrap(vi.fn().mockResolvedValue([{ ticker: "GOOG", added_at: "2026-08-01T00:00:00Z", note: null }]));
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage holdings" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove GOOG" }));
+
+    expect(await screen.findByText("GOOG is not in your holdings")).toBeInTheDocument();
+  });
 });

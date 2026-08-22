@@ -31,8 +31,8 @@ with its timestamp.
   card so the ranking stays explainable.
 - **Holdings** — an admin-only list of tickers you own, so the trending list can
   filter out what you already hold.
-- **Homepage performance cards** — portfolio vs VOO / QQQ return across several
-  ranges (1d / 5d / 1m / 3m / 6m / ytd / 1y).
+- **Homepage performance cards** — VOO / QQQ / VT benchmark cards with price, a
+  sparkline, and % change across several ranges (1d / 5d / 1m / 3m / 6m / ytd / 1y).
 - **Feed filtering** — filter the homepage video feed by channel / stock / stance.
 - **Stock fundamentals** — latest-quarter revenue / margin growth, a margin-trend
   chart, and analyst targets (low / mean / high, upside, rating distribution).

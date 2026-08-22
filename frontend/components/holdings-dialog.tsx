@@ -27,12 +27,18 @@ export function HoldingsDialog() {
   const [message, setMessage] = useState<string | null>(null);
   const { data: holdings } = useSWR<Holding[]>(authenticated ? "/api/holdings" : null);
 
-  // held changed -> every trending page must refetch, or the filter shows stale rows
+  // held changed -> every trending consumer must refetch, or the filter shows stale rows
   async function revalidate() {
     await mutate("/api/holdings");
+    // Reaches the homepage strip / search / recent-stocks consumers, which use plain useSWR.
     await mutate(
       (key) => typeof key === "string" && key.startsWith("/api/stocks/trending"),
     );
+    // TrendingStocksPage (the /stocks grid) uses useSWRInfinite instead, whose $inf$-prefixed
+    // cache key the filter-mutate predicate above can't target (SWR's matchMutate explicitly
+    // skips $inf$/$sub$ keys before ever calling the predicate); signal it explicitly so that
+    // page refreshes too. Mirrors add-channel-dialog.tsx -> channel-manager.tsx.
+    window.dispatchEvent(new Event("holdings:changed"));
   }
 
   async function add() {
@@ -74,6 +80,10 @@ export function HoldingsDialog() {
       );
       if (status === 401) {
         handleAuthError(new ApiError(body.error ?? "", 401));
+        return;
+      }
+      if (!body.data) {
+        setMessage(body.error ?? t("failed"));
         return;
       }
       await revalidate();

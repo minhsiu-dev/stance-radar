@@ -10,7 +10,8 @@ const messages = {
       channelCount: "{count} channels",
       scoreBreakdown: "{channels} channels · {days}d ago",
       scoreBreakdownNoBuys: "No buy calls yet",
-      scoreBreakdownWeighted: "{channels} channels · {days}d ago · {winRate}% win rate",
+      scoreBreakdownWeighted:
+        "{channels, plural, one {# channel} other {# channels}} · {days}d ago · {winRate}% win rate",
     },
   },
   Stock: {
@@ -87,5 +88,16 @@ describe("StockCard", () => {
   it("omits the win rate from the breakdown when there is none", () => {
     wrap({ ...BASE, channel_win_rate_avg: null }, true);
     expect(screen.getByTestId("score-breakdown")).not.toHaveTextContent("%");
+  });
+
+  // Regression for F3: the fixture above used to hard-code a non-pluralized copy of
+  // scoreBreakdownWeighted ("{channels} channels · ..."), so this suite could never have
+  // caught en.json rendering "1 channels" for the single-buy-channel case -- the default
+  // (weighted=true) path most English users actually see.
+  it("pluralizes a single buy channel correctly in the weighted breakdown", () => {
+    wrap({ ...BASE, buy_channel_count: 1, channel_win_rate_avg: 61.4 }, true);
+    const breakdown = screen.getByTestId("score-breakdown");
+    expect(breakdown).toHaveTextContent("1 channel");
+    expect(breakdown).not.toHaveTextContent("1 channels");
   });
 });

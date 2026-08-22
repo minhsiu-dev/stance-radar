@@ -393,11 +393,16 @@ async def stance_summary(
         for cid, title, thumb in chan_rows
     ]
 
-    # Per-bucket stance trend: distinct channels per bucket, by most-recent Mention stance.
+    # Per-bucket stance trend: distinct channels per bucket, by VideoStance (one video = one
+    # vote), matching /stocks/trending's bucket_rows and the same StanceTrendChart this feeds
+    # everywhere else it's rendered. This used to read raw Mention rows, so a single video
+    # mentioning a ticker N times inflated this page's bucket counts N-fold while the trending
+    # cards (already on VideoStance) stayed at 1 -- the same chart meant two different things
+    # on two pages.
     bucket_rows = (await session.execute(
-        select(Video.channel_id, Mention.stance, Video.published_at)
-        .join(Video, Mention.video_id == Video.id)
-        .where(Mention.ticker == ticker.upper())
+        select(Video.channel_id, VideoStance.stance, Video.published_at)
+        .join(Video, VideoStance.video_id == Video.id)
+        .where(VideoStance.ticker == ticker.upper())
         .where(Video.published_at >= cutoff)
     )).all()
     rows_for_buckets = [(cid, st.value, pub) for cid, st, pub in bucket_rows]

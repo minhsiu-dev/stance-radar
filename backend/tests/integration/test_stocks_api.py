@@ -645,9 +645,9 @@ async def test_trending_includes_weekly_buckets(api, sessionmaker):
 
 
 @pytest.mark.asyncio
-async def test_stance_summary_includes_buckets_from_mentions(api, sessionmaker):
+async def test_stance_summary_buckets_count_video_stances_not_raw_mentions(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
-    from app.models import Channel, Mention, Stance, Video, VideoStatus
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
 
     _, client = api
     now = datetime.now(timezone.utc)
@@ -656,14 +656,22 @@ async def test_stance_summary_includes_buckets_from_mentions(api, sessionmaker):
         s.add(Video(id="vsb", channel_id="csb", title="t",
                     published_at=now - timedelta(days=2), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
+        # Two mentions in the same video (the ticker comes up twice), but the bucket trend
+        # must count VideoStance -- one vote per video -- not each individual Mention, or a
+        # single video mentioning a ticker repeatedly inflates its bucket counts (this is what
+        # regressed: this page lagged on raw Mention rows while /stocks/trending had already
+        # moved to VideoStance, so the same chart meant two different things on two pages).
         s.add(Mention(video_id="vsb", ticker="SHOP", start_seconds=1.0,
                       quote="q", stance=Stance.buy, reasoning="r"))
+        s.add(Mention(video_id="vsb", ticker="SHOP", start_seconds=30.0,
+                      quote="q2", stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="vsb", ticker="SHOP", stance=Stance.buy, summary="s"))
         await s.commit()
 
     body = (await client.get("/api/stocks/SHOP/stance-summary?days=90")).json()["data"]
     assert len(body["buckets"]) == 12  # 90d -> 12 weekly buckets
     assert all(b["granularity"] == "week" for b in body["buckets"])
-    assert sum(b["buy_new"] for b in body["buckets"]) == 1
+    assert sum(b["buy_new"] for b in body["buckets"]) == 1  # one video -> one vote, not 2 mentions
     assert sum(b["buy_repeat"] for b in body["buckets"]) == 0
 
 
