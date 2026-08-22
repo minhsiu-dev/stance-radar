@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_market, get_price_store, get_session
 from app.envelope import fail, ok
+from app.insights.channel_win_rates import ChannelWinRate, get_channel_win_rates
 from app.insights.scorecard import PriceSeries, _to_series
 from app.insights.watch_score import ChannelBuys, WatchScore, compute_watch_score
 from app.market.client import RANGE_TO_FETCH, MarketClient, StockNotFound
@@ -90,6 +91,7 @@ def _trending_item(
         "buy_channel_count": len(entry["buy_by_channel"]),
         "video_count": entry["count"],
         "watch_score": round(score.score, 4),
+        "channel_win_rate_avg": score.win_rate_avg,
         "last_mentioned_at": last.isoformat(),
         "last_buy_at": entry["last_buy"].isoformat() if entry["last_buy"] else None,
         "stances": stances,
@@ -105,6 +107,7 @@ async def stocks_trending(
     count_days: int | None = Query(None, ge=1, le=365),
     min_channels: int | None = Query(None, ge=1),
     sort: Literal["channels", "score"] = Query("channels"),
+    weighted: bool = Query(True),
     session: AsyncSession = Depends(get_session),
 ):
     """`days` = freshness: only include stocks with a video stance within this window.
@@ -116,6 +119,9 @@ async def stocks_trending(
     `min_channels` (optional, inclusive) keeps only tickers with at least that many
     distinct channels; applied after ranking and before pagination, so `offset`/`limit`
     page within the filtered set.
+    `weighted` (default true) multiplies each recommending channel's contribution by
+    its 90d buy win rate, shrunk by sample size; `weighted=false` gives every channel
+    weight 1.0, i.e. pure momentum x breadth.
     `offset`/`limit` paginate the ranked list for infinite scroll."""
     now = datetime.now(timezone.utc)
     fresh_cutoff = now - timedelta(days=days)
@@ -170,12 +176,23 @@ async def stocks_trending(
                 }
     # only tickers that were mentioned within the freshness window
     fresh = [(t, e) for t, e in stats.items() if e["fresh_last"] is not None]
+    win_rates: dict[str, ChannelWinRate] = (
+        await get_channel_win_rates(session) if weighted else {}
+    )
+    _UNRATED = ChannelWinRate(win_rate=None, n=0)
     scores = {
         t: compute_watch_score(
-            [ChannelBuys(channel_id=cid, published_ats=tuple(ts))
-             for cid, ts in e["buy_by_channel"].items()],
+            [
+                ChannelBuys(
+                    channel_id=cid,
+                    published_ats=tuple(ts),
+                    win_rate=win_rates.get(cid, _UNRATED).win_rate,
+                    win_rate_n=win_rates.get(cid, _UNRATED).n,
+                )
+                for cid, ts in e["buy_by_channel"].items()
+            ],
             now,
-            weighted=False,
+            weighted=weighted,
         )
         for t, e in fresh
     }

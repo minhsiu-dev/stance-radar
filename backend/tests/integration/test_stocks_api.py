@@ -842,6 +842,98 @@ async def test_trending_rejects_unknown_sort(api):
     assert (await client.get("/api/stocks/trending?sort=bogus")).status_code == 422
 
 
+@pytest.mark.asyncio
+async def test_trending_weights_by_channel_win_rate(api, sessionmaker):
+    """Two tickers with identical momentum and breadth: the one recommended by the
+    channel with the better 90d record must rank higher — and weighted=false must
+    make that difference disappear."""
+    from datetime import datetime, timezone, timedelta
+    from app.insights.channel_win_rates import reset_cache
+    from app.models import Channel, PriceBar, Stance, Video, VideoStance, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    async with sessionmaker() as s:
+        start = today - timedelta(days=210)
+        for d in range(211):
+            day = start + timedelta(days=d)
+            s.add(PriceBar(ticker="VOO", date=day, open=100.0, high=100.0,
+                           low=100.0, close=100.0, volume=1))
+            s.add(PriceBar(ticker="WUP", date=day, open=100.0 + d, high=100.0 + d,
+                           low=100.0 + d, close=100.0 + d, volume=1))
+            s.add(PriceBar(ticker="WDN", date=day, open=300.0 - d, high=300.0 - d,
+                           low=300.0 - d, close=300.0 - d, volume=1))
+        # track records: cw_good called WUP (rose), cw_bad called WDN (fell)
+        for cid, hist_ticker in (("cw_good", "WUP"), ("cw_bad", "WDN")):
+            s.add(Channel(id=cid, title=cid, thumbnail_url="",
+                          uploads_playlist_id=f"UU{cid}"))
+            for k in range(3):
+                vid = f"vh_{cid}_{k}"
+                s.add(Video(id=vid, channel_id=cid, title="t",
+                            published_at=now - timedelta(days=150 - k),
+                            thumbnail_url="", duration_seconds=60,
+                            status=VideoStatus.analyzed))
+                s.add(VideoStance(video_id=vid, ticker=hist_ticker,
+                                  stance=Stance.buy, summary="s"))
+        # the calls under test: identical timing, one per channel, distinct tickers
+        for cid, ticker in (("cw_good", "GOODPICK"), ("cw_bad", "BADPICK")):
+            vid = f"vn_{cid}"
+            s.add(Video(id=vid, channel_id=cid, title="t",
+                        published_at=now - timedelta(days=1), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(VideoStance(video_id=vid, ticker=ticker,
+                              stance=Stance.buy, summary="s"))
+        await s.commit()
+    reset_cache()
+
+    rows = (await client.get(
+        "/api/stocks/trending?sort=score&days=90&count_days=90&limit=200"
+    )).json()["data"]
+    picks = [r for r in rows if r["ticker"] in {"GOODPICK", "BADPICK"}]
+    assert [r["ticker"] for r in picks] == ["GOODPICK", "BADPICK"]
+    assert picks[0]["watch_score"] > picks[1]["watch_score"]
+    assert picks[0]["channel_win_rate_avg"] == 100.0
+    assert picks[1]["channel_win_rate_avg"] == 0.0
+
+    reset_cache()
+    rows = (await client.get(
+        "/api/stocks/trending?sort=score&days=90&count_days=90&limit=200&weighted=false"
+    )).json()["data"]
+    picks = {r["ticker"]: r for r in rows if r["ticker"] in {"GOODPICK", "BADPICK"}}
+    assert picks["GOODPICK"]["watch_score"] == picks["BADPICK"]["watch_score"]
+    assert picks["GOODPICK"]["channel_win_rate_avg"] is None  # not computed when off
+
+
+@pytest.mark.asyncio
+async def test_trending_unrated_channel_counts_as_neutral(api, sessionmaker):
+    """A channel with no matured calls must not be penalised — its weight is 1.0."""
+    import math
+    from datetime import datetime, timezone, timedelta
+    from app.insights.channel_win_rates import reset_cache
+    from app.models import Channel, Stance, Video, VideoStance, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(id="cnew", title="cnew", thumbnail_url="",
+                      uploads_playlist_id="UUnew"))
+        s.add(Video(id="vnew", channel_id="cnew", title="t",
+                    published_at=now - timedelta(days=1), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        s.add(VideoStance(video_id="vnew", ticker="FRESHCO",
+                          stance=Stance.buy, summary="s"))
+        await s.commit()
+    reset_cache()
+
+    rows = (await client.get("/api/stocks/trending?sort=score&limit=200")).json()["data"]
+    row = next(r for r in rows if r["ticker"] == "FRESHCO")
+    assert row["channel_win_rate_avg"] is None
+    # one channel, one video, 1 day old, weight 1.0 -> sqrt(0.5 ** (1/14)) = 0.9755.
+    # NOTE the parens: ** is right-associative, so 0.5 ** (1/14) ** 0.5 is NOT this.
+    assert row["watch_score"] == pytest.approx(math.sqrt(0.5 ** (1 / 14)), abs=2e-3)
+
+
 async def test_stock_earnings_for_stock_and_empty_for_etf(api):
     app, client = api
     resp = await client.get("/api/stocks/AAPL/earnings")
