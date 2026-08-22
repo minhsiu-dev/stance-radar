@@ -2,22 +2,19 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
-import { TrendingStocksPage, segmentParams } from "@/components/trending-stocks-page";
+import { TrendingStocksPage, minChannelsParam } from "@/components/trending-stocks-page";
 
 const messages = {
   Trending: {
     title: "Trending stocks",
     freshness: "Freshness",
     countWindow: "Count window",
-    coverage: "Coverage",
+    minChannels: "Min channels",
     week: "1W", month: "1M", quarter: "3M",
-    segAll: "All",
-    segEmerging: "Emerging 2–3",
-    segForming: "Forming 4–6",
-    segHot: "Popular 7+",
+    minAll: "Any", min2: "2 or more", min3: "3 or more", min5: "5 or more",
     empty: "No stocks",
   },
-  Dashboard: { recentStocks: { channelCount: "{count} channels" } },
+  Dashboard: { recentStocks: { channelCount: "{count} channels", scoreBreakdown: "{channels} channels · {days}d ago" } },
   Stock: { stance: { buy: "Buy", neutral: "Neutral", sell: "Sell", new: "New", repeat: "Repeat" } },
 };
 
@@ -25,7 +22,8 @@ function zone(n: number) {
   return { count: n, avatars: Array.from({ length: Math.min(n, 3) }, (_, i) => ({ title: `C${i}`, thumbnail_url: "" })) };
 }
 const STOCK = {
-  ticker: "NVDA", channel_count: 3, video_count: 5, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z",
+  ticker: "NVDA", channel_count: 3, video_count: 5, watch_score: 2.5,
+  last_mentioned_at: "2026-06-11T00:00:00Z", last_buy_at: "2026-06-11T00:00:00Z",
   stances: { buy: zone(3), neutral: zone(0), sell: zone(0) }, buckets: [],
 };
 
@@ -55,8 +53,8 @@ describe("TrendingStocksPage", () => {
     wrap(fetcher);
     expect(await screen.findByTestId("recent-stock-card")).toBeInTheDocument();
     expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("days=30") && u.includes("count_days=90"))).toBe(true);
-    // default coverage segment is "all" -> no channel-count bounds
-    expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("min_channels") || u.includes("max_channels"))).toBe(false);
+    // default min-channels band is "all" -> no channel-count bound
+    expect(fetcher.mock.calls.some(([u]: string[]) => u.includes("min_channels"))).toBe(false);
     // triggers show window labels, not raw day-count numbers
     expect(screen.getAllByText("1M").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("3M").length).toBeGreaterThanOrEqual(1);
@@ -64,11 +62,24 @@ describe("TrendingStocksPage", () => {
     expect(screen.queryByText("90")).toBeNull();
   });
 
-  // Note: a test that drives the new coverage dropdown to "All" and asserts the key
-  // drops min_channels/max_channels was attempted but skipped — Radix Select's
-  // onValueChange does not fire under jsdom's pointer-event model, so the click
-  // never changes the segment. The band->params mapping is instead covered directly
-  // by the `segmentParams` unit tests below.
+  // Note: a test that drives the min-channels dropdown and asserts the key changes
+  // min_channels was attempted but skipped — Base UI Select's onValueChange does not
+  // fire under jsdom's pointer-event model, so the click never changes the value. The
+  // band->params mapping is instead covered directly by the `minChannelsParam` unit
+  // tests below.
+
+  it("always requests the score ordering", async () => {
+    const fetcher = vi.fn().mockResolvedValue([STOCK]);
+    wrap(fetcher);
+    await screen.findByTestId("recent-stock-card");
+    // Scope to the trending-list calls: the shared mock fetcher also serves
+    // useSparklines' /api/stocks/sparklines requests, which never carry `sort`.
+    const trendingUrls = fetcher.mock.calls
+      .map(([u]: string[]) => u)
+      .filter((u: string) => u.includes("/api/stocks/trending"));
+    expect(trendingUrls.length).toBeGreaterThan(0);
+    expect(trendingUrls.every((u: string) => u.includes("sort=score"))).toBe(true);
+  });
 
   it("shows the empty state when no stocks come back", async () => {
     wrap(vi.fn().mockResolvedValue([]));
@@ -114,11 +125,11 @@ describe("TrendingStocksPage", () => {
   });
 });
 
-describe("segmentParams", () => {
-  it("maps each coverage band to the right channel-count query fragment", () => {
-    expect(segmentParams("all")).toBe(""); // unbounded -> neither param
-    expect(segmentParams("emerging")).toBe("&min_channels=2&max_channels=3");
-    expect(segmentParams("forming")).toBe("&min_channels=4&max_channels=6");
-    expect(segmentParams("hot")).toBe("&min_channels=7"); // open-ended -> min only
+describe("minChannelsParam", () => {
+  it("maps the min-channel bands to query params", () => {
+    expect(minChannelsParam("all")).toBe("");
+    expect(minChannelsParam("min2")).toBe("&min_channels=2");
+    expect(minChannelsParam("min3")).toBe("&min_channels=3");
+    expect(minChannelsParam("min5")).toBe("&min_channels=5");
   });
 });

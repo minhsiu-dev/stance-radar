@@ -250,8 +250,9 @@ export interface TrendingStock {
   ticker: string;
   channel_count: number;
   video_count: number;
-  score: number;
+  watch_score: number;
   last_mentioned_at: string;
+  last_buy_at: string | null;
   stances: {
     buy: StanceZone;
     neutral: StanceZone;

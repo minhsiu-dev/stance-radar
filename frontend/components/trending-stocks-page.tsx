@@ -22,24 +22,21 @@ const WINDOWS = [
   { days: 90, key: "quarter" },
 ] as const;
 
-// Coverage bands: filter by distinct-channel count via min_channels / max_channels.
-// `all` leaves both sides unbounded; otherwise an undefined bound stays unbounded.
-const SEGMENTS = {
-  all: { key: "segAll" },
-  emerging: { key: "segEmerging", min: 2, max: 3 },
-  forming: { key: "segForming", min: 4, max: 6 },
-  hot: { key: "segHot", min: 7 },
+// Minimum distinct-channel count. The old 2-3 / 4-6 / 7+ bands existed because the
+// ranking was hard-wired to channel count, so browsing by band was the only way to
+// see anything but the top. With score ordering an upper bound has no purpose.
+const MIN_CHANNELS = {
+  all: { key: "minAll" },
+  min2: { key: "min2", min: 2 },
+  min3: { key: "min3", min: 3 },
+  min5: { key: "min5", min: 5 },
 } as const;
 
-type SegmentKey = keyof typeof SEGMENTS;
+type MinChannelsKey = keyof typeof MIN_CHANNELS;
 
-// Channel-count query fragment for a coverage band ("" for the unbounded `all`).
-export function segmentParams(segment: SegmentKey): string {
-  const seg = SEGMENTS[segment];
-  let q = "";
-  if ("min" in seg) q += `&min_channels=${seg.min}`;
-  if ("max" in seg) q += `&max_channels=${seg.max}`;
-  return q;
+export function minChannelsParam(value: MinChannelsKey): string {
+  const band = MIN_CHANNELS[value];
+  return "min" in band ? `&min_channels=${band.min}` : "";
 }
 
 const PAGE_SIZE = 20;
@@ -48,24 +45,24 @@ export function TrendingStocksPage() {
   const t = useTranslations("Trending");
   const [fresh, setFresh] = useState(30);
   const [count, setCount] = useState(90);
-  const [segment, setSegment] = useState<SegmentKey>("all");
+  const [minChannels, setMinChannels] = useState<MinChannelsKey>("all");
 
   // Infinite scroll: fetch the ranked list PAGE_SIZE at a time via offset pagination.
   // A short page (< PAGE_SIZE) means we've reached the end, so getKey returns null.
   const getKey = useCallback(
     (pageIndex: number, previous: TrendingStock[] | null) => {
       if (previous && previous.length < PAGE_SIZE) return null;
-      const url = `/api/stocks/trending?limit=${PAGE_SIZE}&offset=${pageIndex * PAGE_SIZE}&days=${fresh}&count_days=${count}`;
-      return url + segmentParams(segment);
+      const url = `/api/stocks/trending?limit=${PAGE_SIZE}&offset=${pageIndex * PAGE_SIZE}&days=${fresh}&count_days=${count}&sort=score`;
+      return url + minChannelsParam(minChannels);
     },
-    [fresh, count, segment],
+    [fresh, count, minChannels],
   );
   const { data: pages, isLoading, setSize } = useSWRInfinite<TrendingStock[]>(getKey);
 
   // Reset to the first page when the filters change.
   useEffect(() => {
     setSize(1);
-  }, [fresh, count, segment, setSize]);
+  }, [fresh, count, minChannels, setSize]);
 
   const items = (pages ?? []).flat();
   const yMax = maxBucketTotal(items);
@@ -103,7 +100,12 @@ export function TrendingStocksPage() {
         <div className="flex flex-wrap gap-4">
           <WindowSelect label={t("freshness")} value={fresh} onChange={setFresh} t={t} />
           <WindowSelect label={t("countWindow")} value={count} onChange={setCount} t={t} />
-          <SegmentSelect label={t("coverage")} value={segment} onChange={setSegment} t={t} />
+          <MinChannelsSelect
+            label={t("minChannels")}
+            value={minChannels}
+            onChange={setMinChannels}
+            t={t}
+          />
         </div>
       </div>
       {isLoading ? (
@@ -157,29 +159,29 @@ function WindowSelect({
   );
 }
 
-function SegmentSelect({
+function MinChannelsSelect({
   label,
   value,
   onChange,
   t,
 }: {
   label: string;
-  value: SegmentKey;
-  onChange: (s: SegmentKey) => void;
+  value: MinChannelsKey;
+  onChange: (v: MinChannelsKey) => void;
   t: ReturnType<typeof useTranslations<"Trending">>;
 }) {
-  const keys = Object.keys(SEGMENTS) as SegmentKey[];
+  const keys = Object.keys(MIN_CHANNELS) as MinChannelsKey[];
   return (
     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
       {label}
-      <Select value={value} onValueChange={(v) => onChange(v as SegmentKey)}>
+      <Select value={value} onValueChange={(v) => onChange(v as MinChannelsKey)}>
         <SelectTrigger className="w-28">
-          <SelectValue>{t(SEGMENTS[value].key)}</SelectValue>
+          <SelectValue>{t(MIN_CHANNELS[value].key)}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {keys.map((k) => (
             <SelectItem key={k} value={k}>
-              {t(SEGMENTS[k].key)}
+              {t(MIN_CHANNELS[k].key)}
             </SelectItem>
           ))}
         </SelectContent>
