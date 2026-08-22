@@ -61,8 +61,9 @@ _TRENDING_HALF_LIFE_DAYS = 7.0
 
 def _trending_item(ticker: str, entry: dict, now: datetime, span_days: int) -> dict:
     """Build a trending payload row. Channels are bucketed into their most-recent
-    stance (within the count window). `last` is the newest mention in the count
-    window, falling back to the freshness window when the count window is empty."""
+    stance (within the count window). `last` is the newest video stance in the count
+    window, falling back to the freshness window when the count window is empty.
+    One row per (video, ticker) — a video that mentions a ticker eight times votes once."""
     buckets_meta: dict[str, list[dict]] = {"buy": [], "neutral": [], "sell": []}
     for ch in entry["channels"].values():
         buckets_meta[ch["stance"]].append(ch)
@@ -80,7 +81,7 @@ def _trending_item(ticker: str, entry: dict, now: datetime, span_days: int) -> d
     return {
         "ticker": ticker,
         "channel_count": len(entry["channels"]),
-        "mention_count": entry["count"],
+        "video_count": entry["count"],
         "score": round(entry["score"], 4),
         "last_mentioned_at": last.isoformat(),
         "stances": stances,
@@ -98,7 +99,7 @@ async def stocks_trending(
     max_channels: int | None = Query(None, ge=1),
     session: AsyncSession = Depends(get_session),
 ):
-    """`days` = freshness: only include stocks mentioned within this window.
+    """`days` = freshness: only include stocks with a video stance within this window.
     `count_days` (defaults to days) = the window for counting channels and stances.
     Sort key = distinct channel count -> most recent mention -> ticker.
     `min_channels`/`max_channels` (optional, inclusive) keep only tickers whose
@@ -111,24 +112,24 @@ async def stocks_trending(
     earliest = min(fresh_cutoff, count_cutoff)
     rows = (await session.execute(
         select(
-            Mention.ticker,
-            Mention.stance,
+            VideoStance.ticker,
+            VideoStance.stance,
             Video.channel_id,
             Channel.title,
             Channel.thumbnail_url,
             Video.published_at,
         )
-        .join(Video, Mention.video_id == Video.id)
+        .join(Video, VideoStance.video_id == Video.id)
         .join(Channel, Video.channel_id == Channel.id)
         .where(Video.published_at >= earliest)
-        .order_by(Video.published_at.asc(), Mention.id.asc())
+        .order_by(Video.published_at.asc(), VideoStance.video_id.asc())
     )).all()
     stats: dict[str, dict] = {}
     for ticker, stance, channel_id, ch_title, ch_thumb, published_at in rows:
         entry = stats.setdefault(
             ticker,
             {"count": 0, "score": 0.0, "last": None, "fresh_last": None,
-             "channels": {}, "bucket_rows": []},
+             "channels": {}, "bucket_rows": [], "buy_by_channel": {}, "last_buy": None},
         )
         if published_at >= fresh_cutoff:
             entry["fresh_last"] = (
@@ -144,6 +145,12 @@ async def stocks_trending(
                 published_at if entry["last"] is None
                 else max(entry["last"], published_at)
             )
+            if stance.value == "buy":
+                entry["buy_by_channel"].setdefault(channel_id, []).append(published_at)
+                entry["last_buy"] = (
+                    published_at if entry["last_buy"] is None
+                    else max(entry["last_buy"], published_at)
+                )
             ch = entry["channels"].get(channel_id)
             if ch is None or published_at >= ch["last"]:
                 entry["channels"][channel_id] = {

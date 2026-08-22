@@ -294,7 +294,7 @@ async def test_mentions_endpoint_returns_context_columns(api, sessionmaker):
 @pytest.mark.asyncio
 async def test_trending_ties_broken_by_recency(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
-    from app.models import Channel, Mention, Stance, Video, VideoStatus
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
 
     _, client = api
     async with sessionmaker() as s:
@@ -303,38 +303,43 @@ async def test_trending_ties_broken_by_recency(api, sessionmaker):
         s.add(Video(id="v_old", channel_id="ch_t", title="old",
                     published_at=now - timedelta(days=10), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
+        # 5 same-video mentions -> still ONE vote for AAPL (proves mentions don't leak)
         for i in range(5):
             s.add(Mention(video_id="v_old", ticker="AAPL", start_seconds=float(i),
                           quote="q", stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="v_old", ticker="AAPL", stance=Stance.buy, summary="s"))
         s.add(Video(id="v_new", channel_id="ch_t", title="new",
                     published_at=now - timedelta(hours=1), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="v_new", ticker="NVDA", start_seconds=1.0,
                       quote="q", stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="v_new", ticker="NVDA", stance=Stance.buy, summary="s"))
         s.add(Video(id="v_stale", channel_id="ch_t", title="stale",
                     published_at=now - timedelta(days=80), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
         for i in range(5):
             s.add(Mention(video_id="v_stale", ticker="TSLA", start_seconds=float(i),
                           quote="q", stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="v_stale", ticker="TSLA", stance=Stance.buy, summary="s"))
         await s.commit()
 
     rows = (await client.get("/api/stocks/trending?limit=5")).json()["data"]
-    # All single-channel → channel_count ties → ordered by most-recent mention
+    # All single-channel → channel_count ties → ordered by most-recent video stance
     assert [r["ticker"] for r in rows] == ["NVDA", "AAPL", "TSLA"]
     assert all(r["channel_count"] == 1 for r in rows)
-    assert rows[1]["mention_count"] == 5  # AAPL still reports its mention total
+    # AAPL: one video (its 5 mentions don't inflate video_count)
+    assert rows[1]["video_count"] == 1
 
 
 @pytest.mark.asyncio
 async def test_trending_ranks_by_distinct_channel_count(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
-    from app.models import Channel, Mention, Stance, Video, VideoStatus
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
 
     _, client = api
     async with sessionmaker() as s:
         now = datetime.now(timezone.utc)
-        # 3 distinct channels each mention MSFT once
+        # 3 distinct channels each state MSFT once
         for n in range(3):
             s.add(Channel(id=f"chm{n}", title=f"chm{n}", thumbnail_url="",
                           uploads_playlist_id=f"UUm{n}"))
@@ -343,7 +348,11 @@ async def test_trending_ranks_by_distinct_channel_count(api, sessionmaker):
                         duration_seconds=60, status=VideoStatus.analyzed))
             s.add(Mention(video_id=f"vm{n}", ticker="MSFT", start_seconds=1.0,
                           quote="q", stance=Stance.buy, reasoning="r"))
-        # 1 channel mentions GOOG 10 times (more mentions, fewer channels)
+            s.add(VideoStance(video_id=f"vm{n}", ticker="MSFT", stance=Stance.buy, summary="s"))
+        # 1 channel states GOOG across 4 videos (more videos, but fewer channels than
+        # MSFT) -> proves ranking is by distinct channel count, not by video_count.
+        # v_solo alone also carries 10 same-video mentions, so mention volume still
+        # doesn't leak into video_count either.
         s.add(Channel(id="ch_solo", title="solo", thumbnail_url="",
                       uploads_playlist_id="UUsolo"))
         s.add(Video(id="v_solo", channel_id="ch_solo", title="t",
@@ -352,14 +361,20 @@ async def test_trending_ranks_by_distinct_channel_count(api, sessionmaker):
         for i in range(10):
             s.add(Mention(video_id="v_solo", ticker="GOOG", start_seconds=float(i),
                           quote="q", stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="v_solo", ticker="GOOG", stance=Stance.buy, summary="s"))
+        for i in range(1, 4):
+            s.add(Video(id=f"v_solo{i}", channel_id="ch_solo", title="t",
+                        published_at=now - timedelta(hours=i), thumbnail_url="",
+                        duration_seconds=60, status=VideoStatus.analyzed))
+            s.add(VideoStance(video_id=f"v_solo{i}", ticker="GOOG", stance=Stance.buy, summary="s"))
         await s.commit()
 
     rows = (await client.get("/api/stocks/trending?limit=5")).json()["data"]
     by = {r["ticker"]: r for r in rows}
     assert by["MSFT"]["channel_count"] == 3
     assert by["GOOG"]["channel_count"] == 1
-    assert by["GOOG"]["mention_count"] == 10
-    # 3 channels outranks 1 channel despite GOOG having more mentions
+    assert by["GOOG"]["video_count"] == 4
+    # 3 channels outranks 1 channel despite GOOG having more videos (and far more mentions)
     assert rows.index(by["MSFT"]) < rows.index(by["GOOG"])
 
 
@@ -443,7 +458,7 @@ async def test_stance_summary_counts_distinct_channels(api, sessionmaker):
 @pytest.mark.asyncio
 async def test_trending_includes_per_stance_channel_avatars(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
-    from app.models import Channel, Mention, Stance, Video, VideoStatus
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
 
     _, client = api
     now = datetime.now(timezone.utc)
@@ -458,6 +473,7 @@ async def test_trending_includes_per_stance_channel_avatars(api, sessionmaker):
                         duration_seconds=60, status=VideoStatus.analyzed))
             s.add(Mention(video_id=f"vb{n}", ticker="AMZN", start_seconds=1.0,
                           quote="q", stance=Stance.buy, reasoning="r"))
+            s.add(VideoStance(video_id=f"vb{n}", ticker="AMZN", stance=Stance.buy, summary="s"))
         # channel cb0 ALSO has an OLDER sell mention → its latest stance is buy, so it
         # must count only in buy (proves most-recent-wins reduction + clean partition)
         s.add(Video(id="vb0_old", channel_id="cb0", title="t",
@@ -465,6 +481,7 @@ async def test_trending_includes_per_stance_channel_avatars(api, sessionmaker):
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="vb0_old", ticker="AMZN", start_seconds=1.0,
                       quote="q", stance=Stance.sell, reasoning="r"))
+        s.add(VideoStance(video_id="vb0_old", ticker="AMZN", stance=Stance.sell, summary="s"))
         # 1 channel bearish
         s.add(Channel(id="cs", title="Bear", thumbnail_url="http://x/s.jpg",
                       uploads_playlist_id="UUs"))
@@ -473,6 +490,7 @@ async def test_trending_includes_per_stance_channel_avatars(api, sessionmaker):
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="vs", ticker="AMZN", start_seconds=1.0,
                       quote="q", stance=Stance.sell, reasoning="r"))
+        s.add(VideoStance(video_id="vs", ticker="AMZN", stance=Stance.sell, summary="s"))
         await s.commit()
 
     rows = (await client.get("/api/stocks/trending?limit=5")).json()["data"]
@@ -495,7 +513,7 @@ async def test_trending_includes_per_stance_channel_avatars(api, sessionmaker):
 @pytest.mark.asyncio
 async def test_trending_count_days_independent_of_freshness(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
-    from app.models import Channel, Mention, Stance, Video, VideoStatus
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
 
     _, client = api
     now = datetime.now(timezone.utc)
@@ -508,17 +526,20 @@ async def test_trending_count_days_independent_of_freshness(api, sessionmaker):
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="nf_new", ticker="NFLX", start_seconds=1.0, quote="q",
                       stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="nf_new", ticker="NFLX", stance=Stance.buy, summary="s"))
         s.add(Video(id="nf_old", channel_id="cc1", title="t",
                     published_at=now - timedelta(days=60), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="nf_old", ticker="NFLX", start_seconds=1.0, quote="q",
                       stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="nf_old", ticker="NFLX", stance=Stance.buy, summary="s"))
         # ORCL: only an old mention (60 days ago) → NOT fresh in a 7-day window
         s.add(Video(id="or_old", channel_id="cc0", title="t",
                     published_at=now - timedelta(days=60), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="or_old", ticker="ORCL", start_seconds=1.0, quote="q",
                       stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="or_old", ticker="ORCL", stance=Stance.buy, summary="s"))
         await s.commit()
 
     # freshness=7d, count=90d: only NFLX is fresh; its channel_count counts BOTH channels (90d window)
@@ -537,7 +558,7 @@ async def test_trending_count_days_independent_of_freshness(api, sessionmaker):
 async def test_trending_count_days_defaults_to_days(api, sessionmaker):
     # Omitting count_days must preserve the current behaviour (count window == days).
     from datetime import datetime, timezone, timedelta
-    from app.models import Channel, Mention, Stance, Video, VideoStatus
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
 
     _, client = api
     now = datetime.now(timezone.utc)
@@ -548,6 +569,7 @@ async def test_trending_count_days_defaults_to_days(api, sessionmaker):
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="d_v", ticker="ADBE", start_seconds=1.0, quote="q",
                       stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="d_v", ticker="ADBE", stance=Stance.buy, summary="s"))
         await s.commit()
     rows = (await client.get("/api/stocks/trending?days=90&limit=50")).json()["data"]
     adbe = next(r for r in rows if r["ticker"] == "ADBE")
@@ -558,7 +580,7 @@ async def test_trending_count_days_defaults_to_days(api, sessionmaker):
 @pytest.mark.asyncio
 async def test_trending_fresh_but_outside_count_window(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
-    from app.models import Channel, Mention, Stance, Video, VideoStatus
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
 
     _, client = api
     now = datetime.now(timezone.utc)
@@ -570,12 +592,13 @@ async def test_trending_fresh_but_outside_count_window(api, sessionmaker):
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="g_v", ticker="SHOP", start_seconds=1.0, quote="q",
                       stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="g_v", ticker="SHOP", stance=Stance.buy, summary="s"))
         await s.commit()
 
     rows = (await client.get("/api/stocks/trending?days=90&count_days=7&limit=50")).json()["data"]
     shop = next(r for r in rows if r["ticker"] == "SHOP")  # still included (fresh within 90d)
     assert shop["channel_count"] == 0          # no channels within the 7d count window
-    assert shop["mention_count"] == 0
+    assert shop["video_count"] == 0
     assert shop["stances"]["buy"]["count"] == 0
     assert shop["last_mentioned_at"].startswith("20")  # from fresh_last, not None
 
@@ -583,7 +606,7 @@ async def test_trending_fresh_but_outside_count_window(api, sessionmaker):
 @pytest.mark.asyncio
 async def test_trending_includes_weekly_buckets(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
-    from app.models import Channel, Mention, Stance, Video, VideoStatus
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
 
     _, client = api
     now = datetime.now(timezone.utc)
@@ -595,11 +618,13 @@ async def test_trending_includes_weekly_buckets(api, sessionmaker):
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="vbk_new", ticker="ABNB", start_seconds=1.0,
                       quote="q", stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="vbk_new", ticker="ABNB", stance=Stance.buy, summary="s"))
         s.add(Video(id="vbk_old", channel_id="cbk", title="t",
                     published_at=now - timedelta(days=21), thumbnail_url="",
                     duration_seconds=60, status=VideoStatus.analyzed))
         s.add(Mention(video_id="vbk_old", ticker="ABNB", start_seconds=1.0,
                       quote="q", stance=Stance.sell, reasoning="r"))
+        s.add(VideoStance(video_id="vbk_old", ticker="ABNB", stance=Stance.sell, summary="s"))
         await s.commit()
 
     rows = (await client.get("/api/stocks/trending?limit=50&days=90&count_days=90")).json()["data"]
@@ -645,7 +670,7 @@ async def test_stance_summary_includes_buckets_from_mentions(api, sessionmaker):
 @pytest.mark.asyncio
 async def test_trending_offset_paginates(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
-    from app.models import Channel, Mention, Stance, Video, VideoStatus
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
 
     _, client = api
     now = datetime.now(timezone.utc)
@@ -659,6 +684,8 @@ async def test_trending_offset_paginates(api, sessionmaker):
                         duration_seconds=60, status=VideoStatus.analyzed))
             s.add(Mention(video_id=f"vp{i}", ticker=f"PG{i}", start_seconds=1.0,
                           quote="q", stance=Stance.buy, reasoning="r"))
+            s.add(VideoStance(video_id=f"vp{i}", ticker=f"PG{i}",
+                              stance=Stance.buy, summary="s"))
         await s.commit()
 
     p1 = (await client.get("/api/stocks/trending?limit=2&offset=0")).json()["data"]
@@ -672,7 +699,7 @@ async def test_trending_offset_paginates(api, sessionmaker):
 @pytest.mark.asyncio
 async def test_trending_filters_by_channel_count(api, sessionmaker):
     from datetime import datetime, timezone, timedelta
-    from app.models import Channel, Mention, Stance, Video, VideoStatus
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
 
     _, client = api
     now = datetime.now(timezone.utc)
@@ -690,6 +717,8 @@ async def test_trending_filters_by_channel_count(api, sessionmaker):
                             duration_seconds=60, status=VideoStatus.analyzed))
                 s.add(Mention(video_id=vid_id, ticker=ticker, start_seconds=1.0,
                               quote="q", stance=Stance.buy, reasoning="r"))
+                s.add(VideoStance(video_id=vid_id, ticker=ticker,
+                                  stance=Stance.buy, summary="s"))
         await s.commit()
 
     # 1) min+max band returns only the 2- and 3-channel tickers
@@ -808,3 +837,36 @@ async def test_sparklines_normalize_and_dedupe_tickers(api):
     )).json()["data"]
     assert set(data.keys()) == {"AAPL"}
     assert len(data["AAPL"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_trending_counts_videos_not_mentions(api, sessionmaker):
+    """One video that name-drops a ticker eight times is ONE vote, not eight.
+
+    Guards the Mention -> VideoStance switch: the old per-timestamp source made
+    "repeat" mean "talked about it for a while" instead of "recommended it again".
+    """
+    from datetime import datetime, timezone, timedelta
+    from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
+
+    _, client = api
+    now = datetime.now(timezone.utc)
+    async with sessionmaker() as s:
+        s.add(Channel(id="cvs", title="cvs", thumbnail_url="", uploads_playlist_id="UUvs"))
+        s.add(Video(id="vvs", channel_id="cvs", title="t",
+                    published_at=now - timedelta(days=1), thumbnail_url="",
+                    duration_seconds=60, status=VideoStatus.analyzed))
+        for sec in range(8):
+            s.add(Mention(video_id="vvs", ticker="RIVN", start_seconds=float(sec),
+                          quote="q", stance=Stance.buy, reasoning="r"))
+        s.add(VideoStance(video_id="vvs", ticker="RIVN", stance=Stance.buy, summary="s"))
+        await s.commit()
+
+    rows = (await client.get("/api/stocks/trending?limit=50")).json()["data"]
+    row = next(r for r in rows if r["ticker"] == "RIVN")
+    assert row["video_count"] == 1
+    assert "mention_count" not in row
+    assert row["channel_count"] == 1
+    # one video -> exactly one "new" bar, no repeats
+    assert sum(b["buy_new"] for b in row["buckets"]) == 1
+    assert sum(b["buy_repeat"] for b in row["buckets"]) == 0

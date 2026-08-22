@@ -249,7 +249,7 @@ export interface StanceBucket {
 export interface TrendingStock {
   ticker: string;
   channel_count: number;
-  mention_count: number;
+  video_count: number;
   score: number;
   last_mentioned_at: string;
   stances: {

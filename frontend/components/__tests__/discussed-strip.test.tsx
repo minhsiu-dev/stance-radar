@@ -7,8 +7,8 @@ import { DiscussedStrip } from "@/components/discussed-strip";
 const messages = { Dashboard: { discussed: { title: "Most discussed" } } };
 
 const STOCKS = [
-  { ticker: "NVDA", channel_count: 4, mention_count: 7, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z" },
-  { ticker: "AAPL", channel_count: 2, mention_count: 5, score: 1, last_mentioned_at: "2026-06-10T00:00:00Z" },
+  { ticker: "NVDA", channel_count: 4, video_count: 7, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z" },
+  { ticker: "AAPL", channel_count: 2, video_count: 5, score: 1, last_mentioned_at: "2026-06-10T00:00:00Z" },
 ];
 
 function wrap(selected: string[], onToggle: (t: string) => void) {

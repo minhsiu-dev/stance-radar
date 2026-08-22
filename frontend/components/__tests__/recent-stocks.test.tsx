@@ -35,9 +35,9 @@ const zone = (count: number, avatarN = Math.min(count, 3)) => ({
 });
 
 const STOCKS = [
-  { ticker: "NVDA", channel_count: 5, mention_count: 7, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z",
+  { ticker: "NVDA", channel_count: 5, video_count: 7, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z",
     stances: { buy: zone(4), neutral: zone(0), sell: zone(1) }, buckets: [] },
-  { ticker: "AAPL", channel_count: 2, mention_count: 5, score: 1, last_mentioned_at: "2026-06-10T00:00:00Z",
+  { ticker: "AAPL", channel_count: 2, video_count: 5, score: 1, last_mentioned_at: "2026-06-10T00:00:00Z",
     stances: { buy: zone(2), neutral: zone(0), sell: zone(0) }, buckets: [] },
 ];
 
@@ -47,7 +47,7 @@ describe("RecentStocks", () => {
     const cards = await screen.findAllByTestId("recent-stock-card");
     expect(cards).toHaveLength(2);
     expect(cards[0].textContent).toContain("NVDA");
-    expect(cards[0].textContent).toContain("5"); // channel count, not mention_count (7)
+    expect(cards[0].textContent).toContain("5"); // channel count, not video_count (7)
   });
 
   it("links each card to its stock page", async () => {

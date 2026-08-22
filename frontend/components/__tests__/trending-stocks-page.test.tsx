@@ -25,7 +25,7 @@ function zone(n: number) {
   return { count: n, avatars: Array.from({ length: Math.min(n, 3) }, (_, i) => ({ title: `C${i}`, thumbnail_url: "" })) };
 }
 const STOCK = {
-  ticker: "NVDA", channel_count: 3, mention_count: 5, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z",
+  ticker: "NVDA", channel_count: 3, video_count: 5, score: 1, last_mentioned_at: "2026-06-11T00:00:00Z",
   stances: { buy: zone(3), neutral: zone(0), sell: zone(0) }, buckets: [],
 };
 
