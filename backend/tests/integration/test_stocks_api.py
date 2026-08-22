@@ -339,7 +339,7 @@ async def test_trending_ranks_by_distinct_channel_count(api, sessionmaker):
     _, client = api
     async with sessionmaker() as s:
         now = datetime.now(timezone.utc)
-        # 3 distinct channels each state MSFT once
+        # 3 distinct channels each publish one MSFT video
         for n in range(3):
             s.add(Channel(id=f"chm{n}", title=f"chm{n}", thumbnail_url="",
                           uploads_playlist_id=f"UUm{n}"))
@@ -349,7 +349,7 @@ async def test_trending_ranks_by_distinct_channel_count(api, sessionmaker):
             s.add(Mention(video_id=f"vm{n}", ticker="MSFT", start_seconds=1.0,
                           quote="q", stance=Stance.buy, reasoning="r"))
             s.add(VideoStance(video_id=f"vm{n}", ticker="MSFT", stance=Stance.buy, summary="s"))
-        # 1 channel states GOOG across 4 videos (more videos, but fewer channels than
+        # 1 channel publishes GOOG across 4 videos (more videos, but fewer channels than
         # MSFT) -> proves ranking is by distinct channel count, not by video_count.
         # v_solo alone also carries 10 same-video mentions, so mention volume still
         # doesn't leak into video_count either.
