@@ -29,3 +29,6 @@ fix-*.png
 
 # Local-only design specs/plans (not published)
 docs/superpowers/
+
+# local DB backups (scripts/backup-db.sh)
+backups/
