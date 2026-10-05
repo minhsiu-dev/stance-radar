@@ -28,13 +28,16 @@ test("golden path: add channel → import → analyze → dashboard → stock �
   await page.goto("/en/review");
   await expect(page).toHaveURL(/\/en\/pipeline/);
 
-  // 3. Inbox: discover runs in the background after the add, so poll until the inbox
-  //    offers a submit button (fresh channels) or says it is empty (already imported).
+  // 3. Inbox: discover runs in the background after the add, and an empty inbox is also
+  //    what the page shows before it lands, so empty is NOT evidence of a finished import.
+  //    Poll until the submit button appears (fresh channels) or the videos already show up
+  //    under "Just finished" (re-run on an already-imported stack).
   const submit = page.getByRole("button", { name: /^Send \d+ · skip the rest$/ });
-  const empty = page.getByText("Nothing waiting for a decision");
+  const done = page.getByRole("region", { name: "Just finished" });
+  const imported = done.getByText("AAPL 財報解讀");
   await expect(async () => {
     await page.reload();
-    await expect(submit.or(empty).first()).toBeVisible({ timeout: 2_000 });
+    await expect(submit.or(imported).first()).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
   if (await submit.isVisible()) {
     for (const box of await page.getByRole("checkbox").all()) await box.check();
@@ -43,7 +46,6 @@ test("golden path: add channel → import → analyze → dashboard → stock �
   }
 
   // 4. Watch the videos reach the right-hand bucket
-  const done = page.getByRole("region", { name: "Just finished" });
   await expect(done.getByText("AAPL 財報解讀")).toBeVisible({ timeout: 30_000 });
   await expect(done.getByText("No transcript").first()).toBeVisible(); // beta_vid_1
 
