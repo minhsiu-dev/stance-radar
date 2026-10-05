@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -107,8 +107,12 @@ export function Inbox({ total }: { total: number }) {
     [data],
   );
   const selected = allIds.filter((id) => checked.has(id));
+  // Ids on screen when the operator first touched a checkbox: only those were reviewed,
+  // so videos that arrive later are never skipped unseen.
+  const reviewedIds = useRef<ReadonlySet<string> | null>(null);
 
   function setMany(ids: readonly string[], select: boolean) {
+    if (reviewedIds.current === null) reviewedIds.current = new Set(allIds);
     setChecked((prev) => {
       const next = new Set(prev);
       for (const id of ids) {
@@ -123,7 +127,9 @@ export function Inbox({ total }: { total: number }) {
     setSubmitting(true);
     setMessage(null);
     try {
-      const skipped = allIds.filter((id) => !checked.has(id));
+      const reviewed = reviewedIds.current;
+      const skipped = (reviewed ? [...reviewed].filter((id) => allIds.includes(id)) : allIds)
+        .filter((id) => !checked.has(id));
       if (skipped.length) {
         await apiFetch("/api/videos/skip", {
           method: "POST",
@@ -137,6 +143,7 @@ export function Inbox({ total }: { total: number }) {
         });
       }
       setChecked(new Set());
+      reviewedIds.current = null;
       await mutate(
         (key) =>
           typeof key === "string" && (key.startsWith("/api/videos") || key === PIPELINE_KEY),

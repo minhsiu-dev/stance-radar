@@ -87,6 +87,55 @@ describe("Inbox", () => {
     ]);
   });
 
+  it("does not skip videos that arrived after the operator started picking", async () => {
+    const v4 = {
+      id: "v4", title: "Video 4", thumbnail_url: "", published_at: "2026-06-09T12:00:00Z",
+      duration_seconds: 100, status: "discovered" as const,
+    };
+    const grown: DiscoveredResponse = {
+      total: 4,
+      groups: [
+        { ...response.groups[0], videos: [v4, ...response.groups[0].videos] },
+        response.groups[1],
+      ],
+    };
+    const fetcher = vi.fn().mockResolvedValue(response);
+    const tree = (total: number) => (
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ fetcher, provider: () => new Map(), dedupingInterval: 0 }}>
+          <Inbox total={total} />
+        </SWRConfig>
+      </NextIntlClientProvider>
+    );
+    const { rerender } = render(tree(3));
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Video 1/ }));
+
+    fetcher.mockResolvedValue(grown);
+    rerender(tree(4));
+    expect(await screen.findByText("Video 4")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Send 1 · skip the rest" }));
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
+    expect(apiFetchMock.mock.calls[0]).toEqual([
+      "/api/videos/skip",
+      { method: "POST", body: JSON.stringify({ video_ids: ["v2", "v3"] }) },
+    ]);
+    expect(apiFetchMock.mock.calls[1]).toEqual([
+      "/api/videos/analyze",
+      { method: "POST", body: JSON.stringify({ video_ids: ["v1"] }) },
+    ]);
+  });
+
+  it("Send 0 with no interaction still skips everything shown", async () => {
+    renderInbox();
+    await userEvent.click(await screen.findByRole("button", { name: "Send 0 · skip the rest" }));
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(1));
+    expect(apiFetchMock.mock.calls[0]).toEqual([
+      "/api/videos/skip",
+      { method: "POST", body: JSON.stringify({ video_ids: ["v1", "v2", "v3"] }) },
+    ]);
+  });
+
   it("shows a failed submit and routes a 401 through handleAuthError", async () => {
     apiFetchMock.mockRejectedValue(new Error("boom"));
     renderInbox();
