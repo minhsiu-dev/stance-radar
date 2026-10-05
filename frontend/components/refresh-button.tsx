@@ -3,10 +3,10 @@
 import { useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { useAdmin } from "@/components/admin-provider";
 import { apiFetch } from "@/lib/api";
+import { PIPELINE_KEY } from "@/lib/pipeline";
 import type { JobInfo } from "@/lib/types";
 
 function progressLabel(
@@ -20,18 +20,11 @@ function progressLabel(
       total: p.channels_total ?? 0,
     });
   }
-  if (p.stage === "analyzing") {
-    return t("stages.analyzing", {
-      done: p.videos_done ?? 0,
-      total: p.videos_total ?? 0,
-    });
-  }
   return t("stages.preparing");
 }
 
 export function RefreshButton() {
   const t = useTranslations("Dashboard.refresh");
-  const router = useRouter();
   const { mutate } = useSWRConfig();
   const { authenticated, handleAuthError } = useAdmin();
   const [triggerError, setTriggerError] = useState<string | null>(null);
@@ -41,21 +34,23 @@ export function RefreshButton() {
   const { data: job } = useSWR<JobInfo | null>("/api/jobs/current", apiFetch, {
     refreshInterval: (latest) => (latest?.status === "running" ? 2000 : 0),
     onSuccess: (latest) => {
-      // The moment running → done/failed: refresh data, and if discover found new videos navigate to the selection page
+      // The moment running → done/failed: refresh what the job changed. New videos
+      // simply show up in the import inbox, so there is nothing to navigate to.
       if (prevStatus.current === "running" && latest?.status !== "running") {
         mutate(
           (key) =>
             typeof key === "string" &&
             (key.startsWith("/api/feed") ||
               key.startsWith("/api/videos") ||
-              key.startsWith("/api/channels")),
+              key.startsWith("/api/channels") ||
+              key === PIPELINE_KEY),
         );
-        if (latest?.status === "done" && latest.kind === "discover") {
-          if ((latest.progress.discovered ?? 0) > 0) {
-            router.push("/review");
-          } else {
-            setNoNew(true);
-          }
+        if (
+          latest?.status === "done" &&
+          latest.kind === "discover" &&
+          (latest.progress.discovered ?? 0) === 0
+        ) {
+          setNoNew(true);
         }
       }
       prevStatus.current = latest?.status ?? null;
@@ -88,11 +83,6 @@ export function RefreshButton() {
       {!running && job?.status === "failed" && (
         <p className="text-xs text-red-500">
           {t("lastFailed", { message: job.error_message ?? "" })}
-        </p>
-      )}
-      {!running && job?.status === "done" && (job.progress.videos_failed ?? 0) > 0 && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
-          {t("lastPartialFailure", { failed: job.progress.videos_failed })}
         </p>
       )}
     </div>

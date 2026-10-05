@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -6,7 +6,6 @@ import { RefreshButton } from "@/components/refresh-button";
 
 const useAdmin = vi.fn();
 vi.mock("@/components/admin-provider", () => ({ useAdmin: () => useAdmin() }));
-vi.mock("@/i18n/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 // RefreshButton passes `apiFetch` itself as the SWR fetcher, which overrides
 // SWRConfig's global `fetcher` default — so mocking apiFetch directly (rather
@@ -24,13 +23,10 @@ const messages = {
       label: "Check new videos",
       running: "Working… {stage}",
       lastFailed: "Last update failed: {message}",
-      lastPartialFailure:
-        "{failed, plural, one {# video} other {# videos}} failed to analyze in the last update",
       triggerFailed: "Update failed",
       autoEvery: "Auto-refresh every {minutes} min",
       stages: {
         listing: "Checking channels {done}/{total}",
-        analyzing: "Analyzing videos {done}/{total}",
         preparing: "Preparing…",
       },
       noNew: "No new videos found",
@@ -38,93 +34,47 @@ const messages = {
   },
 };
 
-function wrap(videosFailed: number) {
-  const job = {
-    id: 1,
-    kind: "analyze",
-    status: "done",
-    progress: {
-      stage: "analyzing",
-      videos_done: 3,
-      videos_failed: videosFailed,
-      videos_total: 3,
-    },
-    started_at: "2026-08-03T00:00:00Z",
-    finished_at: "2026-08-03T00:01:00Z",
-    error_message: null,
-  };
-  apiFetchMock.mockResolvedValue(job);
-  // Expose the SWR cache Map so tests can prove the fetch actually settled
-  // (a same-shaped `job` with videos_failed: 0 renders identically to "no
-  // job loaded yet" — see test 2 below — so the DOM alone can't prove data
-  // arrived; SWR's own cache entry for the key can).
-  const cache = new Map();
-  render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      <SWRConfig value={{ provider: () => cache }}>
-        <RefreshButton />
-      </SWRConfig>
-    </NextIntlClientProvider>,
-  );
-  return cache;
-}
-
 beforeEach(() => {
+  apiFetchMock.mockReset();
   useAdmin.mockReturnValue({ authenticated: true, handleAuthError: vi.fn() });
 });
 
-it("reports how many videos failed in a finished run", async () => {
-  wrap(1);
-  expect(
-    await screen.findByText("1 video failed to analyze in the last update"),
-  ).toBeInTheDocument();
-});
+const runningJob = {
+  id: 1,
+  kind: "discover",
+  status: "running",
+  progress: { stage: "listing", channels_done: 0, channels_total: 2 },
+  started_at: "2026-10-04T00:00:00Z",
+  finished_at: null,
+  error_message: null,
+};
 
-it("stays quiet when the finished run had no failures", async () => {
-  const cache = wrap(0);
-  // A job with videos_failed: 0 renders identically to no job having loaded
-  // yet (button just says "Check new videos" either way), so proving the
-  // absence of the failure message is meaningful requires first proving the
-  // fetch actually resolved into a "done" job — checked via the SWR cache
-  // entry, not the DOM, which wouldn't distinguish the two states.
-  await waitFor(() => {
-    expect(cache.get("/api/jobs/current")?.data?.status).toBe("done");
-  });
-  expect(screen.queryByText(/failed to analyze/)).not.toBeInTheDocument();
-});
-
-it("stays quiet when the finished run's progress has no videos_failed key at all", async () => {
-  // Jobs created before this field existed, and discover/load_older jobs,
-  // never set videos_failed — the `?? 0` guard at refresh-button.tsx:93
-  // exists for exactly this shape, so it must be exercised without the key
-  // present rather than just with it set to 0.
-  const job = {
-    id: 1,
-    kind: "analyze",
-    status: "done",
-    progress: {
-      stage: "analyzing",
-      videos_done: 3,
-      videos_total: 3,
-    },
-    started_at: "2026-08-03T00:00:00Z",
-    finished_at: "2026-08-03T00:01:00Z",
-    error_message: null,
-  };
-  apiFetchMock.mockResolvedValue(job);
-  const cache = new Map();
+function renderButton() {
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
-      <SWRConfig value={{ provider: () => cache }}>
+      <SWRConfig value={{ provider: () => new Map() }}>
         <RefreshButton />
       </SWRConfig>
     </NextIntlClientProvider>,
   );
-  // Same proof-of-load requirement as the test above: a job with no
-  // videos_failed key renders identically to no job having loaded yet, so
-  // confirm the fetch actually settled into a "done" job via the SWR cache.
-  await waitFor(() => {
-    expect(cache.get("/api/jobs/current")?.data?.status).toBe("done");
+}
+
+it("says so when a finished discover found nothing new", async () => {
+  apiFetchMock.mockResolvedValueOnce(runningJob).mockResolvedValue({
+    ...runningJob,
+    status: "done",
+    progress: { stage: "listing", channels_done: 2, channels_total: 2, discovered: 0 },
+    finished_at: "2026-10-04T00:01:00Z",
   });
-  expect(screen.queryByText(/failed to analyze/)).not.toBeInTheDocument();
+  renderButton();
+  expect(await screen.findByRole("button", { name: /Checking channels 0\/2/ })).toBeDisabled();
+  expect(
+    await screen.findByText("No new videos found", {}, { timeout: 4000 }),
+  ).toBeInTheDocument();
+});
+
+it("shows why the last update failed", async () => {
+  apiFetchMock.mockResolvedValue({ ...runningJob, status: "failed", error_message: "quota exhausted" });
+  renderButton();
+  expect(await screen.findByText("Last update failed: quota exhausted")).toBeInTheDocument();
 });

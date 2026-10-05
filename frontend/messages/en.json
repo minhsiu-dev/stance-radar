@@ -81,12 +81,10 @@
       "label": "Check new videos",
       "running": "Working… {stage}",
       "lastFailed": "Last update failed: {message}",
-      "lastPartialFailure": "{failed, plural, one {# video} other {# videos}} failed to analyze in the last update",
       "triggerFailed": "Update failed",
       "autoEvery": "Auto-refresh every {minutes} min",
       "stages": {
         "listing": "Checking channels {done}/{total}",
-        "analyzing": "Analyzing videos {done}/{total}",
         "preparing": "Preparing…"
       },
       "noNew": "No new videos found"
