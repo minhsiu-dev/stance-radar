@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { useAdmin } from "@/components/admin-provider";
 import { apiFetch } from "@/lib/api";
-import { laneState, minutesSince, type LaneState } from "@/lib/pipeline";
+import { elapsedLabel, laneState, minutesSince, type LaneState } from "@/lib/pipeline";
 import type { LaneName, PipelineLane } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -73,7 +73,10 @@ export function LaneStatus({
           role="alert"
           className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1.5 text-xs"
         >
-          <p className="font-medium">{t("autoPaused")}</p>
+          <p className="font-medium">
+            {t("autoPaused")}
+            {lane.last_error_at && ` · ${t("ago", { time: elapsedLabel(lane.last_error_at, now) })}`}
+          </p>
           {lane.last_error && (
             <p className="mt-0.5 break-words font-mono text-[11px]">{lane.last_error}</p>
           )}

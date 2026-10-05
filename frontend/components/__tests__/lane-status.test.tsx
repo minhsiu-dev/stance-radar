@@ -55,9 +55,17 @@ describe("LaneStatus", () => {
   });
 
   it("explains an automatic pause with the error that caused it", () => {
-    renderStatus(lane({ paused: true, pause_reason: "auto", last_error: "usage limit reached" }));
+    renderStatus(
+      lane({
+        paused: true,
+        pause_reason: "auto",
+        last_error: "usage limit reached",
+        last_error_at: iso(192_000),
+      }),
+    );
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("Paused after an error");
+    expect(alert).toHaveTextContent("3m12s ago");
     expect(alert).toHaveTextContent("usage limit reached");
   });
 

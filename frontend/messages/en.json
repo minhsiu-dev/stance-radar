@@ -202,6 +202,7 @@
       "pause": "Pause",
       "resume": "Resume",
       "autoPaused": "Paused after an error",
+      "ago": "{time} ago",
       "offlineSince": "The worker hasn't responded for {minutes, plural, one {# minute} other {# minutes}}; queued videos are stuck",
       "offlineNever": "The worker hasn't reported in yet; queued videos are stuck",
       "lastError": "Last error: {message}",
