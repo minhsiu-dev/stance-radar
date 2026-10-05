@@ -97,7 +97,8 @@ class Lane:
             # its attempt back on cancellation), leave a note for /pipeline, and let
             # the worker exit for a restart.
             await self._cancel(in_flight)
-            await lane_store.record_error(self._sessionmaker, self.name, str(exc))
+            error = str(exc) or type(exc).__name__
+            await lane_store.record_error(self._sessionmaker, self.name, error)
             raise
         finally:
             await self._cancel(in_flight)
@@ -119,7 +120,9 @@ class Lane:
         except Exception as exc:  # a stage bug must not leave the video claimed forever
             logger.exception("%s lane: stage crashed on %s", self.name, video_id)
             error = str(exc) or type(exc).__name__
-            await lane_store.fail_video(self._sessionmaker, video_id, error)
+            await lane_store.fail_video(
+                self._sessionmaker, video_id, error, status=self._input_status
+            )
             outcome = failure(error)
         await self._record(outcome)
 

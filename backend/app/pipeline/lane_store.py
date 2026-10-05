@@ -65,11 +65,16 @@ async def release_claims(sessionmaker: Sessionmaker, status: VideoStatus) -> int
         return result.rowcount
 
 
-async def fail_video(sessionmaker: Sessionmaker, video_id: str, error: str) -> None:
+async def fail_video(
+    sessionmaker: Sessionmaker, video_id: str, error: str, *, status: VideoStatus | None = None
+) -> None:
     async with sessionmaker() as session:
+        where_clause = [Video.id == video_id]
+        if status is not None:
+            where_clause.append(Video.status == status)
         await session.execute(
             update(Video)
-            .where(Video.id == video_id)
+            .where(*where_clause)
             .values(status=VideoStatus.failed, error_message=error, claimed_at=None)
         )
         await session.commit()

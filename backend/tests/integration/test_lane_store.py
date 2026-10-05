@@ -91,6 +91,16 @@ async def test_fail_video_marks_it_failed_and_releases_the_claim(sessionmaker):
     assert (row.status, row.error_message, row.claimed_at) == (VideoStatus.failed, "boom", None)
 
 
+async def test_fail_video_with_status_filter_does_not_fail_if_status_mismatch(sessionmaker):
+    await seed(sessionmaker, ("v", VideoStatus.transcribed, 1))
+    await lane_store.fail_video(sessionmaker, "v", "boom", status=VideoStatus.pending)
+    row = await video(sessionmaker, "v")
+    # Status should not change because the WHERE clause filtered it out
+    assert row.status == VideoStatus.transcribed
+    assert row.error_message is None
+    assert row.claimed_at is None
+
+
 async def test_ensure_lanes_is_idempotent_and_a_missing_row_reads_as_not_paused(sessionmaker):
     assert await lane_store.is_paused(sessionmaker, ANALYSIS_LANE) is False
     await lane_store.ensure_lanes(sessionmaker)

@@ -196,3 +196,35 @@ async def test_startup_releases_only_its_own_claims_and_reports_in(sessionmaker)
     row = await lane_row(sessionmaker)
     assert row.concurrency == 3
     assert row.last_heartbeat_at is not None
+
+
+async def test_a_fatal_error_with_no_message_falls_back_to_class_name(sessionmaker):
+    await seed(sessionmaker, ["v0"])
+
+    class FatalStage:
+        async def process(self, video_id):
+            raise Boom()  # no message on purpose
+
+    stage = FatalStage()
+    with pytest.raises(Boom):
+        await make_lane(sessionmaker, stage, fatal=(Boom,)).drain()
+    row = await lane_row(sessionmaker)
+    assert row.last_error == "Boom"
+
+
+async def test_a_crash_after_the_stage_commits_does_not_fail_the_video(sessionmaker):
+    await seed(sessionmaker, ["v0"])
+
+    class PostCommitCrashStage:
+        async def process(self, video_id):
+            # Stage commits its result first
+            await finish(sessionmaker, video_id)
+            # Then crashes
+            raise ValueError("late")
+
+    await make_lane(sessionmaker, PostCommitCrashStage()).drain()
+    async with sessionmaker() as s:
+        row = await s.get(Video, "v0")
+    # The video was already finished by the stage, so it should stay transcribed
+    assert row.status == VideoStatus.transcribed
+    assert row.claimed_at is None
