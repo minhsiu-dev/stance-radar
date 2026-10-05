@@ -2,6 +2,9 @@ services:
   api:
     environment:
       USE_FAKE_ADAPTERS: "true"
+      # Writes are admin-gated; the golden path unlocks with this over plain http
+      ADMIN_PASSWORD: e2e-admin
+      ADMIN_COOKIE_SECURE: "false"
   worker:
     environment:
       USE_FAKE_ADAPTERS: "true"
