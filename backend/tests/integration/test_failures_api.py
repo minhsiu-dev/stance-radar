@@ -11,11 +11,14 @@ async def seed_failures(sessionmaker) -> None:
       plus one analyzed video that must never show up.
     """
     def vid(vid_id, ch, day, *, transcript, attempts, status=VideoStatus.failed):
+        # Attempts land on the stage the video died in -- transcript presence decides
         return Video(
             id=vid_id, channel_id=ch, title=f"title {vid_id}",
             published_at=datetime(2026, 6, day, tzinfo=timezone.utc),
             thumbnail_url="", duration_seconds=600, status=status,
-            transcript=transcript, analysis_attempts=attempts,
+            transcript=transcript,
+            transcript_attempts=attempts if transcript is None else 0,
+            analysis_attempts=attempts if transcript is not None else 0,
             error_message="boom" if status == VideoStatus.failed else None,
         )
 
@@ -96,7 +99,8 @@ async def test_items_shape_and_ordering(api, sessionmaker):
     row = data["items"][0]
     assert row["channel"] == {"id": "ch-b", "title": "Beta"}
     assert row["error_message"] == "boom"
-    assert row["analysis_attempts"] == 1
+    assert row["attempts"] == 1
+    assert "analysis_attempts" not in row
     assert row["last_attempt_at"] is None
     assert row["duration_seconds"] == 600
 
@@ -190,9 +194,7 @@ async def test_retry_requeues_only_the_matching_subset(api, session, sessionmake
         "/api/videos/failures/retry", json={"kind": "analysis"}
     )
     assert resp.status_code == 200, resp.text
-    data = resp.json()["data"]
-    assert data["queued"] == 2      # f-a3, f-b1
-    assert data["created"] is True
+    assert resp.json()["data"] == {"queued": 2}      # f-a3, f-b1
     await wait_refresh(app)
 
     # untouched: the transcript-class failures keep their status AND their error
@@ -200,7 +202,7 @@ async def test_retry_requeues_only_the_matching_subset(api, session, sessionmake
     await session.refresh(a1)
     assert a1.status == VideoStatus.failed
     assert a1.error_message == "boom"
-    assert a1.analysis_attempts == 1
+    assert a1.transcript_attempts == 1
 
 
 async def test_retry_preserves_the_attempt_counter(api, session, sessionmaker):
@@ -232,7 +234,7 @@ async def test_retry_honours_the_attempt_threshold(api, session, sessionmaker):
 
     a2 = await session.get(Video, "f-a2")
     await session.refresh(a2)
-    assert a2.analysis_attempts == 5            # the residue was left alone
+    assert a2.transcript_attempts == 5            # the residue was left alone
 
 
 async def test_retry_matching_nothing_starts_no_job(api, sessionmaker):
@@ -243,7 +245,7 @@ async def test_retry_matching_nothing_starts_no_job(api, sessionmaker):
         "/api/videos/failures/retry", json={"kind": "transcript", "max_attempts": 1}
     )
     data = resp.json()["data"]
-    assert data == {"queued": 0, "job_id": None, "created": False}
+    assert data == {"queued": 0}
     assert (await client.get("/api/jobs/current")).status_code == 204
 
 
@@ -333,3 +335,40 @@ async def test_summary_retryable_matches_what_retry_actually_queues(api, session
         json={"kind": "analysis", "channel_id": "ch-a"},
     )
     assert resp.json()["data"]["queued"] == scoped_retryable
+
+
+async def test_retry_routes_each_video_to_the_lane_it_died_in(api, sessionmaker):
+    _, client = api
+    await seed_failures(sessionmaker)
+
+    resp = await client.post("/api/videos/failures/retry", json={})
+    assert resp.json()["data"] == {"queued": 4}
+    async with sessionmaker() as s:
+        for vid_id, expected in (
+            ("f-a1", VideoStatus.pending),
+            ("f-a2", VideoStatus.pending),
+            ("f-a3", VideoStatus.transcribed),
+            ("f-b1", VideoStatus.transcribed),
+        ):
+            assert (await s.get(Video, vid_id)).status is expected
+
+
+async def test_the_threshold_reads_each_stages_own_counter(api, sessionmaker):
+    """f-a2 died fetching after 5 tries; a stray LLM count on it must not matter."""
+    _, client = api
+    await seed_failures(sessionmaker)
+    async with sessionmaker() as s:
+        a2 = await s.get(Video, "f-a2")
+        a2.analysis_attempts = 1
+        await s.commit()
+
+    data = (await client.get(
+        "/api/videos/failures", params={"max_attempts": 2}
+    )).json()["data"]
+    by_kind = {g["kind"]: g for g in data["groups"]}
+    assert by_kind["transcript"]["retryable"] == 1   # f-a1 only
+
+    items = (await client.get(
+        "/api/videos/failures/items", params={"max_attempts": 2}
+    )).json()["data"]["items"]
+    assert sorted(i["id"] for i in items) == ["f-a1", "f-b1"]  # no kind: per-row stage

@@ -27,18 +27,18 @@ async def test_process_video_stores_transcript(api, session):
 async def test_reanalyze_reuses_stored_transcript_without_fetching(api, session, monkeypatch):
     app, client = api
     await _discover_and_analyze(app, client, "alpha_vid_3")
-    runner = app.state.runner
 
-    calls = {"n": 0}
+    async def no_fetch(video_id):
+        raise AssertionError("fetch must not be called when a transcript is stored")
 
-    async def spy_fetch(video_id):
-        calls["n"] += 1
-        raise AssertionError("fetch must not be called when transcript is stored")
+    monkeypatch.setattr(app.state.transcript_lane.stage.client, "fetch", no_fetch)
+    resp = await client.post("/api/videos/analyze", json={"video_ids": ["alpha_vid_3"]})
+    assert resp.json()["data"]["analysis"] == 1
+    await wait_refresh(app)
 
-    monkeypatch.setattr(runner._deps.transcripts, "fetch", spy_fetch)
-    await runner._process_video("alpha_vid_3")  # re-analyze
-
-    assert calls["n"] == 0
+    video = await session.get(Video, "alpha_vid_3")
+    await session.refresh(video)
+    assert video.status.value == "analyzed"
     # Load mentions explicitly (lazy loading doesn't work in async context without greenlet)
     mentions = list((await session.execute(
         select(Mention).where(Mention.video_id == "alpha_vid_3")

@@ -65,9 +65,7 @@ async def test_analyze_selected_videos_only(api):
     await add_channels_and_discover(app, client)
 
     resp = await analyze(client, app, ["alpha_vid_3"])
-    data = resp.json()["data"]
-    assert data["created"] is True
-    assert data["queued"] == 1
+    assert resp.json()["data"] == {"queued": 1, "transcript": 1, "analysis": 0}
 
     feed = (await client.get("/api/feed")).json()["data"]
     assert feed["total"] == 1
@@ -245,3 +243,58 @@ async def test_video_detail_includes_tldr(api):
     # video whose fake analysis is empty -> no TL;DR, field stays null
     resp = await client.get("/api/videos/alpha_vid_1")
     assert resp.json()["data"]["video"]["tldr"] is None
+
+
+async def mark_claimed(sessionmaker, video_id: str) -> None:
+    async with sessionmaker() as s:
+        video = await s.get(Video, video_id)
+        video.claimed_at = datetime.now(timezone.utc)
+        await s.commit()
+
+
+async def test_reanalyze_routes_a_stored_transcript_straight_to_analysis(api, sessionmaker):
+    app, client = api
+    await add_channels_and_discover(app, client)
+    await analyze(client, app, ["alpha_vid_3"])
+
+    resp = await client.post("/api/videos/analyze", json={"video_ids": ["alpha_vid_3"]})
+    assert resp.json()["data"] == {"queued": 1, "transcript": 0, "analysis": 1}
+    async with sessionmaker() as s:
+        assert (await s.get(Video, "alpha_vid_3")).status is VideoStatus.transcribed
+    # nothing was enqueued: the most recent job is still the add-channel discover
+    assert (await client.get("/api/jobs/current")).json()["data"]["kind"] == "discover"
+
+
+async def test_analyze_rejects_a_batch_that_includes_a_video_being_processed(api, sessionmaker):
+    app, client = api
+    await add_channels_and_discover(app, client)
+    await mark_claimed(sessionmaker, "alpha_vid_2")
+
+    resp = await client.post(
+        "/api/videos/analyze", json={"video_ids": ["alpha_vid_3", "alpha_vid_2"]}
+    )
+    assert resp.status_code == 409
+    assert "alpha_vid_2" in resp.json()["error"]
+    async with sessionmaker() as s:  # the whole batch is rejected
+        assert (await s.get(Video, "alpha_vid_3")).status is VideoStatus.discovered
+
+
+async def test_skip_rejects_a_video_being_processed(api, sessionmaker):
+    app, client = api
+    await add_channels_and_discover(app, client)
+    await mark_claimed(sessionmaker, "alpha_vid_3")
+
+    resp = await client.post("/api/videos/skip", json={"video_ids": ["alpha_vid_3"]})
+    assert resp.status_code == 409
+    assert "alpha_vid_3" in resp.json()["error"]
+
+
+async def test_video_detail_reports_whether_a_lane_holds_it(api, sessionmaker):
+    app, client = api
+    await add_channels_and_discover(app, client)
+    detail = (await client.get("/api/videos/alpha_vid_3")).json()["data"]["video"]
+    assert detail["claimed"] is False
+
+    await mark_claimed(sessionmaker, "alpha_vid_3")
+    detail = (await client.get("/api/videos/alpha_vid_3")).json()["data"]["video"]
+    assert detail["claimed"] is True

@@ -80,18 +80,27 @@ async def api(engine, monkeypatch):
     from asgi_lifespan import LifespanManager
     from httpx import ASGITransport, AsyncClient
 
+    from app.analysis.llm import FakeLLMClient
+    from app.analysis.tickers import TickerValidator
     from app.main import create_app
+    from app.pipeline.lane_factory import build_analysis_lane, build_transcript_lane
+    from app.transcripts.client import FakeTranscriptClient
     from app.worker import JobWorker
 
     app = create_app()
     async with LifespanManager(app):
-        # Production splits job *running* into a separate `worker` container that claims
-        # rows via JobWorker.poll_once() (see app/worker.py); api routes only enqueue() an
-        # unclaimed row now. One JobWorker for the whole fixture lifetime -- same as the
-        # real worker process holds exactly one across its run -- so wait_refresh() below
-        # can call poll_once() repeatedly and have its continuation-chain bookkeeping
-        # (drain_continuations' _last_continuation) stay correct across calls.
-        app.state.job_worker = JobWorker(app.state.runner, app.state.sessionmaker)
+        # Production runs jobs and lanes in the worker containers (app/worker.py); api
+        # routes only enqueue jobs and re-status videos. These play those containers
+        # for wait_refresh() below, with the same fakes USE_FAKE_ADAPTERS wires up there.
+        settings = get_settings()
+        sessionmaker = app.state.sessionmaker
+        app.state.job_worker = JobWorker(app.state.runner, sessionmaker)
+        app.state.transcript_lane = build_transcript_lane(
+            sessionmaker, FakeTranscriptClient(), settings
+        )
+        app.state.analysis_lane = build_analysis_lane(
+            sessionmaker, FakeLLMClient(), TickerValidator(app.state.market), settings
+        )
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             await client.post("/api/admin/unlock", json={"password": "hunter2"})
@@ -144,21 +153,23 @@ async def no_admin_api(engine, monkeypatch):
 
 
 async def wait_refresh(app) -> None:
-    """Drain enqueued jobs the way the `worker` container does, then wait for any
-    follow-up job RefreshRunner chains into on a clean finish.
+    """Play both worker containers to a fixed point.
 
-    Api routes call RefreshRunner.enqueue() now (creates an unclaimed row; nothing runs
-    it in-process) instead of running jobs themselves, so tests need to actually play
-    the worker's role: poll to a fixed point using the app's JobWorker (app.state.
-    job_worker, built once by the `api` fixture above) -- the same poll_once() the real
-    worker container's run_forever() calls in a loop. poll_once() unconditionally drains
-    continuations via drain_continuations() (see app/worker.py) even on the "nothing to
-    claim" path, so this catches continuations started by a direct runner.start() -- a
-    few tests, and scheduler.py, still call that themselves -- without a second explicit
-    drain call here.
+    Drain enqueued jobs (discover / load_older) the way `worker` does, then both
+    lanes -- transcript first, since its output is the analysis lane's input -- and
+    repeat until a full pass does nothing: a discover can queue auto_analyze videos,
+    and one lane's output feeds the next.
+
+    A lane that paused itself (e.g. after an analysis failure) stops claiming, so this
+    still terminates; a test that needs it running again calls the resume endpoint.
     """
-    worker = app.state.job_worker
+    lanes = (app.state.transcript_lane, app.state.analysis_lane)
     while True:
-        ran = await worker.poll_once()
+        ran = False
+        while await app.state.job_worker.poll_once():
+            ran = True
+        for lane in lanes:
+            if await lane.drain():
+                ran = True
         if not ran:
-            break
+            return

@@ -1,16 +1,15 @@
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_price_store, get_runner, get_session
+from app.api.deps import get_price_store, get_session
 from app.auth import require_admin
 from app.envelope import fail, ok
-from app.models import (
-    Channel, JobKind, Mention, Stance, Video, VideoStance, VideoStatus,
-)
-from app.pipeline.refresh import RefreshRunner
+from app.models import Channel, Mention, Stance, Video, VideoStance, VideoStatus
+from app.pipeline.queueing import queue_status_for, requeue_ids
 from app.insights.scorecard import build_scorecard_page
 from app.market.store import PriceStore
 
@@ -70,7 +69,12 @@ async def _load_videos(
     if not ids:
         return None, fail("video_ids must not be empty", status_code=400)
     videos = (await session.execute(
-        select(Video).where(Video.id.in_(ids))
+        select(Video)
+        .where(Video.id.in_(ids))
+        # Lock the rows for the rest of this request: a lane slot's claim uses SKIP
+        # LOCKED, so it steps around them instead of claiming a video whose status this
+        # request is about to change (pipeline/lane_store.claim_next).
+        .with_for_update()
     )).scalars().all()
     missing = set(ids) - {v.id for v in videos}
     if missing:
@@ -80,23 +84,35 @@ async def _load_videos(
     return list(videos), None
 
 
+def _busy(videos: list[Video]) -> JSONResponse | None:
+    """409 when a lane holds any of these videos: changing a claimed video's status
+    would race the lane's own write of its result."""
+    claimed = sorted(v.id for v in videos if v.claimed_at is not None)
+    if not claimed:
+        return None
+    return fail(f"Videos are being processed: {', '.join(claimed)}", status_code=409)
+
+
 @router.post("/analyze")
 async def analyze_videos(
     body: VideoIdsRequest,
     session: AsyncSession = Depends(get_session),
-    runner: RefreshRunner = Depends(get_runner),
     _: None = Depends(require_admin),
 ):
     videos, error = await _load_videos(session, body.video_ids)
     if error is not None:
         return error
+    if (busy := _busy(videos)) is not None:
+        return busy
+    by_stage = {"transcript": 0, "analysis": 0}
     for video in videos:
-        video.status = VideoStatus.pending
+        video.status = queue_status_for(video.transcript is not None)
         video.error_message = None
+        stage = "analysis" if video.status is VideoStatus.transcribed else "transcript"
+        by_stage[stage] += 1
     await session.commit()
-    # created=False means a job is already running; videos just set to pending will be picked up by the next analyze job
-    job_id, created = await runner.enqueue(JobKind.analyze)
-    return ok({"job_id": job_id, "created": created, "queued": len(videos)})
+    # Nothing to enqueue: the lanes in the worker containers pick queued videos up.
+    return ok({"queued": len(videos), **by_stage})
 
 
 @router.post("/skip")
@@ -108,6 +124,8 @@ async def skip_videos(
     videos, error = await _load_videos(session, body.video_ids)
     if error is not None:
         return error
+    if (busy := _busy(videos)) is not None:
+        return busy
     analyzed = sorted(v.id for v in videos if v.status == VideoStatus.analyzed)
     if analyzed:
         return fail(
@@ -144,8 +162,23 @@ def _failure_conditions(
     if channel_id is not None:
         conditions.append(Video.channel_id == channel_id)
     if max_attempts is not None:
-        conditions.append(Video.analysis_attempts < max_attempts)
+        conditions.append(_attempts_below(kind, max_attempts))
     return conditions
+
+
+def _attempts_below(kind: str | None, max_attempts: int) -> ColumnElement[bool]:
+    """Each stage keeps its own counter; a failed video's stage is the one its
+    transcript presence says it died in."""
+    transcript_side = Video.transcript_attempts < max_attempts
+    analysis_side = Video.analysis_attempts < max_attempts
+    if kind == "transcript":
+        return transcript_side
+    if kind == "analysis":
+        return analysis_side
+    return or_(
+        and_(Video.transcript.is_(None), transcript_side),
+        and_(Video.transcript.is_not(None), analysis_side),
+    )
 
 
 async def _count_failures(session: AsyncSession, conditions: list) -> int:
@@ -223,7 +256,9 @@ async def failures_items(
                 "published_at": v.published_at.isoformat(),
                 "duration_seconds": v.duration_seconds,
                 "error_message": v.error_message,
-                "analysis_attempts": v.analysis_attempts,
+                "attempts": (
+                    v.transcript_attempts if v.transcript is None else v.analysis_attempts
+                ),
                 "last_attempt_at": (
                     v.last_attempt_at.isoformat() if v.last_attempt_at else None
                 ),
@@ -246,7 +281,6 @@ class RetryFailuresRequest(BaseModel):
 async def retry_failures(
     body: RetryFailuresRequest,
     session: AsyncSession = Depends(get_session),
-    runner: RefreshRunner = Depends(get_runner),
     _: None = Depends(require_admin),
 ):
     if body.kind is not None and body.kind not in FAILURE_KINDS:
@@ -260,19 +294,13 @@ async def retry_failures(
         )
     )).scalars().all()
     if not ids:
-        return ok({"queued": 0, "job_id": None, "created": False})
-    await session.execute(
-        update(Video)
-        .where(Video.id.in_(ids))
-        .values(status=VideoStatus.pending, error_message=None)
-        # analysis_attempts is deliberately NOT touched: it is the only record that
-        # distinguishes "blocked once" from "blocked twelve times", which is exactly
-        # what the max_attempts threshold spends.
-    )
+        return ok({"queued": 0})
+    # Back to the lane each video died in; analysis_attempts / transcript_attempts are
+    # deliberately NOT touched -- they are the only record that distinguishes "blocked
+    # once" from "blocked twelve times", which is exactly what max_attempts spends.
+    await requeue_ids(session, ids)
     await session.commit()
-    # created=False means a job is already running; the pending videos fold into its drain.
-    job_id, created = await runner.enqueue(JobKind.analyze)
-    return ok({"queued": len(ids), "job_id": job_id, "created": created})
+    return ok({"queued": len(ids)})
 
 
 @router.get("/{video_id}")
@@ -336,6 +364,7 @@ async def video_detail(
             "duration_seconds": video.duration_seconds,
             "status": video.status.value,
             "tldr": video.tldr,
+            "claimed": video.claimed_at is not None,
         },
         "groups": ordered,
     })
