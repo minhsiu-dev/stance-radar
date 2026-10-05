@@ -23,8 +23,8 @@ async def enqueue_job(
     a status it doesn't know. claimed_at is the single source of truth for "is someone
     actually executing this row right now" -- not "was it created by a worker's claim":
     pass claimed=True when the caller is about to run the job in-process immediately
-    (RefreshRunner.start(), used by _continue_if_pending and by AutoRefreshScheduler --
-    both already running inside the worker process), so the row is never `running` with
+    (RefreshRunner.start(), used by AutoRefreshScheduler -- already running inside the
+    worker process), so the row is never `running` with
     `claimed_at IS NULL` while genuinely in flight. Getting this wrong bites twice:
     fail_orphan_jobs would ignore a crash mid-run because it only matches claimed_at IS
     NOT NULL, and a separate worker's claim_next_job() (same claimed_at IS NULL filter)

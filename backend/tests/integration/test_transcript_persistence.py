@@ -12,7 +12,7 @@ async def _discover_and_analyze(app, client, video_id):
     await wait_refresh(app)
 
 
-async def test_process_video_stores_transcript(api, session):
+async def test_analysis_stores_transcript(api, session):
     app, client = api
     await _discover_and_analyze(app, client, "alpha_vid_3")
 

@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import models  # noqa: F401  # register models for create_all
-from app.analysis.llm import ClaudeCLIClient, FakeLLMClient
 from app.analysis.tickers import TickerValidator
 from app.config import Settings, get_settings
 from app.db import Base, create_engine_and_sessionmaker
@@ -12,29 +11,17 @@ from app.market.client import FakeMarketClient, YFinanceMarketClient
 from app.market.store import PriceStore
 from app.net.proxy import ProxyRotator
 from app.pipeline.refresh import RefreshDeps, RefreshRunner
-from app.transcripts.client import FakeTranscriptClient, YouTubeTranscriptApiClient
 from app.youtube.client import DataAPIYouTubeClient, FakeYouTubeClient
 
 
 def build_adapters(settings: Settings) -> dict:
+    """The api's own adapters: YouTube (channel lookup) and market data. Transcript
+    and LLM clients live only in the workers (app/worker.py build_worker_adapters)."""
     if settings.use_fake_adapters:
-        return {
-            "youtube": FakeYouTubeClient(),
-            "transcripts": FakeTranscriptClient(),
-            "llm": FakeLLMClient(),
-            "market": FakeMarketClient(),
-        }
+        return {"youtube": FakeYouTubeClient(), "market": FakeMarketClient()}
     rotator = ProxyRotator(settings.gluetun_control_url)
     return {
         "youtube": DataAPIYouTubeClient(api_key=settings.youtube_api_key),
-        "transcripts": YouTubeTranscriptApiClient(
-            proxy_url=settings.fetch_proxy_url, rotator=rotator
-        ),
-        "llm": ClaudeCLIClient(
-            binary=settings.claude_bin,
-            model=settings.claude_model,
-            timeout_seconds=settings.claude_timeout_seconds,
-        ),
         "market": YFinanceMarketClient(
             proxy_url=settings.fetch_proxy_url, rotator=rotator
         ),
@@ -44,8 +31,7 @@ def build_adapters(settings: Settings) -> dict:
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     settings = get_settings()
-    # The `worker` container is the one that spawns `claude` now (see app/worker.py);
-    # the api process itself never does, so it has no reason to require the binary on PATH.
+    # Only worker-analyze spawns `claude`; the api never needs the binary on PATH.
     settings.validate_required_keys(require_claude=False)
     engine, sessionmaker = create_engine_and_sessionmaker(settings.database_url)
     try:
@@ -59,16 +45,10 @@ async def lifespan(application: FastAPI):
         application.state.ticker_validator = TickerValidator(adapters["market"])
         application.state.price_store = PriceStore(sessionmaker, adapters["market"])
         application.state.youtube = adapters["youtube"]
-        # The api only enqueues jobs; the worker container claims and runs them (see
-        # app/worker.py). RefreshDeps still needs every field filled in -- get_runner's
-        # dependency injection and the test fixtures both expect a full RefreshRunner --
-        # but api routes call only its enqueue().
+        # The api only enqueues jobs; the `worker` container claims and runs them.
         application.state.runner = RefreshRunner(RefreshDeps(
             sessionmaker=sessionmaker,
             youtube=adapters["youtube"],
-            transcripts=adapters["transcripts"],
-            llm=adapters["llm"],
-            ticker_validator=application.state.ticker_validator,
             settings=settings,
         ))
         yield

@@ -4,34 +4,15 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.analysis.context import excerpt_around
-from app.analysis.llm import AnalysisError, AnalysisInfrastructureError, LLMClient
-from app.analysis.tickers import TickerValidatorLike
 from app.config import Settings
-from app.models import (
-    Channel, JobKind, Mention, Stance, Video, VideoStance, VideoStatus, utcnow,
-)
+from app.models import Channel, JobKind, Video, VideoStatus, utcnow
 from app.pipeline import jobs
-from app.transcripts.client import (
-    TranscriptClient,
-    TranscriptNotAvailable,
-    transcript_from_json,
-    transcript_to_json,
-)
 from app.youtube.client import QuotaExceededError, YouTubeClient
 
 logger = logging.getLogger(__name__)
-
-
-class AllVideosFailedError(Exception):
-    """Every video in an analyze run failed.
-
-    That is a failed run, not a success with no results — without it the job reports
-    `done` and a wholly broken pipeline looks identical to a healthy one.
-    """
 
 
 def _is_short(duration_seconds: int | None, max_seconds: int) -> bool:
@@ -46,14 +27,15 @@ def _is_short(duration_seconds: int | None, max_seconds: int) -> bool:
 class RefreshDeps:
     sessionmaker: async_sessionmaker[AsyncSession]
     youtube: YouTubeClient
-    transcripts: TranscriptClient
-    llm: LLMClient
-    ticker_validator: TickerValidatorLike
     settings: Settings
 
 
 class RefreshRunner:
-    """Only one refresh job is allowed at a time. start() launches the background task and returns immediately."""
+    """Runs the YouTube listing jobs (discover / load_older); only one runs at a time.
+
+    Transcripts and analysis are not jobs: the pipeline lanes (app/pipeline/lanes.py)
+    pick queued videos up on their own.
+    """
 
     def __init__(self, deps: RefreshDeps) -> None:
         self._deps = deps
@@ -89,32 +71,32 @@ class RefreshRunner:
     async def run_job(
         self, job_id: int, kind: JobKind, params: dict | None = None
     ) -> None:
-        """Execute an already-created job row to completion. Raises on infrastructure failure."""
-        if kind is JobKind.discover:
-            run = self._run_discover
-        elif kind is JobKind.load_older:
+        """Execute an already-created job row to completion."""
+        if kind is JobKind.analyze:
+            # Analysis runs in the pipeline lanes now. An analyze row can only be a
+            # leftover from before the two-lane deploy; close it so it never holds the
+            # single job slot discover and load_older share.
+            await jobs.finish_job(
+                self._deps.sessionmaker, job_id, error=jobs.SUPERSEDED_MESSAGE
+            )
+            return
+        if kind is JobKind.load_older:
             run = functools.partial(
                 self._run_load_older, channel_id=(params or {}).get("channel_id")
             )
         else:
-            run = self._run_analyze
+            run = self._run_discover
         await self._run_safely(job_id, run)
 
     async def start(
         self, kind: JobKind = JobKind.discover, channel_id: str | None = None
     ) -> tuple[int, bool]:
-        """In-process convenience used by tests and _continue_if_pending: enqueue + run in a task.
+        """In-process convenience used by tests and AutoRefreshScheduler: enqueue + run
+        in a task.
 
-        _start_lock must span both the enqueue and the create_task (not just the enqueue,
-        as a naive `enqueue()` + `create_task()` split would do): AutoRefreshScheduler
-        (scheduler.py:_start_analyze_and_wait) reads self.current_task right after calling
-        start(), with no await in between, relying on it already corresponding to the
-        job_id start() returned -- including when created=False, i.e. this call lost the
-        race to a concurrent start(). If the lock only covered the enqueue, this caller
-        could observe created=False before the winner has set current_task yet (stale or
-        None), breaking that guarantee. Holding the lock across both closes that window;
-        the winner's create_task always happens before the lock is released, so a loser
-        never observes stale state.
+        _start_lock spans both the enqueue and the create_task: AutoRefreshScheduler.
+        run_once reads self.current_task right after calling start(), with no await in
+        between, relying on it already being the task for the job start() just created.
         """
         async with self._start_lock:
             job_id, created, params = await self._enqueue_locked(
@@ -134,18 +116,6 @@ class RefreshRunner:
         except QuotaExceededError as exc:
             await jobs.finish_job(self._deps.sessionmaker, job_id, error=str(exc))
             return
-        except AllVideosFailedError as exc:
-            # Not an unexpected crash: a clean, already-logged verdict about the run.
-            # Returning here also skips _continue_if_pending(), so a fully broken
-            # pipeline does not immediately queue itself another round.
-            await jobs.finish_job(self._deps.sessionmaker, job_id, error=str(exc))
-            return
-        except AnalysisInfrastructureError as exc:
-            # Record the verdict, then let it escape: the worker that owns this runner
-            # exits the process so Docker restarts it with a clean address space.
-            logger.error("aborting job %s: %s", job_id, exc)
-            await jobs.finish_job(self._deps.sessionmaker, job_id, error=str(exc))
-            raise
         except Exception as exc:
             logger.exception("job %s failed", job_id)
             await jobs.finish_job(
@@ -153,13 +123,6 @@ class RefreshRunner:
             )
             return
         await jobs.finish_job(self._deps.sessionmaker, job_id)
-        await self._continue_if_pending()
-
-    async def _continue_if_pending(self) -> None:
-        # After a clean finish, drain any pending videos via an analyze job. The DB
-        # single-job guard in start() makes this a no-op if one is already running.
-        if await self._count_pending() > 0:
-            await self.start(JobKind.analyze)
 
     async def _run_discover(self, job_id: int) -> None:
         deps = self._deps
@@ -179,86 +142,6 @@ class RefreshRunner:
             "stage": "listing",
             "channels_done": total_channels, "channels_total": total_channels,
             "discovered": discovered,
-        })
-
-    async def _run_analyze(self, job_id: int) -> None:
-        deps = self._deps
-        done = 0
-        failed = 0
-        last_error: str | None = None
-        seen: set[str] = set()  # never reprocess an id within this job run
-        progress_lock = asyncio.Lock()
-        semaphore = asyncio.Semaphore(deps.settings.analysis_concurrency)
-
-        async def process(video_id: str) -> None:
-            nonlocal done, failed, last_error
-            error: str | None = None
-            async with semaphore:
-                try:
-                    error = await self._process_video(video_id)
-                except AnalysisInfrastructureError:
-                    raise
-                except Exception as exc:  # one video failing shouldn't take down the whole job
-                    logger.exception("video %s processing failed", video_id)
-                    error = str(exc)
-                    await self._mark_video_failed(video_id, error)
-            async with progress_lock:
-                done += 1
-                if error is not None:
-                    failed += 1
-                    last_error = error
-                await self._report_analyze(job_id, done, failed)
-
-        # Drain: keep pulling pending until none remain, so videos queued mid-run
-        # (resume semantics + the user selecting more while this job runs) fold into
-        # this same job. Each pass's query runs after the previous gather completes,
-        # so nothing is processed twice.
-        while True:
-            async with deps.sessionmaker() as session:
-                pending = list((await session.execute(
-                    select(Video.id)
-                    .where(Video.status == VideoStatus.pending)
-                    .order_by(Video.published_at.desc())
-                )).scalars().all())
-            batch = [vid for vid in pending if vid not in seen]
-            if not batch:
-                break
-            seen.update(batch)
-            await self._report_analyze(job_id, done, failed)
-            # Explicit tasks (not a bare gather over coroutines) so an infrastructure
-            # abort can cancel the rest of the batch. asyncio.gather's default
-            # return_exceptions=False re-raises the first exception without touching
-            # its siblings, which would otherwise keep burning attempts against a
-            # process that can no longer spawn children (the 159-video incident).
-            tasks = [asyncio.create_task(process(vid)) for vid in batch]
-            try:
-                await asyncio.gather(*tasks)
-            except AnalysisInfrastructureError:
-                for task in tasks:
-                    task.cancel()
-                await asyncio.gather(*tasks, return_exceptions=True)
-                raise
-
-        # Judged across the whole run, drain batches included.
-        if done > 0 and failed == done:
-            raise AllVideosFailedError(
-                f"All {done} videos failed; last error: {last_error}"
-            )
-
-    async def _count_pending(self) -> int:
-        async with self._deps.sessionmaker() as session:
-            return (await session.execute(
-                select(func.count()).select_from(Video)
-                .where(Video.status == VideoStatus.pending)
-            )).scalar_one()
-
-    async def _report_analyze(self, job_id: int, done: int, failed: int) -> None:
-        remaining = await self._count_pending()
-        await jobs.update_progress(self._deps.sessionmaker, job_id, {
-            "stage": "analyzing",
-            "videos_done": done,
-            "videos_failed": failed,
-            "videos_total": done + remaining,
         })
 
     async def _ingest_channel_videos(self, channel: Channel) -> int:
@@ -357,117 +240,3 @@ class RefreshRunner:
             row.last_refreshed_at = utcnow()
             await session.commit()
             return added
-
-    async def _process_video(self, video_id: str) -> str | None:
-        """Process one video.
-
-        Returns the error message when a failure was handled internally (so the
-        caller can still count it), or None on success / no_transcript — neither
-        of which is a failure.
-        """
-        deps = self._deps
-        async with deps.sessionmaker() as session:
-            video = await session.get(Video, video_id)
-            # Commit the attempt stamp immediately. The generic-exception path re-opens a
-            # fresh session in _mark_video_failed, so anything still uncommitted here is
-            # discarded on exactly the failures we most want counted.
-            video.analysis_attempts = (video.analysis_attempts or 0) + 1
-            video.last_attempt_at = utcnow()
-            await session.commit()
-            # From here on, the attempt above is durably committed but the video hasn't
-            # reached a real per-video outcome yet. If a sibling's infrastructure abort
-            # cancels us anywhere in here (observed cancelling mid-flight inside our own
-            # deps.llm.analyze() at production's default analysis_concurrency=2), we were
-            # never actually analyzed, so give the attempt back -- same as the
-            # AnalysisInfrastructureError branch below, just triggered from outside rather
-            # than by our own LLM call.
-            try:
-                if video.transcript:
-                    # Re-analysis runs offline from the stored transcript — no YouTube fetch.
-                    transcript = transcript_from_json(video.transcript)
-                else:
-                    try:
-                        transcript = await deps.transcripts.fetch(video_id)
-                    except TranscriptNotAvailable:
-                        video.status = VideoStatus.no_transcript
-                        video.error_message = None
-                        await session.commit()
-                        return None
-                    video.transcript = transcript_to_json(transcript)
-                try:
-                    result = await deps.llm.analyze(
-                        video_id=video_id, video_title=video.title, transcript=transcript
-                    )
-                except AnalysisInfrastructureError:
-                    # The process is broken, not the video. Give the attempt back (it was
-                    # committed up-front) and leave the video pending so a fresh worker retries it.
-                    video.analysis_attempts = max((video.analysis_attempts or 1) - 1, 0)
-                    await session.commit()
-                    raise
-                except AnalysisError as exc:
-                    video.status = VideoStatus.failed
-                    video.error_message = str(exc)
-                    await session.commit()
-                    return str(exc)
-
-                # Idempotent: when reprocessing a failed video, clear leftover data first
-                await session.execute(delete(Mention).where(Mention.video_id == video_id))
-                await session.execute(
-                    delete(VideoStance).where(VideoStance.video_id == video_id)
-                )
-                tickers = {m.ticker for m in result.mentions} | {
-                    s.ticker for s in result.stances
-                }
-                valid: set[str] = set()
-                dropped: list[str] = []
-                for ticker in tickers:
-                    if await deps.ticker_validator.is_valid(ticker):
-                        valid.add(ticker)
-                    else:
-                        dropped.append(ticker)
-                        logger.warning(
-                            "dropping unknown ticker %s from video %s", ticker, video_id
-                        )
-                for m in result.mentions:
-                    if m.ticker in valid:
-                        excerpt = excerpt_around(
-                            transcript.segments, start_seconds=m.start_seconds,
-                        )
-                        session.add(Mention(
-                            video_id=video_id, ticker=m.ticker,
-                            start_seconds=m.start_seconds, quote=m.quote,
-                            stance=Stance(m.stance), reasoning=m.reasoning,
-                            excerpt=excerpt,
-                            confidence=m.confidence, time_horizon=m.time_horizon,
-                            is_conditional=m.is_conditional, condition=m.condition,
-                        ))
-                for s in result.stances:
-                    if s.ticker in valid:
-                        session.add(VideoStance(
-                            video_id=video_id, ticker=s.ticker,
-                            stance=Stance(s.stance), summary=s.summary,
-                            confidence=s.confidence,
-                            is_conditional=s.is_conditional,
-                        ))
-                video.dropped_tickers = sorted(dropped) or None
-                video.tldr = list(result.tldr) if result.tldr else None
-                video.transcript_language = transcript.language
-                video.status = VideoStatus.analyzed
-                video.error_message = None
-                video.analyzed_at = utcnow()
-                await session.commit()
-            except asyncio.CancelledError:
-                # Mid-flight cancellation from a sibling's abort (see comment above the
-                # try). Give the attempt back, then let the cancellation keep propagating
-                # -- never swallow it.
-                video.analysis_attempts = max((video.analysis_attempts or 1) - 1, 0)
-                await session.commit()
-                raise
-
-    async def _mark_video_failed(self, video_id: str, error: str) -> None:
-        async with self._deps.sessionmaker() as session:
-            video = await session.get(Video, video_id)
-            if video is not None:
-                video.status = VideoStatus.failed
-                video.error_message = error
-                await session.commit()

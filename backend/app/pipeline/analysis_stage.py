@@ -1,6 +1,6 @@
 """Analysis lane: run the LLM over a stored transcript and persist mentions/stances.
 
-Moved here from RefreshRunner._process_video. The LLM call and ticker validation run
+Moved here from the old in-process analyze job in RefreshRunner. The LLM call and ticker validation run
 with no session open -- a `claude` call can take five minutes -- and the result is
 written in one commit together with status=analyzed and the released claim.
 """

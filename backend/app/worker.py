@@ -65,53 +65,16 @@ class JobWorker:
         self._runner = runner
         self._sessionmaker = sessionmaker
         self._poll_seconds = poll_seconds
-        self._last_continuation: asyncio.Task | None = None
 
     async def poll_once(self) -> bool:
-        """Claim and run one job (plus any continuation it silently chains into).
-        Returns True if a job was claimed and run here.
-
-        Continuations are drained even when nothing was claimed (queue empty): a
-        continuation the scheduler fired via RefreshRunner.start() -- not this method --
-        can still be sitting on runner.current_task with nothing left for claim_next_job()
-        to find, and it must still be adopted here rather than left for whatever polls
-        next. Found in review: with the drain gated behind the "something was claimed"
-        branch, an idle poll loop silently abandoned it.
-
-        AnalysisInfrastructureError is deliberately NOT caught: the caller exits the
-        process so a fresh one takes over.
-        """
+        """Claim and run one job. Returns True if a job was claimed and run here."""
         claimed = await jobs.claim_next_job(self._sessionmaker)
-        if claimed is not None:
-            job_id, kind, params = claimed
-            logger.info("claimed job %s (%s)", job_id, kind)
-            await self._runner.run_job(job_id, JobKind(kind), params)
-        await self.drain_continuations()
-        return claimed is not None
-
-    async def drain_continuations(self) -> None:
-        """A clean finish can silently keep the pipeline going: RefreshRunner
-        ._continue_if_pending() fires a follow-up job via asyncio.create_task and stores
-        it on runner.current_task WITHOUT awaiting it (run_job() above only awaits the
-        job it was given directly) -- and that follow-up can itself chain into another
-        one the same way. Left alone, an AnalysisInfrastructureError raised inside one of
-        those dies as an exception nobody ever retrieves on a detached task instead of
-        reaching us: the worker would keep polling inside the very poisoned address space
-        it exists to escape (found in review: discover succeeds, auto-continues into
-        analyze, analyze dies silently, repeat).
-
-        Adopt and await runner.current_task, following the chain to a fixed point.
-        _last_continuation remembers the last task we've already awaited (current_task is
-        never reset to None once set, so without this we'd re-await an old, already
-        awaited task forever); a genuinely new task -- meaning the chain kept going --
-        always compares unequal to it and gets awaited too.
-        """
-        while True:
-            task = self._runner.current_task
-            if task is None or task is self._last_continuation:
-                return
-            self._last_continuation = task
-            await task
+        if claimed is None:
+            return False
+        job_id, kind, params = claimed
+        logger.info("claimed job %s (%s)", job_id, kind)
+        await self._runner.run_job(job_id, JobKind(kind), params)
+        return True
 
     async def run_forever(self) -> None:
         while True:
@@ -164,14 +127,10 @@ async def main() -> int:
         runner = RefreshRunner(RefreshDeps(
             sessionmaker=sessionmaker,
             youtube=adapters["youtube"],
-            transcripts=adapters["transcripts"],
-            llm=adapters["llm"],
-            ticker_validator=adapters["ticker_validator"],
             settings=settings,
         ))
         scheduler = AutoRefreshScheduler(
             runner=runner,
-            sessionmaker=sessionmaker,
             interval_minutes=settings.auto_refresh_minutes,
         )
         scheduler.start()

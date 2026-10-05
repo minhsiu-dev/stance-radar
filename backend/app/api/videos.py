@@ -150,7 +150,7 @@ def _failure_conditions(
     """Shared selection rule for the summary / items / retry endpoints, so the
     three can never disagree about which videos a filter covers.
 
-    `kind` is derived, not stored: _process_video only fetches a transcript when
+    `kind` is derived, not stored: the transcript stage only fetches a transcript when
     none is saved, so "failed with no transcript" *is* "died fetching", and
     "failed with a transcript" *is* "died in the LLM".
     """

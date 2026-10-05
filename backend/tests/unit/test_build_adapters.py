@@ -9,12 +9,10 @@ def test_build_adapters_passes_proxy_when_set(monkeypatch):
         gluetun_control_url="http://gluetun:8000", _env_file=None,
     )
     adapters = build_adapters(s)
-    assert adapters["transcripts"]._proxy_url == "http://proxy:8888"
     assert adapters["market"]._proxy_url == "http://proxy:8888"
 
 
 def test_build_adapters_no_proxy_by_default():
     s = Settings(youtube_api_key="k", _env_file=None)
     adapters = build_adapters(s)
-    assert adapters["transcripts"]._proxy_url == ""
     assert adapters["market"]._proxy_url == ""

@@ -1,21 +1,17 @@
 """The api enqueues a job row; the worker claims it. Claiming must be exclusive, and
 orphan recovery must never kill a job that no worker has picked up yet -- but it must
 still catch a job that crashed while running in-process (RefreshRunner.start(), which
-every api route and _continue_if_pending use today): claimed_at is the single source of
+the scheduler uses today): claimed_at is the single source of
 truth for "is anyone actually executing this row right now", not "was this row created
 by a worker's claim"."""
 import asyncio
 
 from sqlalchemy import select
 
-from app.analysis.llm import FakeLLMClient
-from app.analysis.tickers import TickerValidator
 from app.config import Settings
-from app.market.client import FakeMarketClient
 from app.models import Channel, Job, JobKind, JobStatus, utcnow
 from app.pipeline import jobs
 from app.pipeline.refresh import RefreshDeps, RefreshRunner
-from app.transcripts.client import FakeTranscriptClient
 from app.youtube.client import FakeYouTubeClient
 
 
@@ -99,9 +95,6 @@ def _make_runner(sessionmaker, *, youtube=None) -> RefreshRunner:
     return RefreshRunner(RefreshDeps(
         sessionmaker=sessionmaker,
         youtube=youtube or FakeYouTubeClient(),
-        transcripts=FakeTranscriptClient(),
-        llm=FakeLLMClient(),
-        ticker_validator=TickerValidator(FakeMarketClient()),
         settings=Settings(),
     ))
 
@@ -130,8 +123,7 @@ async def _seed_channel_with_a_gated_discover(sessionmaker):
 
 
 async def test_a_start_created_job_is_not_claimable_by_a_worker(sessionmaker):
-    """RefreshRunner.start() -- used by every api route today, and by
-    _continue_if_pending -- executes the job in-process immediately. It must not leave
+    """RefreshRunner.start() -- used by AutoRefreshScheduler -- executes the job in-process immediately. It must not leave
     claimed_at NULL while doing so, or a separate worker's claim_next_job() could pick up
     and run the very same job a second time, concurrently with the in-process task."""
     youtube, gate = await _seed_channel_with_a_gated_discover(sessionmaker)
