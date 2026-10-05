@@ -3,10 +3,15 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
+import en from "@/messages/en.json";
 import { ReanalyzeButton } from "@/components/reanalyze-button";
+import type { VideoStatus } from "@/lib/types";
+import { snapshot } from "./pipeline-fixtures";
 
-const useAdmin = vi.fn();
-vi.mock("@/components/admin-provider", () => ({ useAdmin: () => useAdmin() }));
+const handleAuthError = vi.fn();
+vi.mock("@/components/admin-provider", () => ({
+  useAdmin: () => ({ authenticated: true, handleAuthError }),
+}));
 
 const apiFetchMock = vi.fn();
 vi.mock("@/lib/api", async (orig) => ({
@@ -14,69 +19,80 @@ vi.mock("@/lib/api", async (orig) => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }));
 
-const messages = {
-  VideoDetail: {
-    reanalyze: "Re-analyze",
-    reanalyzing: "Re-analyzing…",
-    reanalyzeFailed: "Re-analysis failed",
-  },
-};
+let video: { status: VideoStatus; claimed: boolean } = { status: "analyzed", claimed: false };
+let analysisPaused = false;
 
-const doneJob = {
-  id: 42,
-  kind: "analyze",
-  status: "done",
-  progress: {},
-  started_at: "2026-08-09T00:00:00Z",
-  finished_at: "2026-08-09T00:01:00Z",
-  error_message: null,
-};
+const fetcher = (key: string) =>
+  Promise.resolve(
+    key === "/api/pipeline"
+      ? snapshot({ lanes: { analysis: { paused: analysisPaused } } })
+      : {
+          video: {
+            id: "vid-1",
+            title: "t",
+            channel: { id: "c", title: "c", thumbnail_url: "" },
+            published_at: "2026-10-01T00:00:00Z",
+            duration_seconds: 60,
+            tldr: null,
+            ...video,
+          },
+          groups: [],
+        },
+  );
 
-function renderButton(onDone: () => void) {
+function renderButton(onDone = vi.fn()) {
   render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      <SWRConfig value={{ fetcher: () => doneJob, provider: () => new Map() }}>
-        <ReanalyzeButton videoId="vid-1" onDone={onDone} />
+    <NextIntlClientProvider locale="en" messages={{ VideoDetail: en.VideoDetail }}>
+      <SWRConfig value={{ fetcher, provider: () => new Map(), dedupingInterval: 0 }}>
+        <ReanalyzeButton videoId="vid-1" onDone={onDone} pollMs={20} />
       </SWRConfig>
     </NextIntlClientProvider>,
   );
+  return onDone;
 }
 
 beforeEach(() => {
-  useAdmin.mockReturnValue({ authenticated: true, handleAuthError: vi.fn() });
   apiFetchMock.mockReset();
+  apiFetchMock.mockResolvedValue({ queued: 1, transcript: 0, analysis: 1 });
+  handleAuthError.mockReset();
+  video = { status: "analyzed", claimed: false };
+  analysisPaused = false;
 });
 
 describe("ReanalyzeButton", () => {
-  it("posts the video id and calls onDone once its own job id reports finished", async () => {
-    apiFetchMock.mockResolvedValue({ job_id: 42, created: true });
-    const onDone = vi.fn();
-    renderButton(onDone);
-
-    await userEvent.click(screen.getByRole("button"));
+  it("queues the video, follows it through the lane, and calls onDone at the end", async () => {
+    const onDone = renderButton();
+    video = { status: "transcribed", claimed: false };
+    await userEvent.click(screen.getByRole("button", { name: "Re-analyze" }));
 
     expect(apiFetchMock).toHaveBeenCalledWith("/api/videos/analyze", {
       method: "POST",
       body: JSON.stringify({ video_ids: ["vid-1"] }),
     });
+    expect(await screen.findByRole("button", { name: /Queued/ })).toBeDisabled();
+
+    video = { status: "transcribed", claimed: true };
+    expect(await screen.findByRole("button", { name: /Re-analyzing/ })).toBeDisabled();
+
+    video = { status: "analyzed", claimed: false };
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Re-analyze" })).toBeEnabled();
   });
 
-  it("surfaces a trigger failure instead of hanging in the working state", async () => {
-    apiFetchMock.mockRejectedValue(new Error("nope"));
-    renderButton(vi.fn());
-
-    await userEvent.click(screen.getByRole("button"));
-
-    expect(await screen.findByText("nope")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByRole("button")).not.toBeDisabled(),
-    );
+  it("says so when the lane it is waiting on is paused", async () => {
+    analysisPaused = true;
+    renderButton();
+    video = { status: "transcribed", claimed: false };
+    await userEvent.click(screen.getByRole("button", { name: "Re-analyze" }));
+    expect(await screen.findByText("That stage is paused right now")).toBeInTheDocument();
   });
 
-  it("renders nothing when not authenticated", () => {
-    useAdmin.mockReturnValue({ authenticated: false, handleAuthError: vi.fn() });
-    renderButton(vi.fn());
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  it("reports a failed request and stays usable", async () => {
+    apiFetchMock.mockRejectedValue(new Error("Videos are being processed: vid-1"));
+    renderButton();
+    await userEvent.click(screen.getByRole("button", { name: "Re-analyze" }));
+    expect(await screen.findByText("Videos are being processed: vid-1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Re-analyze" })).toBeEnabled();
+    expect(handleAuthError).toHaveBeenCalled();
   });
 });

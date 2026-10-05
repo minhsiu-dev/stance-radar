@@ -435,6 +435,8 @@
     "reanalyze": "Re-analyze",
     "reanalyzing": "Re-analyzing…",
     "reanalyzeFailed": "Re-analysis failed",
+    "reanalyzeQueued": "Queued…",
+    "reanalyzePaused": "That stage is paused right now",
     "callPerformance": "Call performance",
     "tldrHeading": "TL;DR"
   },
