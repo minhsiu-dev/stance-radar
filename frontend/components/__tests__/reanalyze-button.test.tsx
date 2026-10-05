@@ -9,8 +9,9 @@ import type { VideoStatus } from "@/lib/types";
 import { snapshot } from "./pipeline-fixtures";
 
 const handleAuthError = vi.fn();
+const admin = { authenticated: true };
 vi.mock("@/components/admin-provider", () => ({
-  useAdmin: () => ({ authenticated: true, handleAuthError }),
+  useAdmin: () => ({ authenticated: admin.authenticated, handleAuthError }),
 }));
 
 const apiFetchMock = vi.fn();
@@ -55,6 +56,7 @@ beforeEach(() => {
   apiFetchMock.mockReset();
   apiFetchMock.mockResolvedValue({ queued: 1, transcript: 0, analysis: 1 });
   handleAuthError.mockReset();
+  admin.authenticated = true;
   video = { status: "analyzed", claimed: false };
   analysisPaused = false;
 });
@@ -75,6 +77,23 @@ describe("ReanalyzeButton", () => {
     expect(await screen.findByRole("button", { name: /Re-analyzing/ })).toBeDisabled();
 
     video = { status: "analyzed", claimed: false };
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Re-analyze" })).toBeEnabled();
+  });
+
+  it("renders nothing for a locked admin", () => {
+    admin.authenticated = false;
+    renderButton();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("ends the watch and calls onDone when the video ends up skipped", async () => {
+    const onDone = renderButton();
+    video = { status: "transcribed", claimed: false };
+    await userEvent.click(screen.getByRole("button", { name: "Re-analyze" }));
+    expect(await screen.findByRole("button", { name: /Queued/ })).toBeDisabled();
+
+    video = { status: "skipped", claimed: false };
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("button", { name: "Re-analyze" })).toBeEnabled();
   });

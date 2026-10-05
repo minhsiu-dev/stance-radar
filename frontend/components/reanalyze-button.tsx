@@ -11,7 +11,7 @@ import { PIPELINE_KEY } from "@/lib/pipeline";
 import type { PipelineSnapshot, VideoDetailResponse, VideoStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const FINAL: ReadonlySet<VideoStatus> = new Set(["analyzed", "failed", "no_transcript"]);
+const FINAL: ReadonlySet<VideoStatus> = new Set(["analyzed", "failed", "no_transcript", "skipped"]);
 
 type Phase = "idle" | "submitting" | "watching";
 
