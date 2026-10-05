@@ -154,10 +154,9 @@ describe("FailedVideos", () => {
     await waitFor(() => expect(admin.handleAuthError).toHaveBeenCalled());
   });
 
-  it("threads channel filter through summary fetch and retry POST", async () => {
-    // Tests that when a channel is selected (even though we can't drive the
-    // select in jsdom due to popover rendering), the channel_id is threaded
-    // through the summary key and retry body.
+  it("threads a selected channel into both the summary fetch and the retry POST body", async () => {
+    // Drives the real base-ui Select to verify that when a channel is selected,
+    // the channel_id is threaded through both the summary fetch key and retry POST body.
     const channelSummary = {
       groups: [{ kind: "transcript", total: 48, retryable: 40 }],
       channels: [{ id: "ch-a", title: "Alpha", total: 48 }],
@@ -165,13 +164,36 @@ describe("FailedVideos", () => {
     };
     const fetcher = makeChannelAwareFetcher(channelSummary);
     apiFetchMock.mockResolvedValue({ queued: 40 });
+    const user = userEvent.setup();
     renderFailed("transcript", fetcher);
     await screen.findByText(/YouTube blocked the transcript request/);
 
-    // Verify that the fetcher is called with the base summary on initial load
+    // Open the channel select and click Alpha option
+    // Option name is formatted as "{title} ({count})" from the base summary's channels
+    const [channelSelect] = screen.getAllByRole("combobox");
+    await user.click(channelSelect);
+    const alphaOption = await screen.findByRole("option", { name: /^Alpha/ });
+    await user.click(alphaOption);
+
+    // The channel-scoped summary swaps the group counts in, proving the
+    // request that produced them carried channel_id=ch-a (the fetcher only
+    // returns this payload for that query string).
+    await screen.findByText("48 videos · 40 match the threshold");
     expect(
-      fetcher.mock.calls.some(([k]) => String(k).startsWith("/api/videos/failures")),
+      fetcher.mock.calls.some(([k]) =>
+        String(k).match(/^\/api\/videos\/failures\?.*channel_id=ch-a/),
+      ),
     ).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Retry this group (40)" }));
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/videos/failures/retry", {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "transcript",
+        channel_id: "ch-a",
+        max_attempts: null,
+      }),
+    });
   });
 
   it("threads a selected attempt threshold into both the summary fetch and the retry POST body", async () => {
@@ -214,19 +236,34 @@ describe("FailedVideos", () => {
     });
   });
 
-  it("renders dropdowns when the current channel has no failures (keepPreviousData)", async () => {
+  it("keeps the channel dropdown visible when the selected channel currently has none", async () => {
     // The `keepPreviousData` guard ensures that when the selected channel has
-    // zero current failures, the selects stay mounted so the user isn't stranded.
+    // zero current failures, the selects stay mounted with "No videos match"
+    // wording, not the global "No failed videos." text, and the user isn't
+    // stranded with no way to pick a different channel.
     const channelSummary = {
       groups: [],
       channels: [{ id: "ch-a", title: "Alpha", total: 48 }],
       total: 0,
     };
     const fetcher = makeChannelAwareFetcher(channelSummary);
+    const user = userEvent.setup();
     renderFailed("transcript", fetcher);
     await screen.findByText(/YouTube blocked the transcript request/);
 
-    // Both selects should be rendered and usable
+    // Select Alpha channel
+    const [channelSelect] = screen.getAllByRole("combobox");
+    await user.click(channelSelect);
+    const alphaOption = await screen.findByRole("option", { name: /^Alpha/ });
+    await user.click(alphaOption);
+
+    // When the channel has zero failures, should show "No videos match..."
+    // not the global "No failed videos."
+    expect(await screen.findByText("No videos match the current filter.")).toBeInTheDocument();
+    expect(screen.queryByText("No failed videos.")).not.toBeInTheDocument();
+
+    // Both selects are still mounted and usable -- the user is not stranded
+    // with no way back to "All channels".
     expect(screen.getAllByRole("combobox")).toHaveLength(2);
   });
 
