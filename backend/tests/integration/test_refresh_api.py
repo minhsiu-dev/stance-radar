@@ -52,3 +52,38 @@ async def test_double_trigger_returns_same_job(api):
     assert first.json()["data"]["job_id"] == second.json()["data"]["job_id"]
     assert second.json()["data"]["created"] is False
     await wait_refresh(app)
+
+
+async def test_jobs_current_fallback_ignores_legacy_analyze_rows(api):
+    from app.models import Job, JobStatus
+
+    app, client = api
+    async with app.state.sessionmaker() as s:
+        s.add(Job(status=JobStatus.done, kind="discover", progress={}))
+        await s.commit()
+        s.add(Job(
+            status=JobStatus.failed, kind="analyze", progress={},
+            error_message="Superseded by pipeline lanes",
+        ))
+        await s.commit()
+
+    resp = await client.get("/api/jobs/current")
+    assert resp.status_code == 200
+    body = resp.json()["data"]
+    assert body["kind"] == "discover"
+    assert body["status"] == "done"
+
+
+async def test_jobs_current_204_with_only_analyze_rows(api):
+    from app.models import Job, JobStatus
+
+    app, client = api
+    async with app.state.sessionmaker() as s:
+        s.add(Job(
+            status=JobStatus.failed, kind="analyze", progress={},
+            error_message="Superseded by pipeline lanes",
+        ))
+        await s.commit()
+
+    resp = await client.get("/api/jobs/current")
+    assert resp.status_code == 204

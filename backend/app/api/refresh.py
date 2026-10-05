@@ -44,9 +44,12 @@ async def app_settings():
 async def current_job(session: AsyncSession = Depends(get_session)):
     job = await get_running_job(session)
     if job is None:
-        # No in-progress job -> return the most recent one (so the frontend can show done/error status); none at all -> 204
+        # No in-progress job -> return the most recent discover/load_older one (legacy analyze rows are history; so the frontend can show done/error status); none at all -> 204
         job = (await session.execute(
-            select(Job).order_by(Job.id.desc()).limit(1)
+            select(Job)
+            .where(Job.kind.in_((JobKind.discover.value, JobKind.load_older.value)))
+            .order_by(Job.id.desc())
+            .limit(1)
         )).scalars().first()
     if job is None:
         return Response(status_code=204)
