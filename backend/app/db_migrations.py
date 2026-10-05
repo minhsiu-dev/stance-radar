@@ -9,6 +9,8 @@ import logging
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.pipeline.jobs import SUPERSEDED_MESSAGE
+
 logger = logging.getLogger(__name__)
 
 _STATEMENTS = (
@@ -43,12 +45,6 @@ _STATEMENTS = (
     "ALTER TABLE videos ADD COLUMN IF NOT EXISTS analysis_attempts"
     " INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE videos ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ",
-    # Backfill: a video carrying an error_message has been attempted at least once, so
-    # showing "0 attempts" would lie. Idempotent by construction — after this runs the
-    # touched rows hold 1, so a second pass matches nothing, and it can never clobber a
-    # real count. Videos that were never analyzed have error_message NULL and stay 0.
-    "UPDATE videos SET analysis_attempts = 1"
-    " WHERE analysis_attempts = 0 AND error_message IS NOT NULL",
     # Portfolio feature removed: drop its tables + enum (no-op on fresh DBs)
     "DROP TABLE IF EXISTS portfolio_transactions",
     "DROP TABLE IF EXISTS portfolio_cash",
@@ -56,6 +52,40 @@ _STATEMENTS = (
     # Worker split: a worker process claims a job row the api enqueued.
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ",
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS params JSONB",
+    # Two-lane pipeline (docs/superpowers/specs/2026-10-04-two-lane-pipeline-design.md)
+    "ALTER TYPE video_status ADD VALUE IF NOT EXISTS 'transcribed'",
+    "ALTER TABLE videos ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ",
+    "ALTER TABLE videos ADD COLUMN IF NOT EXISTS transcript_attempts"
+    " INTEGER NOT NULL DEFAULT 0",
+    # Attempt backfills, per stage. A failed video's stage is the one its transcript
+    # presence says it died in (the rule /api/videos/failures classifies by).
+    # 1) Legacy: a video carrying an error_message was attempted at least once.
+    #    Analysis side only -- see 3) for the transcript side.
+    "UPDATE videos SET analysis_attempts = 1"
+    " WHERE analysis_attempts = 0 AND error_message IS NOT NULL"
+    " AND transcript IS NOT NULL",
+    # 2) The old combined counter on a video with no stored transcript only ever
+    #    counted fetch attempts: move it over. After one pass those rows hold
+    #    analysis_attempts = 0, and the new code only counts LLM attempts on videos
+    #    that have a transcript, so a second pass matches nothing.
+    "UPDATE videos SET transcript_attempts = analysis_attempts, analysis_attempts = 0"
+    " WHERE transcript IS NULL AND analysis_attempts > 0 AND transcript_attempts = 0",
+    # 3) Legacy, transcript side of 1).
+    "UPDATE videos SET transcript_attempts = 1"
+    " WHERE transcript_attempts = 0 AND error_message IS NOT NULL"
+    " AND transcript IS NULL",
+    # `pending` now means "waiting for a transcript"; a pending video that already has
+    # one belongs to the analysis lane. The new code never creates such a row.
+    "UPDATE videos SET status = 'transcribed'"
+    " WHERE status = 'pending' AND transcript IS NOT NULL",
+    # create_all builds the table but never its rows
+    "INSERT INTO pipeline_lanes (lane) VALUES ('transcript'), ('analysis')"
+    " ON CONFLICT (lane) DO NOTHING",
+    # A running analyze job from before the deploy would hold the single job slot
+    # discover and load_older still share.
+    "UPDATE jobs SET status = 'failed', finished_at = now(),"
+    f" error_message = '{SUPERSEDED_MESSAGE}'"
+    " WHERE kind = 'analyze' AND status = 'running'",
 )
 
 

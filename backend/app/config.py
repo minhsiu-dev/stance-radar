@@ -11,7 +11,18 @@ class Settings(BaseSettings):
     claude_bin: str = "claude"
     claude_model: str = "claude-haiku-4-5"
     backfill_limit: int = 30
-    analysis_concurrency: int = 2
+    # Analysis lane slots: parallel `claude -p` calls in worker-analyze. All slots share
+    # one Claude account's quota, so more containers would not be any faster.
+    analysis_concurrency: int = 5
+    # Transcript lane slots: one at a time is gentle on YouTube's IP-block heuristics
+    transcript_concurrency: int = 1
+    # Consecutive failures before a lane pauses itself. Transcript failures are mostly
+    # IP blocks the client already retried through the proxy; analysis failures are
+    # mostly an exhausted Claude quota, so that lane stops on the first one.
+    transcript_pause_after_failures: int = 5
+    analysis_pause_after_failures: int = 1
+    # /api/pipeline reports a lane offline once its heartbeat is older than this
+    lane_offline_seconds: int = 30
     # Max seconds to wait for a single Claude CLI analysis call before killing it and retrying.
     # Long transcripts spend the whole call generating a large JSON output (a single turn, no
     # tool use); e.g. a ~15-min video measured ~196s, so 180s timed out. 300s covers that.
@@ -39,11 +50,13 @@ class Settings(BaseSettings):
     # Worker -> api base URL, used for ticker validation (the worker never imports yfinance)
     api_base_url: str = "http://api:8000"
 
-    def validate_required_keys(self, *, require_claude: bool = True) -> None:
+    def validate_required_keys(
+        self, *, require_claude: bool = True, require_youtube: bool = True
+    ) -> None:
         if self.use_fake_adapters:
             return
         problems: list[str] = []
-        if not self.youtube_api_key:
+        if require_youtube and not self.youtube_api_key:
             problems.append(
                 "Missing required environment variable: YOUTUBE_API_KEY. "
                 "Copy .env.example to .env and fill it in."
@@ -52,8 +65,8 @@ class Settings(BaseSettings):
             problems.append(
                 f"Claude Code CLI binary '{self.claude_bin}' not found in PATH. "
                 "Install it with `npm i -g @anthropic-ai/claude-code` and run "
-                "`claude login`; if running in docker, mount ~/.claude into the worker "
-                "container so the auth token is visible."
+                "`claude login`; if running in docker, mount ~/.claude into the "
+                "worker-analyze container so the auth token is visible."
             )
         if problems:
             raise RuntimeError("\n".join(problems))

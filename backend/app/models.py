@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     BigInteger, Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer,
-    String, Text,
+    String, Text, false,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -20,11 +20,21 @@ def utcnow() -> datetime:
 
 class VideoStatus(str, enum.Enum):
     discovered = "discovered"
+    # Selected for analysis, waiting for the transcript lane
     pending = "pending"
+    # Transcript stored, waiting for the analysis lane
+    transcribed = "transcribed"
     analyzed = "analyzed"
     no_transcript = "no_transcript"
     failed = "failed"
     skipped = "skipped"
+
+
+# Lane names double as pipeline_lanes primary keys, the /api/pipeline/lanes/{lane}
+# path segment, and the failure kinds /api/videos/failures groups by.
+TRANSCRIPT_LANE = "transcript"
+ANALYSIS_LANE = "analysis"
+LANES = (TRANSCRIPT_LANE, ANALYSIS_LANE)
 
 
 class JobKind(str, enum.Enum):
@@ -90,12 +100,20 @@ class Video(Base):
     # Whole-video TL;DR bullets from the LLM (English); NULL for videos analyzed before this field existed
     tldr: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # How many times analysis has been attempted (successes included). Drives the
-    # /failed page's "retry only videos tried fewer than N times" threshold.
+    # Attempts per stage. They drive the /failed threshold ("retry only videos tried
+    # fewer than N times"), so each stage keeps its own count: a video IP-blocked
+    # twelve times must not look like one that crashed the LLM twelve times.
+    transcript_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     analysis_attempts: Mapped[int] = mapped_column(
         Integer, default=0, server_default="0", nullable=False
     )
     last_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Set while a lane worker holds this video; NULL means nobody is working on it.
+    claimed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     # Tickers reported by the LLM but dropped because they failed ticker validation (lets the user know something was skipped)
@@ -164,6 +182,35 @@ class Holding(Base):
     ticker: Mapped[str] = mapped_column(String(10), primary_key=True)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PipelineLane(Base):
+    """One row per lane: its pause flag and health, written by the lane loop in the
+    worker containers and read by /api/pipeline."""
+
+    __tablename__ = "pipeline_lanes"
+
+    lane: Mapped[str] = mapped_column(String(16), primary_key=True)
+    paused: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    # "manual" (someone pressed pause) or "auto" (the failure streak hit the threshold)
+    pause_reason: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    paused_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    consecutive_failures: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    # The worker's real slot count, written at lane startup -- not the api's own setting
+    concurrency: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_error_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class Job(Base):

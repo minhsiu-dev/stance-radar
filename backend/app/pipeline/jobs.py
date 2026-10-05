@@ -3,6 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models import Job, JobStatus, utcnow
 
+# Closes analyze job rows left over from before the two-lane pipeline: analysis runs
+# in app/pipeline/lanes.py now, never as a job.
+SUPERSEDED_MESSAGE = "Superseded by pipeline lanes"
+
 
 async def get_running_job(session: AsyncSession) -> Job | None:
     result = await session.execute(select(Job).where(Job.status == JobStatus.running))

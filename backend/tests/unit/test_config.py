@@ -30,6 +30,13 @@ def test_require_claude_false_skips_claude_binary_check(monkeypatch):
     settings.validate_required_keys(require_claude=False)  # should not raise
 
 
+def test_require_youtube_false_skips_youtube_key_check(monkeypatch):
+    # worker-analyze passes require_youtube=False: it never calls YouTube.
+    monkeypatch.setattr("app.config.shutil.which", lambda _: "/usr/local/bin/claude")
+    settings = Settings(youtube_api_key="", _env_file=None)
+    settings.validate_required_keys(require_youtube=False)  # should not raise
+
+
 def test_fake_adapters_mode_skips_validation(monkeypatch):
     # Even with neither YouTube key nor claude binary, fake mode must pass.
     monkeypatch.setattr("app.config.shutil.which", lambda _: None)
@@ -44,7 +51,7 @@ def test_defaults():
     assert settings.claude_bin == "claude"
     assert settings.claude_model == "claude-haiku-4-5"
     assert settings.backfill_limit == 30
-    assert settings.analysis_concurrency == 2
+    assert settings.analysis_concurrency == 5
     assert settings.shorts_max_seconds == 240
     assert settings.use_fake_adapters is False
     assert settings.fetch_proxy_url == ""
@@ -55,3 +62,7 @@ def test_defaults():
     assert settings.admin_cookie_secure is False
     assert settings.worker_poll_seconds == 1.0
     assert settings.api_base_url == "http://api:8000"
+    assert settings.transcript_concurrency == 1
+    assert settings.transcript_pause_after_failures == 5
+    assert settings.analysis_pause_after_failures == 1
+    assert settings.lane_offline_seconds == 30
