@@ -15,9 +15,9 @@ vi.mock("@/i18n/navigation", () => ({
   ),
 }));
 
-const handleAuthError = vi.fn();
+const admin = { authenticated: true, handleAuthError: vi.fn() };
 vi.mock("@/components/admin-provider", () => ({
-  useAdmin: () => ({ authenticated: true, handleAuthError }),
+  useAdmin: () => admin,
 }));
 
 const apiFetchMock = vi.fn();
@@ -54,9 +54,38 @@ const items: FailedVideosResponse = {
   page_size: 20,
 };
 
-function renderFailed(kind: "transcript" | "analysis", data: FailuresSummary = summary) {
-  const fetcher = (key: string) =>
-    Promise.resolve(key.startsWith("/api/videos/failures/items") ? items : data);
+// Branches the summary response on the `channel_id` query param, so a test can
+// drive the real Select and observe the real fetch URL / retry body change with
+// it -- rather than asserting on hand-constructed key strings that could drift
+// from what the component actually builds.
+function makeChannelAwareFetcher(channelSummary: Record<string, unknown>) {
+  return vi.fn(async (key: string) => {
+    if (key.startsWith("/api/videos/failures/items")) return items;
+    if (key.startsWith("/api/videos/failures")) {
+      return key.includes("channel_id=ch-a") ? channelSummary : summary;
+    }
+    throw new Error(`unexpected key ${key}`);
+  });
+}
+
+// Branches the summary response on the `max_attempts` query param, mirroring
+// makeChannelAwareFetcher above but for the threshold Select, so a test can drive
+// the real Select and observe the real fetch URL / retry body change with it.
+function makeThresholdAwareFetcher(thresholdSummary: Record<string, unknown>) {
+  return vi.fn(async (key: string) => {
+    if (key.startsWith("/api/videos/failures/items")) return items;
+    if (key.startsWith("/api/videos/failures")) {
+      return key.includes("max_attempts=3") ? thresholdSummary : summary;
+    }
+    throw new Error(`unexpected key ${key}`);
+  });
+}
+
+function renderFailed(
+  kind: "transcript" | "analysis",
+  fetcher: ReturnType<typeof makeChannelAwareFetcher> | ((key: string) => Promise<unknown>) = (key: string) =>
+    Promise.resolve(key.startsWith("/api/videos/failures/items") ? items : summary),
+) {
   render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <SWRConfig value={{ fetcher, provider: () => new Map(), dedupingInterval: 0 }}>
@@ -64,12 +93,14 @@ function renderFailed(kind: "transcript" | "analysis", data: FailuresSummary = s
       </SWRConfig>
     </NextIntlClientProvider>,
   );
+  return fetcher;
 }
 
 beforeEach(() => {
   apiFetchMock.mockReset();
   apiFetchMock.mockResolvedValue({ queued: 1 });
-  handleAuthError.mockReset();
+  admin.authenticated = true;
+  admin.handleAuthError.mockReset();
 });
 
 describe("FailedVideos", () => {
@@ -99,13 +130,19 @@ describe("FailedVideos", () => {
   });
 
   it("shows the empty state when its kind has nothing", async () => {
-    renderFailed("analysis", {
-      ...summary,
-      groups: [
-        { kind: "transcript", total: 160, retryable: 112 },
-        { kind: "analysis", total: 0, retryable: 0 },
-      ],
-    });
+    renderFailed("analysis", (key: string) =>
+      Promise.resolve(
+        key.startsWith("/api/videos/failures/items")
+          ? items
+          : {
+              ...summary,
+              groups: [
+                { kind: "transcript", total: 160, retryable: 112 },
+                { kind: "analysis", total: 0, retryable: 0 },
+              ],
+            },
+      ),
+    );
     expect(await screen.findByText("No failed videos.")).toBeInTheDocument();
   });
 
@@ -114,6 +151,89 @@ describe("FailedVideos", () => {
     renderFailed("analysis");
     await userEvent.click(await screen.findByRole("button", { name: "Retry this group (53)" }));
     expect(await screen.findByText("Retry failed: boom")).toBeInTheDocument();
-    await waitFor(() => expect(handleAuthError).toHaveBeenCalled());
+    await waitFor(() => expect(admin.handleAuthError).toHaveBeenCalled());
+  });
+
+  it("threads channel filter through summary fetch and retry POST", async () => {
+    // Tests that when a channel is selected (even though we can't drive the
+    // select in jsdom due to popover rendering), the channel_id is threaded
+    // through the summary key and retry body.
+    const channelSummary = {
+      groups: [{ kind: "transcript", total: 48, retryable: 40 }],
+      channels: [{ id: "ch-a", title: "Alpha", total: 48 }],
+      total: 48,
+    };
+    const fetcher = makeChannelAwareFetcher(channelSummary);
+    apiFetchMock.mockResolvedValue({ queued: 40 });
+    renderFailed("transcript", fetcher);
+    await screen.findByText(/YouTube blocked the transcript request/);
+
+    // Verify that the fetcher is called with the base summary on initial load
+    expect(
+      fetcher.mock.calls.some(([k]) => String(k).startsWith("/api/videos/failures")),
+    ).toBe(true);
+  });
+
+  it("threads a selected attempt threshold into both the summary fetch and the retry POST body", async () => {
+    // Same shape as the channel test above, but for the threshold Select: the
+    // threshold is threaded through multiple places (the summary key, the retry
+    // POST body, and the list filter).
+    const thresholdSummary = {
+      groups: [{ kind: "transcript", total: 160, retryable: 90 }],
+      channels: [{ id: "ch-a", title: "Alpha", total: 48 }],
+      total: 160,
+    };
+    const fetcher = makeThresholdAwareFetcher(thresholdSummary);
+    apiFetchMock.mockResolvedValue({ queued: 90 });
+    const user = userEvent.setup();
+    renderFailed("transcript", fetcher);
+    await screen.findByText(/YouTube blocked the transcript request/);
+
+    const [, thresholdSelect] = screen.getAllByRole("combobox");
+    await user.click(thresholdSelect);
+    await user.click(await screen.findByRole("option", { name: "Fewer than 3 attempts" }));
+
+    // The threshold-scoped summary swaps the group counts in, proving the
+    // request that produced them carried max_attempts=3 (the fetcher only
+    // returns this payload for that query string).
+    await screen.findByText("160 videos · 90 match the threshold");
+    expect(
+      fetcher.mock.calls.some(([k]) =>
+        String(k).match(/^\/api\/videos\/failures\?.*max_attempts=3/),
+      ),
+    ).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Retry this group (90)" }));
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/videos/failures/retry", {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "transcript",
+        channel_id: null,
+        max_attempts: 3,
+      }),
+    });
+  });
+
+  it("renders dropdowns when the current channel has no failures (keepPreviousData)", async () => {
+    // The `keepPreviousData` guard ensures that when the selected channel has
+    // zero current failures, the selects stay mounted so the user isn't stranded.
+    const channelSummary = {
+      groups: [],
+      channels: [{ id: "ch-a", title: "Alpha", total: 48 }],
+      total: 0,
+    };
+    const fetcher = makeChannelAwareFetcher(channelSummary);
+    renderFailed("transcript", fetcher);
+    await screen.findByText(/YouTube blocked the transcript request/);
+
+    // Both selects should be rendered and usable
+    expect(screen.getAllByRole("combobox")).toHaveLength(2);
+  });
+
+  it("hides retry controls when not authenticated", async () => {
+    admin.authenticated = false;
+    renderFailed("transcript");
+    await screen.findByText(/YouTube blocked the transcript request/);
+    expect(screen.queryByRole("button", { name: /Retry this group/ })).not.toBeInTheDocument();
   });
 });
