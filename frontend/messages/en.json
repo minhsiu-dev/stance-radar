@@ -148,22 +148,7 @@
       "weekOf": "Week of {date}"
     }
   },
-  "Review": {
-    "title": "Pick videos to analyze",
-    "description": "Checked videos will be analyzed. Unchecked videos are skipped — you can recover them anytime from the channel page.",
-    "selectAll": "Select all",
-    "deselectAll": "Deselect all",
-    "confirm": "Analyze selected ({count})",
-    "confirming": "Submitting…",
-    "confirmFailed": "Failed to submit selection",
-    "empty": "No videos awaiting review.",
-    "loadError": "Failed to load: {message}",
-    "banner": "{count} videos awaiting review",
-    "bannerCta": "Review now"
-  },
   "Failed": {
-    "title": "Retry failed videos",
-    "link": "{count} failed",
     "empty": "No failed videos.",
     "loadError": "Failed to load: {message}",
     "allChannels": "All channels",

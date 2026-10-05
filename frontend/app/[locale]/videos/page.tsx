@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { AutoRefreshHint } from "@/components/auto-refresh-hint";
-import { FailedVideosLink } from "@/components/failed-videos-link";
 import { FeedSection } from "@/components/feed-section";
-import { PendingReviewBanner } from "@/components/pending-review-banner";
-import { RefreshButton } from "@/components/refresh-button";
+import { PipelineAttentionChip } from "@/components/pipeline-attention-chip";
 
 export async function generateMetadata({
   params,
@@ -23,13 +20,8 @@ export default async function VideosPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">{t("latest")}</h1>
-        <div className="flex items-center gap-3">
-          <AutoRefreshHint />
-          <FailedVideosLink />
-          <RefreshButton />
-        </div>
+        <PipelineAttentionChip />
       </div>
-      <PendingReviewBanner />
       <FeedSection />
     </div>
   );

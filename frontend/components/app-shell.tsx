@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { AdminNavLink } from "@/components/admin-nav-link";
 import { CommandSearch } from "@/components/command-search";
 import { SettingsMenu } from "@/components/settings-menu";
 import { SiteFooter } from "@/components/site-footer";
@@ -30,6 +31,11 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/channels" className="shrink-0 text-sm text-muted-foreground hover:text-foreground">
               {t("channels")}
             </Link>
+            <AdminNavLink
+              href="/pipeline"
+              label={t("pipeline")}
+              className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
+            />
           </div>
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <CommandSearch />

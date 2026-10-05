@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { ChannelManager } from "@/components/channel-manager";
 import { AddChannelDialog } from "@/components/add-channel-dialog";
-import { PendingReviewBanner } from "@/components/pending-review-banner";
+import { PipelineAttentionChip } from "@/components/pipeline-attention-chip";
 
 export async function generateMetadata({
   params,
@@ -23,7 +23,7 @@ export default async function ChannelsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
         <AddChannelDialog />
       </div>
-      <PendingReviewBanner />
+      <PipelineAttentionChip />
       <ChannelManager />
     </div>
   );

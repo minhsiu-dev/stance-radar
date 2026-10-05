@@ -61,9 +61,10 @@ docker compose up -d --build
 Open <http://localhost:3000> → **Channel Management** → paste one or more channel
 IDs (newline- or comma-separated). Stance Radar fetches each channel's most recent
 videos (`BACKFILL_LIMIT`, default 30) for you to pick from; only the videos you
-select get analyzed. Later, **Check for new videos** lists new uploads per channel
-for you to pick the same way; skipped videos can be re-analyzed from the channel
-page at any time.
+select get analyzed. Later, unlock admin mode (settings menu → Unlock) and open **Import**: new uploads
+wait in its inbox for you to pick, and the videos you send flow through transcript
+fetching and analysis on the same page, where you can watch, pause and retry each
+stage. Skipped videos can be re-analyzed from the channel page at any time.
 
 The worker-analyze container reads your local Claude Code credentials via a read-only mount
 (`~/.claude`), so you must `claude login` on the host first.

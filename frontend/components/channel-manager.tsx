@@ -119,7 +119,7 @@ export function ChannelManager() {
                     </Badge>
                   )}
                   {pending > 0 && (
-                    <Link href="/review">
+                    <Link href="/pipeline">
                       <Badge variant="secondary">
                         {t("list.pendingBadge", { count: pending })}
                       </Badge>

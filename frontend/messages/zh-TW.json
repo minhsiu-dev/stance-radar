@@ -148,22 +148,7 @@
       "weekOf": "{date} 那週"
     }
   },
-  "Review": {
-    "title": "挑選要分析的影片",
-    "description": "勾選的影片會進行分析;未勾選的會標為略過,之後隨時可在頻道頁反悔重新分析。",
-    "selectAll": "全選",
-    "deselectAll": "全不選",
-    "confirm": "開始分析 ({count})",
-    "confirming": "送出中…",
-    "confirmFailed": "送出失敗",
-    "empty": "沒有待挑選的影片。",
-    "loadError": "讀取失敗:{message}",
-    "banner": "{count} 部影片待挑選",
-    "bannerCta": "前往挑選"
-  },
   "Failed": {
-    "title": "失敗影片重試",
-    "link": "{count} 部失敗",
     "empty": "目前沒有失敗的影片。",
     "loadError": "讀取失敗:{message}",
     "allChannels": "全部頻道",
