@@ -164,6 +164,7 @@ const messages = {
       skip: "Skip",
       empty: "No videos.",
       actionFailed: "Action failed: {message}",
+      busy: "Videos being processed can't be changed",
       queued: "Queued for analysis",
       loadMore: "Load more",
       loaded: "{loaded} of {total} loaded",
@@ -598,6 +599,28 @@ describe("ChannelDetail", () => {
     });
     const [err] = handleAuthError.mock.calls[0];
     expect(err).toMatchObject({ status: 401 });
+  });
+});
+
+describe("ChannelDetail busy videos", () => {
+  it("shows the localized busy text when the backend answers 409", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: () =>
+          Promise.resolve({ success: false, error: "Videos are being processed: v1" }),
+      }),
+    );
+    renderDetail(pagedVideos(1));
+    fireEvent.click(await screen.findByRole("tab", { name: /Videos tab/i }));
+    expect(await screen.findByText("Video 1")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+
+    expect(await screen.findByText("Videos being processed can't be changed")).toBeInTheDocument();
+    expect(screen.queryByText(/Videos are being processed/)).not.toBeInTheDocument();
   });
 });
 

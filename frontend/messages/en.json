@@ -327,6 +327,7 @@
       "skip": "Skip",
       "empty": "No videos.",
       "actionFailed": "Action failed: {message}",
+      "busy": "Videos being processed can't be changed",
       "queued": "Queued for analysis",
       "loaded": "{loaded} of {total} loaded",
       "loadOlder": "Load older videos",

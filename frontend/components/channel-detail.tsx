@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { StanceBadge } from "@/components/stance-badge";
 import { useAdmin } from "@/components/admin-provider";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type {
   ChannelDetailDto,
@@ -241,9 +241,11 @@ export function ChannelDetail({ channelId }: { channelId: string }) {
     } catch (err) {
       handleAuthError(err);
       setMessage(
-        t("videos.actionFailed", {
-          message: err instanceof Error ? err.message : "?",
-        }),
+        err instanceof ApiError && err.status === 409
+          ? t("videos.busy")
+          : t("videos.actionFailed", {
+              message: err instanceof Error ? err.message : "?",
+            }),
       );
     } finally {
       setBusy(false);
