@@ -200,6 +200,36 @@ async def test_the_first_failure_pauses_the_analysis_lane(sessionmaker):
     assert sorted(left) == ["v0", "v1"]
 
 
+async def test_video_deleted_mid_analysis_before_failing_llm_returns_neutral(sessionmaker):
+    await seed(sessionmaker, "v")
+
+    class DeleteThenFailLLM:
+        async def analyze(self, *, video_id, video_title, transcript):
+            async with sessionmaker() as s:  # delete the video row
+                await s.execute(delete(Video).where(Video.id == video_id))
+                await s.commit()
+            raise AnalysisError("boom")
+
+    assert await make_stage(sessionmaker, DeleteThenFailLLM()).process("v") == NEUTRAL
+    assert await mention_count(sessionmaker, "v") == 0
+
+
+async def test_video_deleted_mid_analysis_before_failing_llm_does_not_pause_lane(sessionmaker):
+    await seed(sessionmaker, "v", claimed=False)
+
+    class DeleteThenFailLLM:
+        async def analyze(self, *, video_id, video_title, transcript):
+            async with sessionmaker() as s:  # delete the video row
+                await s.execute(delete(Video).where(Video.id == video_id))
+                await s.commit()
+            raise AnalysisError("boom")
+
+    assert await make_lane(sessionmaker, DeleteThenFailLLM()).drain() == 1
+    async with sessionmaker() as s:
+        row = await s.get(PipelineLane, ANALYSIS_LANE)
+    assert (row.paused, row.last_error) == (False, None)
+
+
 async def test_pausing_does_not_cancel_slots_already_in_flight(sessionmaker):
     await seed(sessionmaker, "slow", "fast", claimed=False)  # both claimed at once
 
