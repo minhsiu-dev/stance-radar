@@ -1,12 +1,22 @@
-"""Background job worker.
+"""Background workers. One image, two roles, two containers:
 
-Runs in its own container so the process that spawns `claude` never imports
-pandas/numpy/OpenBLAS/lxml. See docs/superpowers/specs/2026-08-11-analysis-worker-split-design.md
-for the incident that motivated the split.
+  python -m app.worker fetch    -> `worker`: discover / load_older jobs, the
+                                   auto-refresh scheduler and the transcript lane --
+                                   everything that talks to YouTube
+  python -m app.worker analyze  -> `worker-analyze`: the analysis lane, the only
+                                   process that spawns `claude`
+
+Neither role may import pandas/numpy/OpenBLAS/lxml/yfinance. See
+docs/superpowers/specs/2026-08-11-analysis-worker-split-design.md for the SIGSEGV
+latch that motivated the first split, and 2026-10-04-two-lane-pipeline-design.md for
+why the analysis lane now gets a process of its own: when it exits for a restart,
+transcript fetching keeps going.
 """
 import asyncio
 import logging
 import sys
+from collections.abc import Coroutine, Sequence
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -17,39 +27,46 @@ from app.config import Settings, get_settings
 from app.db import create_engine_and_sessionmaker
 from app.market.client import FakeMarketClient
 from app.models import JobKind
+from app.net.proxy import ProxyRotator
 from app.pipeline import jobs
+from app.pipeline.lane_factory import build_analysis_lane, build_transcript_lane
 from app.pipeline.refresh import RefreshDeps, RefreshRunner
 from app.pipeline.scheduler import AutoRefreshScheduler
 from app.transcripts.client import FakeTranscriptClient, YouTubeTranscriptApiClient
-from app.net.proxy import ProxyRotator
 from app.youtube.client import DataAPIYouTubeClient, FakeYouTubeClient
 
 logger = logging.getLogger(__name__)
 
+FETCH = "fetch"
+ANALYZE = "analyze"
+ROLES = (FETCH, ANALYZE)
+USAGE = "usage: python -m app.worker {fetch|analyze}"
 
-def build_worker_adapters(settings: Settings) -> dict:
-    """Like build_adapters() in main.py, but with NO market client.
 
-    Ticker validation goes over HTTP to the api instead, which is what keeps yfinance
-    (and therefore pandas/numpy/OpenBLAS) out of this process.
-    """
-    if settings.use_fake_adapters:
+def build_worker_adapters(settings: Settings, role: str) -> dict:
+    """Like build_adapters() in main.py, but per role and with NO market client:
+    ticker validation goes over HTTP to the api, which keeps yfinance (and therefore
+    pandas/numpy/OpenBLAS) out of both worker processes."""
+    if role == FETCH:
+        if settings.use_fake_adapters:
+            return {"youtube": FakeYouTubeClient(), "transcripts": FakeTranscriptClient()}
+        rotator = ProxyRotator(settings.gluetun_control_url)
         return {
-            "youtube": FakeYouTubeClient(),
-            "transcripts": FakeTranscriptClient(),
-            "llm": FakeLLMClient(),
-            "ticker_validator": TickerValidator(FakeMarketClient()),
+            "youtube": DataAPIYouTubeClient(api_key=settings.youtube_api_key),
+            "transcripts": YouTubeTranscriptApiClient(
+                proxy_url=settings.fetch_proxy_url, rotator=rotator
+            ),
         }
-    rotator = ProxyRotator(settings.gluetun_control_url)
+    if settings.use_fake_adapters:
+        return {"llm": FakeLLMClient(), "ticker_validator": TickerValidator(FakeMarketClient())}
     return {
-        "youtube": DataAPIYouTubeClient(api_key=settings.youtube_api_key),
-        "transcripts": YouTubeTranscriptApiClient(
-            proxy_url=settings.fetch_proxy_url, rotator=rotator
-        ),
         "llm": ClaudeCLIClient(
             binary=settings.claude_bin,
             model=settings.claude_model,
             timeout_seconds=settings.claude_timeout_seconds,
+            # No in-process retry: an analysis failure is almost always an exhausted
+            # quota, and the lane pauses on the first one instead.
+            max_retries=1,
         ),
         "ticker_validator": HttpTickerValidator(settings.api_base_url),
     }
@@ -82,86 +99,84 @@ class JobWorker:
                 await asyncio.sleep(self._poll_seconds)
 
 
-async def _run_until_failure(worker: JobWorker, scheduler: AutoRefreshScheduler) -> None:
-    """Run the poll loop, racing it against the scheduler's own background task.
-
-    scheduler.start() (called by main() just before this) drives its discover/analyze
-    cycles inside its own asyncio.Task, completely separate from worker.run_forever()'s
-    task. Found in review: an AnalysisInfrastructureError raised inside that task (now
-    re-raised out of AutoRefreshScheduler._loop() instead of logged-and-swallowed -- see
-    the except clause added to scheduler.py) still does not reach main() on its own,
-    because asyncio never propagates a sibling task's exception into a coroutine that
-    isn't awaiting it; nothing awaited scheduler's task at all before this existed.
-    scheduler.wait() owns the await (and the None-when-disabled check) instead of this
-    function reaching into the task the scheduler privately tracks -- when auto refresh
-    is disabled (the default) it returns immediately and only the poll loop is watched,
-    same as before this existed.
-    """
-    tasks = [
-        asyncio.create_task(worker.run_forever()),
-        asyncio.create_task(scheduler.wait()),
-    ]
+async def _run_until_failure(loops: Sequence[Coroutine[Any, Any, None]]) -> None:
+    """Race the role's long-running loops; the first one to raise takes the rest down
+    with it. Each runs in its own task, and asyncio never propagates a sibling task's
+    exception on its own -- without this a crashed loop would leave the process
+    running headless instead of exiting for a restart."""
+    tasks = [asyncio.create_task(loop) for loop in loops]
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
-    if pending:
-        # Mirrors refresh.py's own sibling-cancellation idiom for an infrastructure
-        # abort: don't leave the other loop running headless once we're on our way out.
-        for task in pending:
-            task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True)
+    for task in pending:
+        task.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)
     for task in done:
-        task.result()  # re-raise whichever of the two actually failed
+        task.result()  # re-raise whichever loop actually failed
 
 
-async def main() -> int:
+async def _run_fetch(
+    settings: Settings, sessionmaker: async_sessionmaker[AsyncSession]
+) -> None:
+    # Only jobs a previous worker was actually holding; enqueued-but-unclaimed work waits.
+    cleaned = await jobs.fail_orphan_jobs(sessionmaker)
+    if cleaned:
+        logger.warning("cleaned up %s orphaned job(s) from a previous run", cleaned)
+    adapters = build_worker_adapters(settings, FETCH)
+    runner = RefreshRunner(RefreshDeps(
+        sessionmaker=sessionmaker, youtube=adapters["youtube"], settings=settings,
+    ))
+    scheduler = AutoRefreshScheduler(
+        runner=runner, interval_minutes=settings.auto_refresh_minutes
+    )
+    worker = JobWorker(runner, sessionmaker, settings.worker_poll_seconds)
+    lane = build_transcript_lane(sessionmaker, adapters["transcripts"], settings)
+    scheduler.start()
+    try:
+        logger.info("fetch worker ready; polling every %ss", settings.worker_poll_seconds)
+        await _run_until_failure([worker.run_forever(), scheduler.wait(), lane.run_forever()])
+    finally:
+        await scheduler.stop()
+
+
+async def _run_analyze(
+    settings: Settings, sessionmaker: async_sessionmaker[AsyncSession]
+) -> None:
+    adapters = build_worker_adapters(settings, ANALYZE)
+    lane = build_analysis_lane(
+        sessionmaker, adapters["llm"], adapters["ticker_validator"], settings
+    )
+    logger.info("analysis worker ready: %s slot(s)", settings.analysis_concurrency)
+    await _run_until_failure([lane.run_forever()])
+
+
+def parse_role(argv: Sequence[str]) -> str | None:
+    return argv[0] if len(argv) == 1 and argv[0] in ROLES else None
+
+
+async def main(argv: Sequence[str] | None = None) -> int:
+    role = parse_role(sys.argv[1:] if argv is None else argv)
+    if role is None:
+        print(USAGE, file=sys.stderr)
+        return 2
     logging.basicConfig(level=logging.INFO)
     settings = get_settings()
-    settings.validate_required_keys()
+    if role == FETCH:
+        settings.validate_required_keys(require_claude=False)
+    else:
+        settings.validate_required_keys(require_youtube=False)
     engine, sessionmaker = create_engine_and_sessionmaker(settings.database_url)
-    scheduler: AutoRefreshScheduler | None = None
     try:
-        # Only jobs a previous worker was actually holding; enqueued-but-unclaimed work waits.
-        cleaned = await jobs.fail_orphan_jobs(sessionmaker)
-        if cleaned:
-            logger.warning("cleaned up %s orphaned job(s) from a previous run", cleaned)
-        adapters = build_worker_adapters(settings)
-        runner = RefreshRunner(RefreshDeps(
-            sessionmaker=sessionmaker,
-            youtube=adapters["youtube"],
-            settings=settings,
-        ))
-        scheduler = AutoRefreshScheduler(
-            runner=runner,
-            interval_minutes=settings.auto_refresh_minutes,
-        )
-        scheduler.start()
-        worker = JobWorker(runner, sessionmaker, settings.worker_poll_seconds)
-        logger.info("worker ready; polling every %ss", settings.worker_poll_seconds)
-        await _run_until_failure(worker, scheduler)
+        if role == FETCH:
+            await _run_fetch(settings, sessionmaker)
+        else:
+            await _run_analyze(settings, sessionmaker)
     except AnalysisInfrastructureError as exc:
         # Exit non-zero so Docker's restart policy gives us a clean address space.
         logger.error("exiting for a restart: %s", exc)
         return 1
     finally:
-        if scheduler is not None:
-            try:
-                await scheduler.stop()
-            except AnalysisInfrastructureError:
-                # scheduler._task (already recorded and turned into return 1 above, or
-                # already cancelled by _run_until_failure) is done either way; stop()'s
-                # cancel() on a done task is a no-op and its await just re-raises
-                # whatever that task finished with. Without this it would silently
-                # replace the clean `return 1` above with an uncaught crash instead --
-                # same non-zero exit either way, but let's not leave that to chance.
-                pass
         await engine.dispose()
-    # Unreachable today: _run_until_failure races two infinite loops (run_forever's
-    # `while True` and the scheduler's own loop) and only ever returns by raising, which
-    # the `except` above catches. But this function is annotated -> int specifically so
-    # `sys.exit(asyncio.run(main()))` below always exits non-zero on the way this process
-    # is meant to end; falling off the end would silently return None -> exit code 0,
-    # which is the wrong default for a process whose entire contract is "exit non-zero
-    # so Docker can restart us clean." If the loop above ever legitimately returns
-    # instead of raising, that is itself unexpected, so still exit non-zero.
+    # The loops only ever end by raising. Falling through is unexpected too, and this
+    # process's whole contract is "exit non-zero so Docker restarts us".
     return 1
 
 

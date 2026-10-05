@@ -48,9 +48,35 @@ services:
 
   worker:
     build: ./backend
-    command: python -m app.worker
-    # The whole point of the split: if this process ever degrades to where it can't spawn
-    # children, it exits and Docker hands us a clean one.
+    command: python -m app.worker fetch
+    # Discover / load_older jobs, the auto-refresh scheduler and the transcript lane:
+    # everything that talks to YouTube. docker-compose.vpn*.yml route this service's
+    # fetches through the proxy, so it keeps its original name.
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://stance:stance@db:5432/stance_radar
+      USE_FAKE_ADAPTERS: ${USE_FAKE_ADAPTERS:-false}
+      API_BASE_URL: http://api:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        # Not service_started: that only waits for the api container to start, not for its
+        # lifespan (create_all + run_startup_migrations) to finish. On a cold stack the
+        # worker's first fail_orphan_jobs would hit an undefined `jobs` table otherwise.
+        # api's healthcheck above only turns healthy once lifespan.startup has completed,
+        # so this is the actual "schema exists" gate.
+        condition: service_healthy
+
+  worker-analyze:
+    build: ./backend
+    command: python -m app.worker analyze
+    # The analysis lane: the only process that spawns `claude`. When a child dies by
+    # signal it exits non-zero and Docker hands it a clean address space -- without
+    # taking transcript fetching down with it.
     restart: unless-stopped
     env_file:
       - path: .env
@@ -66,11 +92,8 @@ services:
       db:
         condition: service_healthy
       api:
-        # Not service_started: that only waits for the api container to start, not for its
-        # lifespan (create_all + run_startup_migrations) to finish. On a cold stack the
-        # worker's first fail_orphan_jobs would hit an undefined `jobs` table otherwise.
-        # api's healthcheck above only turns healthy once lifespan.startup has completed,
-        # so this is the actual "schema exists" gate.
+        # Same schema gate as `worker`; the analysis lane also needs the api for
+        # ticker validation (HttpTickerValidator).
         condition: service_healthy
 
   frontend:

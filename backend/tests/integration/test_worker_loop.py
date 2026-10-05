@@ -1,5 +1,6 @@
-"""The worker claims enqueued jobs and runs them; a signal crash ends the process so
-Docker can restart it with a clean address space."""
+"""The workers: `fetch` claims enqueued jobs and runs the transcript lane; `analyze`
+runs the analysis lane, and a signal crash there ends the process so Docker can
+restart it with a clean address space."""
 import asyncio
 import subprocess
 import sys
@@ -8,13 +9,20 @@ import pytest
 from sqlalchemy import select
 
 import app.worker as worker_module
+from app.analysis.llm import AnalysisInfrastructureError
+from app.analysis.tickers import TickerValidator
 from app.config import Settings, get_settings
-from app.models import Channel, Job, JobStatus, Video, VideoStatus, utcnow
+from app.market.client import FakeMarketClient
+from app.models import (
+    ANALYSIS_LANE, Channel, Job, JobStatus, PipelineLane, Video, VideoStatus, utcnow,
+)
 from app.pipeline import jobs
 from app.pipeline.refresh import RefreshDeps, RefreshRunner
 from app.worker import JobWorker
 from app.youtube.client import FakeYouTubeClient
 from tests.conftest import TEST_DATABASE_URL
+
+STORED = {"language": "en", "segments": [{"start": 0.0, "text": "hi"}]}
 
 
 def _runner(sessionmaker) -> RefreshRunner:
@@ -117,7 +125,7 @@ async def test_main_cleans_up_orphaned_jobs_before_polling(sessionmaker, monkeyp
 
     try:
         with pytest.raises(StopTheTest):
-            await worker_module.main()
+            await worker_module.main([worker_module.FETCH])
 
         async with sessionmaker() as session:
             row = await session.get(Job, orphan_id)
@@ -126,30 +134,29 @@ async def test_main_cleans_up_orphaned_jobs_before_polling(sessionmaker, monkeyp
         get_settings.cache_clear()
 
 
-def test_build_worker_adapters_real_path_never_imports_yfinance():
-    """The whole point of this module: it must stay safe to import/construct in the
-    process that spawns `claude`. Runs in a fresh subprocess rather than asserting
-    against this test process's own sys.modules: other tests in this same suite (e.g.
-    tests/unit/test_market_client.py) legitimately `import yfinance` for real, so an
-    in-process assertion here would pass or fail depending on test collection order
-    rather than on what build_worker_adapters() itself actually does.
+@pytest.mark.parametrize(
+    "role, expected",
+    [("fetch", {"youtube", "transcripts"}), ("analyze", {"llm", "ticker_validator"})],
+)
+def test_build_worker_adapters_real_path_never_imports_yfinance(role, expected):
+    """Both roles must stay safe to import/construct in a process that must never load
+    pandas/numpy/OpenBLAS. Runs in a fresh subprocess rather than asserting against
+    this test process's own sys.modules: other tests in this suite legitimately import
+    yfinance, so an in-process check would depend on collection order.
 
-    The ticker_validator type check closes a hole found in review: fetch_proxy_url=""
-    here means YFinanceMarketClient.__init__ (which only imports yfinance `if
-    proxy_url:`) wouldn't actually import it either, so copying main.py's
-    build_adapters() to wire TickerValidator(YFinanceMarketClient()) in by mistake would
-    still pass the 'market' and heavy-imports assertions below undetected -- only
-    asserting the adapter is actually HttpTickerValidator catches that regression."""
+    The HttpTickerValidator check closes a hole found in review: fetch_proxy_url=""
+    means YFinanceMarketClient wouldn't import yfinance either, so wiring
+    TickerValidator(YFinanceMarketClient()) in by mistake would otherwise go unnoticed."""
     script = (
         "import sys\n"
         "from app.config import Settings\n"
         "from app.worker import build_worker_adapters\n"
         "settings = Settings(youtube_api_key='x', use_fake_adapters=False, _env_file=None)\n"
-        "adapters = build_worker_adapters(settings)\n"
-        "assert 'market' not in adapters, "
-        "'build_worker_adapters must not build a market client'\n"
-        "assert type(adapters['ticker_validator']).__name__ == 'HttpTickerValidator', "
-        "type(adapters['ticker_validator']).__name__\n"
+        f"adapters = build_worker_adapters(settings, {role!r})\n"
+        f"assert set(adapters) == {expected!r}, set(adapters)\n"
+        "if 'ticker_validator' in adapters:\n"
+        "    name = type(adapters['ticker_validator']).__name__\n"
+        "    assert name == 'HttpTickerValidator', name\n"
         "heavy = [m for m in sys.modules "
         "if m.split('.')[0] in ('yfinance', 'pandas', 'numpy', 'scipy', 'lxml')]\n"
         "assert not heavy, heavy\n"
@@ -158,3 +165,83 @@ def test_build_worker_adapters_real_path_never_imports_yfinance():
         [sys.executable, "-c", script], capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_parse_role_accepts_exactly_one_known_role():
+    assert worker_module.parse_role(["fetch"]) == "fetch"
+    assert worker_module.parse_role(["analyze"]) == "analyze"
+    for argv in ([], ["bogus"], ["fetch", "analyze"]):
+        assert worker_module.parse_role(argv) is None
+
+
+async def test_main_without_a_role_prints_usage_and_exits_2(capsys):
+    assert await worker_module.main([]) == 2
+    assert "usage" in capsys.readouterr().err
+
+
+def _fake_env(monkeypatch) -> None:
+    monkeypatch.setenv("USE_FAKE_ADAPTERS", "true")
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("WORKER_POLL_SECONDS", "0.01")
+    get_settings.cache_clear()
+
+
+async def test_fetch_role_runs_the_transcript_lane(sessionmaker, monkeypatch):
+    _fake_env(monkeypatch)
+    async with sessionmaker() as s:
+        s.add(Channel(id="UC_fake_alpha", title="a", thumbnail_url="", uploads_playlist_id="UU1"))
+        s.add(Video(
+            id="alpha_vid_3", channel_id="UC_fake_alpha", title="t", published_at=utcnow(),
+            thumbnail_url="", status=VideoStatus.pending,
+        ))
+        await s.commit()
+
+    class StopTheTest(Exception):
+        pass
+
+    async def stop_once_transcribed(self) -> None:
+        for _ in range(250):
+            async with sessionmaker() as s:
+                if (await s.get(Video, "alpha_vid_3")).status is VideoStatus.transcribed:
+                    raise StopTheTest()
+            await asyncio.sleep(0.02)
+        raise AssertionError("the transcript lane never picked the video up")
+
+    monkeypatch.setattr(worker_module.JobWorker, "run_forever", stop_once_transcribed)
+    try:
+        with pytest.raises(StopTheTest):
+            await worker_module.main([worker_module.FETCH])
+    finally:
+        get_settings.cache_clear()
+
+
+async def test_analyze_role_exits_nonzero_when_claude_dies_by_signal(sessionmaker, monkeypatch):
+    _fake_env(monkeypatch)
+    async with sessionmaker() as s:
+        s.add(Channel(id="UC1", title="c", thumbnail_url="", uploads_playlist_id="UU1"))
+        s.add(Video(
+            id="v1", channel_id="UC1", title="t", published_at=utcnow(),
+            thumbnail_url="", status=VideoStatus.transcribed, transcript=STORED,
+        ))
+        await s.commit()
+
+    class CrashingLLM:
+        async def analyze(self, *, video_id, video_title, transcript):
+            raise AnalysisInfrastructureError("claude was killed by signal 11")
+
+    def crashing_adapters(settings, role):
+        assert role == worker_module.ANALYZE
+        return {"llm": CrashingLLM(), "ticker_validator": TickerValidator(FakeMarketClient())}
+
+    monkeypatch.setattr(worker_module, "build_worker_adapters", crashing_adapters)
+    try:
+        result = await asyncio.wait_for(worker_module.main([worker_module.ANALYZE]), timeout=10)
+    finally:
+        get_settings.cache_clear()
+
+    assert result == 1
+    async with sessionmaker() as s:
+        video = await s.get(Video, "v1")
+        row = await s.get(PipelineLane, ANALYSIS_LANE)
+    assert (video.status, video.claimed_at) == (VideoStatus.transcribed, None)
+    assert "signal" in row.last_error

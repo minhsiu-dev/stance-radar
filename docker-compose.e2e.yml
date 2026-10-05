@@ -5,3 +5,6 @@ services:
   worker:
     environment:
       USE_FAKE_ADAPTERS: "true"
+  worker-analyze:
+    environment:
+      USE_FAKE_ADAPTERS: "true"
