@@ -175,8 +175,6 @@
     "counts": "{total} videos · {retryable} match the threshold",
     "retryGroup": "Retry this group ({count})",
     "retryOne": "Retry",
-    "expand": "Show list",
-    "collapse": "Hide list",
     "loadMore": "Load more",
     "attempts": "{count} attempts · last {date}",
     "attemptsNever": "{count} attempts · not retried yet",
@@ -184,19 +182,11 @@
     "retryFailed": "Retry failed: {message}",
     "kinds": {
       "transcript": {
-        "title": "Transcript unavailable",
         "description": "YouTube blocked the transcript request (rate limit / IP block). Retrying hits YouTube again — if the proxy is still blocked, most of this round will fail again."
       },
       "analysis": {
-        "title": "Analysis crashed",
         "description": "The transcript is already stored and Claude crashed analysing it. Retrying re-runs fully offline without touching YouTube, and usually succeeds."
       }
-    },
-    "job": {
-      "running": "Analysing {done} / {total}",
-      "partial": "Last retry: {failed} of {total} failed again",
-      "failed": "Last retry failed entirely: {message}",
-      "queued": "Queued into the job already running"
     }
   },
   "Pipeline": {

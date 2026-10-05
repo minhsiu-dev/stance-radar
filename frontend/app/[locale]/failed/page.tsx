@@ -18,7 +18,7 @@ export default async function FailedPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-      <FailedVideos />
+      <FailedVideos kind="transcript" />
     </div>
   );
 }
