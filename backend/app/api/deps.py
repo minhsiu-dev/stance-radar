@@ -1,7 +1,7 @@
 from typing import AsyncIterator
 
 from fastapi import Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.market.client import MarketClient
 from app.market.store import PriceStore
@@ -12,6 +12,10 @@ from app.youtube.client import YouTubeClient
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
     async with request.app.state.sessionmaker() as session:
         yield session
+
+
+def get_sessionmaker(request: Request) -> async_sessionmaker[AsyncSession]:
+    return request.app.state.sessionmaker
 
 
 def get_market(request: Request) -> MarketClient:

@@ -58,8 +58,8 @@ async def lifespan(application: FastAPI):
 
 def create_app() -> FastAPI:
     from app.api import (
-        admin, channels, feed, holdings, insights, internal, markets, refresh,
-        stocks, videos,
+        admin, channels, feed, holdings, insights, internal, markets, pipeline,
+        refresh, stocks, videos,
     )
 
     app = FastAPI(title="Stance Radar API", lifespan=lifespan)
@@ -72,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(videos.router)
     app.include_router(insights.router)
     app.include_router(markets.router)
+    app.include_router(pipeline.router)
     app.include_router(internal.router)
 
     from fastapi.responses import JSONResponse
