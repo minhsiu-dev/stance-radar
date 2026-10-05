@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
 import { StanceBadge } from "@/components/stance-badge";
 import { PipelineVideoRow } from "@/components/pipeline/pipeline-video-row";
@@ -46,7 +47,9 @@ export function DoneColumn({
                   <Badge variant="outline">{t("noTranscript")}</Badge>
                 ) : (
                   v.stances.map((s) => (
-                    <StanceBadge key={s.ticker} stance={s.stance} ticker={s.ticker} />
+                    <Link key={s.ticker} href={`/videos/${v.id}`}>
+                      <StanceBadge stance={s.stance} ticker={s.ticker} />
+                    </Link>
                   ))
                 )}
               </div>

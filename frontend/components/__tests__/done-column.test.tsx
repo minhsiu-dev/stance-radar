@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
 import { DoneColumn } from "@/components/pipeline/done-column";
@@ -43,6 +43,15 @@ describe("DoneColumn", () => {
     expect(analyzed).toHaveTextContent("2m0s ago");
     expect(screen.getByTestId("pipeline-video-n")).toHaveTextContent("No transcript");
     expect(screen.getByText("1 more")).toBeInTheDocument();
+  });
+
+  it("links each ticker chip to the video page", () => {
+    renderDone({
+      total: 1,
+      items: [doneVideo("a", { stances: [{ ticker: "NVDA", stance: "buy" }] })],
+    });
+    const chip = within(screen.getByTestId("pipeline-video-a")).getByRole("link", { name: /NVDA/ });
+    expect(chip).toHaveAttribute("href", "/videos/a");
   });
 
   it("has an empty state", () => {
