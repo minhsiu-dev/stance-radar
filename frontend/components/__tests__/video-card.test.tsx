@@ -53,4 +53,12 @@ describe("VideoCard", () => {
     expect(tag.getAttribute("href")).toContain("video=vid9");
     expect(tag.getAttribute("href")).not.toContain("/videos/vid9");
   });
+
+  it("tags a video waiting in either pipeline lane as pending", () => {
+    for (const status of ["pending", "transcribed"] as const) {
+      const { unmount } = wrap({ ...ITEM, status, stances: [] });
+      expect(screen.getByText("pending")).toBeInTheDocument();
+      unmount();
+    }
+  });
 });

@@ -41,7 +41,7 @@ import type {
 
 const PAGE_SIZE = 50;
 const STAT_ORDER: VideoStatus[] = [
-  "analyzed", "discovered", "pending", "failed", "no_transcript", "skipped",
+  "analyzed", "discovered", "pending", "transcribed", "failed", "no_transcript", "skipped",
 ];
 // The three core cells are always shown; the rest only appear when >0
 const ALWAYS_SHOW: ReadonlySet<VideoStatus> = new Set([
@@ -62,6 +62,7 @@ const BADGE_VARIANT: Record<
   analyzed: "outline",
   discovered: "secondary",
   pending: "secondary",
+  transcribed: "secondary",
   failed: "destructive",
   no_transcript: "outline",
   skipped: "outline",

@@ -9,6 +9,7 @@
     "trending": "熱門個股",
     "videos": "最新影片",
     "channels": "頻道管理",
+    "pipeline": "影片匯入",
     "openMenu": "開啟選單"
   },
   "Trending": {
@@ -198,6 +199,65 @@
       "queued": "已排入目前進行中的工作"
     }
   },
+  "Pipeline": {
+    "title": "影片匯入",
+    "loadError": "讀取失敗：{message}",
+    "locked": {
+      "title": "需要解鎖",
+      "body": "影片匯入只有管理員可以使用。",
+      "cta": "解鎖"
+    },
+    "inbox": {
+      "title": "① 待決定",
+      "count": "{count} 部",
+      "description": "勾選的影片會送去抓字幕與分析；沒勾的會標為略過，之後隨時可以在頻道頁反悔。",
+      "empty": "沒有待決定的影片",
+      "expand": "展開",
+      "collapse": "收合",
+      "selectAll": "全選",
+      "deselectAll": "全不選",
+      "submit": "送出 {count} 部 · 其餘略過",
+      "submitting": "送出中…",
+      "submitFailed": "送出失敗：{message}"
+    },
+    "lanes": { "transcript": "② 抓字幕", "analysis": "③ 分析" },
+    "laneShort": { "transcript": "抓字幕", "analysis": "分析" },
+    "status": {
+      "running": "運作中 · {slots} slots",
+      "paused": "已暫停",
+      "offline": "離線",
+      "pause": "暫停",
+      "resume": "恢復",
+      "autoPaused": "出錯自動暫停",
+      "offlineSince": "worker 已 {minutes} 分鐘沒有回應，排隊中的影片會卡住",
+      "offlineNever": "worker 尚未回報，排隊中的影片會卡住",
+      "lastError": "上次錯誤：{message}",
+      "actionFailed": "操作失敗：{message}"
+    },
+    "column": {
+      "processing": "處理中",
+      "queued": "排隊",
+      "more": "還有 {count} 部",
+      "idle": "閒置",
+      "failed": "失敗 {count}"
+    },
+    "done": {
+      "title": "剛完成",
+      "window": "最近 24 小時",
+      "empty": "最近 24 小時沒有完成的影片",
+      "noTranscript": "無字幕",
+      "more": "還有 {count} 部",
+      "ago": "{time} 前"
+    },
+    "drawer": { "transcript": "抓字幕失敗", "analysis": "分析失敗" },
+    "chip": {
+      "label": "匯入",
+      "pending": "{count} 待決定",
+      "failed": "{count} 失敗",
+      "paused": "{lane}已暫停",
+      "offline": "{lane}離線"
+    }
+  },
   "ChannelDetail": {
     "loadError": "讀取失敗:{message}",
     "added": "加入時間:{date}",
@@ -212,7 +272,8 @@
       "skipped": "已略過",
       "failed": "分析失敗",
       "no_transcript": "無字幕",
-      "pending": "排隊中"
+      "pending": "待抓字幕",
+      "transcribed": "待分析"
     },
     "trackRecord": {
       "title": "各檔推薦戰績",
@@ -299,7 +360,8 @@
       "loadOlderBusy": "有其他更新進行中,稍後再試",
       "status": {
         "discovered": "待挑選",
-        "pending": "排隊中",
+        "pending": "待抓字幕",
+        "transcribed": "待分析",
         "analyzed": "已分析",
         "no_transcript": "無字幕",
         "failed": "分析失敗",

@@ -74,7 +74,7 @@ const itemsPage = {
       published_at: "2026-06-01T00:00:00Z",
       duration_seconds: 600,
       error_message: "claude exited -11",
-      analysis_attempts: 2,
+      attempts: 2,
       last_attempt_at: null,
     },
   ],

@@ -3,7 +3,8 @@ export type ConfidenceValue = "high" | "medium" | "low";
 export type TimeHorizonValue = "short" | "long" | "unspecified";
 export type VideoStatus =
   | "discovered"
-  | "pending"
+  | "pending" // waiting for the transcript lane
+  | "transcribed" // transcript stored, waiting for the analysis lane
   | "analyzed"
   | "no_transcript"
   | "failed"
@@ -492,6 +493,8 @@ export interface VideoDetailResponse {
     duration_seconds: number | null;
     status: VideoStatus;
     tldr?: string[] | null;
+    /** True while a pipeline lane is working on this video. */
+    claimed?: boolean;
   };
   groups: VideoDetailGroup[];
 }
@@ -523,7 +526,9 @@ export interface ChannelPerformanceDto {
 
 /** Derived from whether a transcript is stored: "transcript" died fetching it
  *  from YouTube, "analysis" died in the LLM with the transcript already saved. */
-export type FailureKind = "transcript" | "analysis";
+/** The two pipeline lanes; also the failure kinds /api/videos/failures groups by. */
+export type LaneName = "transcript" | "analysis";
+export type FailureKind = LaneName;
 
 export interface FailureGroup {
   kind: FailureKind;
@@ -546,7 +551,8 @@ export interface FailedVideoItem {
   published_at: string;
   duration_seconds: number | null;
   error_message: string | null;
-  analysis_attempts: number;
+  /** Attempts at the stage the video died in (transcript or analysis). */
+  attempts: number;
   last_attempt_at: string | null;
 }
 
@@ -555,4 +561,49 @@ export interface FailedVideosResponse {
   total: number;
   page: number;
   page_size: number;
+}
+
+export interface PipelineLane {
+  paused: boolean;
+  pause_reason: "manual" | "auto" | null;
+  /** Heartbeat within the last 30s: the lane's worker container is alive. */
+  online: boolean;
+  concurrency: number | null;
+  consecutive_failures: number;
+  last_error: string | null;
+  last_error_at: string | null;
+  last_heartbeat_at: string | null;
+}
+
+export interface PipelineVideo {
+  id: string;
+  title: string;
+  thumbnail_url: string;
+  channel: { id: string; title: string };
+  published_at: string;
+  duration_seconds: number | null;
+  claimed_at: string | null;
+}
+
+export interface PipelineDoneVideo extends PipelineVideo {
+  status: "analyzed" | "no_transcript";
+  finished_at: string;
+  stances: { ticker: string; stance: StanceValue }[];
+}
+
+export interface PipelineLaneStage {
+  queued: number;
+  failed: number;
+  processing: PipelineVideo[];
+  next: PipelineVideo[];
+}
+
+export interface PipelineSnapshot {
+  lanes: Record<LaneName, PipelineLane>;
+  stages: {
+    select: { total: number };
+    transcript: PipelineLaneStage;
+    analysis: PipelineLaneStage;
+    done: { total: number; items: PipelineDoneVideo[] };
+  };
 }

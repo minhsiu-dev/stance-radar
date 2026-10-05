@@ -89,10 +89,10 @@ export function FailedVideosList({
               {v.channel.title} · {formatDate(v.published_at)} ·{" "}
               {v.last_attempt_at
                 ? t("attempts", {
-                    count: v.analysis_attempts,
+                    count: v.attempts,
                     date: formatDate(v.last_attempt_at),
                   })
-                : t("attemptsNever", { count: v.analysis_attempts })}
+                : t("attemptsNever", { count: v.attempts })}
             </p>
             {v.error_message && (
               <p

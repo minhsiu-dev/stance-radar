@@ -9,6 +9,7 @@
     "trending": "Trending stocks",
     "videos": "Latest videos",
     "channels": "Channels",
+    "pipeline": "Import",
     "openMenu": "Open menu"
   },
   "Trending": {
@@ -198,6 +199,65 @@
       "queued": "Queued into the job already running"
     }
   },
+  "Pipeline": {
+    "title": "Import",
+    "loadError": "Failed to load: {message}",
+    "locked": {
+      "title": "Unlock required",
+      "body": "Importing videos is admin-only.",
+      "cta": "Unlock"
+    },
+    "inbox": {
+      "title": "① To decide",
+      "count": "{count, plural, one {# video} other {# videos}}",
+      "description": "Checked videos go on to transcript fetching and analysis. Unchecked ones are skipped — you can recover them anytime from the channel page.",
+      "empty": "Nothing waiting for a decision",
+      "expand": "Show",
+      "collapse": "Hide",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "submit": "Send {count} · skip the rest",
+      "submitting": "Submitting…",
+      "submitFailed": "Submit failed: {message}"
+    },
+    "lanes": { "transcript": "② Transcripts", "analysis": "③ Analysis" },
+    "laneShort": { "transcript": "Transcripts", "analysis": "Analysis" },
+    "status": {
+      "running": "Running · {slots, plural, one {# slot} other {# slots}}",
+      "paused": "Paused",
+      "offline": "Offline",
+      "pause": "Pause",
+      "resume": "Resume",
+      "autoPaused": "Paused after an error",
+      "offlineSince": "The worker hasn't responded for {minutes, plural, one {# minute} other {# minutes}}; queued videos are stuck",
+      "offlineNever": "The worker hasn't reported in yet; queued videos are stuck",
+      "lastError": "Last error: {message}",
+      "actionFailed": "Action failed: {message}"
+    },
+    "column": {
+      "processing": "Processing",
+      "queued": "Queued",
+      "more": "{count} more",
+      "idle": "Idle",
+      "failed": "{count} failed"
+    },
+    "done": {
+      "title": "Just finished",
+      "window": "Last 24 hours",
+      "empty": "Nothing finished in the last 24 hours",
+      "noTranscript": "No transcript",
+      "more": "{count} more",
+      "ago": "{time} ago"
+    },
+    "drawer": { "transcript": "Transcript failures", "analysis": "Analysis failures" },
+    "chip": {
+      "label": "Import",
+      "pending": "{count} to decide",
+      "failed": "{count} failed",
+      "paused": "{lane} paused",
+      "offline": "{lane} offline"
+    }
+  },
   "ChannelDetail": {
     "loadError": "Failed to load: {message}",
     "added": "Added: {date}",
@@ -212,7 +272,8 @@
       "skipped": "Skipped",
       "failed": "Failed",
       "no_transcript": "No transcript",
-      "pending": "Queued"
+      "pending": "Awaiting transcript",
+      "transcribed": "Awaiting analysis"
     },
     "trackRecord": {
       "title": "Track record",
@@ -299,7 +360,8 @@
       "loadOlderBusy": "Another update is running, try again shortly",
       "status": {
         "discovered": "Awaiting review",
-        "pending": "Queued",
+        "pending": "Awaiting transcript",
+        "transcribed": "Awaiting analysis",
         "analyzed": "Analyzed",
         "no_transcript": "No transcript",
         "failed": "Failed",

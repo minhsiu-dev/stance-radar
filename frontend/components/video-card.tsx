@@ -44,7 +44,7 @@ function StatusTag({ item }: { item: FeedItem }) {
         {t("statusFailed")}
       </Badge>
     );
-  if (item.status === "pending")
+  if (item.status === "pending" || item.status === "transcribed")
     return <Badge variant="secondary">{t("statusPending")}</Badge>;
   if (item.stances.length === 0)
     return <span className="text-xs text-muted-foreground">{t("statusNoMentions")}</span>;

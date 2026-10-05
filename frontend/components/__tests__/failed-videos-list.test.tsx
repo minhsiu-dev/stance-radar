@@ -36,7 +36,7 @@ function item(id: string, attempts: number, last: string | null) {
     published_at: "2026-06-01T00:00:00Z",
     duration_seconds: 600,
     error_message: "claude exited -11",
-    analysis_attempts: attempts,
+    attempts: attempts,
     last_attempt_at: last,
   };
 }
