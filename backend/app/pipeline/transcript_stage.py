@@ -39,24 +39,27 @@ class TranscriptStage:
             transcript = await self.client.fetch(video_id)
         except TranscriptNotAvailable:
             # Captions off / video gone: permanent, and nobody's fault
-            await self._write(video_id, status=VideoStatus.no_transcript, error_message=None)
-            return NEUTRAL
+            outcome = NEUTRAL
+            written = await self._write(video_id, status=VideoStatus.no_transcript, error_message=None)
+            return outcome if written else NEUTRAL
         except asyncio.CancelledError:
             await self._give_back(video_id)
             raise
         except Exception as exc:  # IpBlocked / RequestBlocked land here: retryable
             error = str(exc) or type(exc).__name__
             logger.warning("transcript fetch failed for %s: %s", video_id, error)
-            await self._write(video_id, status=VideoStatus.failed, error_message=error)
-            return failure(error)
-        await self._write(
+            outcome = failure(error)
+            written = await self._write(video_id, status=VideoStatus.failed, error_message=error)
+            return outcome if written else NEUTRAL
+        outcome = SUCCESS
+        written = await self._write(
             video_id,
             status=VideoStatus.transcribed,
             error_message=None,
             transcript=transcript_to_json(transcript),
             transcript_language=transcript.language,
         )
-        return SUCCESS
+        return outcome if written else NEUTRAL
 
     async def _stamp_attempt(self, video_id: str) -> bool:
         """Commit the attempt before fetching, so a crash mid-fetch still counts."""
@@ -72,12 +75,13 @@ class TranscriptStage:
             await session.commit()
         return result.rowcount > 0
 
-    async def _write(self, video_id: str, **values: object) -> None:
+    async def _write(self, video_id: str, **values: object) -> bool:
         async with self._sessionmaker() as session:
-            await session.execute(
+            result = await session.execute(
                 update(Video).where(Video.id == video_id).values(claimed_at=None, **values)
             )
             await session.commit()
+        return result.rowcount > 0
 
     async def _give_back(self, video_id: str) -> None:
         """Cancelled mid-fetch (shutdown): this attempt never really happened."""

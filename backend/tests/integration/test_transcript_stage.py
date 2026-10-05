@@ -128,3 +128,52 @@ async def test_five_blocked_fetches_in_a_row_pause_the_lane(sessionmaker):
     # the lane claims newest first, so the two oldest are what's left in the queue
     assert sorted(v for v, st in by_status.items() if st is VideoStatus.pending) == ["v0", "v1"]
     assert (row.paused, row.pause_reason) == (True, "auto")
+
+
+class DeleteOnFetchClient:
+    """Client that deletes the video row during fetch, then returns a transcript."""
+    def __init__(self, sessionmaker, video_id_to_delete):
+        self.sessionmaker = sessionmaker
+        self.video_id_to_delete = video_id_to_delete
+
+    async def fetch(self, video_id):
+        from sqlalchemy import delete
+        async with self.sessionmaker() as s:
+            await s.execute(delete(Video).where(Video.id == self.video_id_to_delete))
+            await s.commit()
+        return await FakeTranscriptClient().fetch("alpha_vid_3")
+
+
+class DeleteOnFetchAndRaiseClient:
+    """Client that deletes the video row during fetch, then raises an exception."""
+    def __init__(self, sessionmaker, video_id_to_delete, exc):
+        self.sessionmaker = sessionmaker
+        self.video_id_to_delete = video_id_to_delete
+        self.exc = exc
+
+    async def fetch(self, video_id):
+        from sqlalchemy import delete
+        async with self.sessionmaker() as s:
+            await s.execute(delete(Video).where(Video.id == self.video_id_to_delete))
+            await s.commit()
+        raise self.exc
+
+
+async def test_video_deleted_mid_fetch_is_neutral(sessionmaker):
+    await seed(sessionmaker, "v")
+    stage = TranscriptStage(sessionmaker, DeleteOnFetchClient(sessionmaker, "v"))
+
+    assert await stage.process("v") == NEUTRAL
+    video = await get(sessionmaker, "v")
+    assert video is None  # video was deleted
+
+
+async def test_video_deleted_mid_fetch_while_raising_is_neutral(sessionmaker):
+    await seed(sessionmaker, "v")
+    stage = TranscriptStage(sessionmaker, DeleteOnFetchAndRaiseClient(
+        sessionmaker, "v", RuntimeError("blocked")
+    ))
+
+    assert await stage.process("v") == NEUTRAL
+    video = await get(sessionmaker, "v")
+    assert video is None  # video was deleted
