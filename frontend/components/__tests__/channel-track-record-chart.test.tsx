@@ -233,23 +233,39 @@ function chipFor(name: string): HTMLElement {
   return screen.getByTestId(`track-chip-${name}`);
 }
 
+function clearChartSpies() {
+  addSeriesSpy.mockClear();
+  markersSpy.mockClear();
+  removeSpy.mockClear();
+  crosshairSpy.mockClear();
+  createChartSpy.mockClear();
+  priceScaleApplyOptionsSpy.mockClear();
+  appliedOptions.length = 0;
+  createdSeries.length = 0;
+}
+
+/** The chart opens in the performance view, so the price-view tests switch
+ *  over first. The spies are cleared before the switch so they hold only the
+ *  price view's own chart build (calls[0] is that build) — except removeSpy,
+ *  cleared after it, since the switch itself tears down the first chart. */
+function renderPriceView() {
+  const result = render(<ChannelTrackRecordChart channelId="ch1" />);
+  clearChartSpies();
+  fireEvent.click(screen.getByTestId("track-view-price"));
+  removeSpy.mockClear();
+  return result;
+}
+
 describe("ChannelTrackRecordChart", () => {
   beforeEach(() => {
-    addSeriesSpy.mockClear();
-    markersSpy.mockClear();
-    removeSpy.mockClear();
-    crosshairSpy.mockClear();
-    createChartSpy.mockClear();
-    priceScaleApplyOptionsSpy.mockClear();
-    appliedOptions.length = 0;
-    createdSeries.length = 0;
+    clearChartSpies();
     swrData = RESPONSE;
     swrError = undefined;
     swrKey = null;
   });
 
   it("renders one chip per server-selected ticker", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     for (const name of ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"]) {
       expect(chipFor(name)).toBeInTheDocument();
     }
@@ -259,7 +275,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("removes a ticker when its chip is clicked, and puts it in the SWR key", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     fireEvent.click(chipFor("FFF"));
     expect(screen.queryByTestId("track-chip-FFF")).toBeNull();
     expect(swrKey).toBe(
@@ -268,7 +284,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("refuses to remove the last remaining ticker", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     for (const name of ["AAA", "BBB", "CCC", "DDD", "EEE"]) {
       fireEvent.click(chipFor(name));
     }
@@ -278,7 +294,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("keeps every other line's colour when one is removed from the middle", () => {
-    const { rerender } = render(<ChannelTrackRecordChart channelId="ch1" />);
+    const { rerender } = renderPriceView();
     const colorOf = (title: string) =>
       (addSeriesSpy.mock.calls.find(
         (call) => (call[1] as { title?: string })?.title === title,
@@ -315,7 +331,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("gives a newly added ticker the freed slot, not a duplicate colour", () => {
-    const { rerender } = render(<ChannelTrackRecordChart channelId="ch1" />);
+    const { rerender } = renderPriceView();
     const colorOf = (title: string) =>
       (addSeriesSpy.mock.calls.find(
         (call) => (call[1] as { title?: string })?.title === title,
@@ -353,7 +369,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("changes the SWR key when the range changes", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     // The user has not touched the selection yet -> no `tickers` param, so the
     // server's own default applies and we don't fire a second, identical request.
     expect(swrKey).toBe("/api/channels/ch1/track-record?range=1y");
@@ -362,7 +378,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("titles only the last segment of a ticker, so the axis label is not repeated", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const titles = addSeriesSpy.mock.calls
       .map((call) => (call[1] as { title?: string }).title)
       .filter((title): title is string => Boolean(title));
@@ -371,7 +387,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("draws sell runs dotted and idle runs faded", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const opts = addSeriesSpy.mock.calls.map(
       (call) => call[1] as { lineStyle?: number; color?: string },
     );
@@ -382,7 +398,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("anchors each turning-point marker on the run that opens it", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const placed = markersSpy.mock.calls.flatMap(
       (call) => call[1] as { time: string; shape: string }[],
     );
@@ -395,7 +411,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("marks every call, including same-stance restatements inside one run", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     // BBB is a single buy run carrying two markers: the opening call and a
     // restatement. Both must be drawn on that one segment.
     const bbbIndex = addSeriesSpy.mock.calls.findIndex(
@@ -409,7 +425,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("draws restatements faded and smaller so state changes stay dominant", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const placed = markersSpy.mock.calls.flatMap(
       (call) => call[1] as { time: string; size: number; color: string }[],
     );
@@ -483,7 +499,7 @@ describe("ChannelTrackRecordChart", () => {
     // Placed first: it ranks first, so the server hands it back as selected —
     // it must still be listed rather than silently vanishing from the row.
     swrData = { ...RESPONSE, tickers: [dead, ...RESPONSE.tickers] };
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     expect(chipFor("ZZZ")).toBeDisabled();
     // The rest of the server's selection is unaffected by the dead one.
     expect(chipFor("EEE")).toBeInTheDocument();
@@ -500,19 +516,19 @@ describe("ChannelTrackRecordChart", () => {
     // As the sole ticker here, that produced a blank chart with no empty
     // message, since drawableCount counted it as drawable.
     swrData = { ...RESPONSE, tickers: [preWindowOnlyTicker("YYY")] };
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     expect(chipFor("YYY")).toBeDisabled();
     expect(screen.getByText("empty")).toBeInTheDocument();
   });
 
   it("wires a crosshair tooltip", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     expect(screen.getByTestId("track-record-tooltip")).toBeInTheDocument();
     expect(crosshairSpy).toHaveBeenCalled();
   });
 
   it("tears down the chart immediately when the selection changes, before any refetch resolves", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     expect(removeSpy).not.toHaveBeenCalled();
     fireEvent.click(chipFor("FFF"));
     // The mocked useSWR never actually refetches here — what this pins is
@@ -524,7 +540,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("renders the crosshair tooltip's per-ticker value as a signed percentage of the indexed value, not the raw indexed number", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const aaaIndex = addSeriesSpy.mock.calls.findIndex(
       (call) => (call[1] as { title?: string }).title === "AAA",
     );
@@ -545,7 +561,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("keeps the chart container mounted (and does not tear down the chart) when a background revalidation errors on an already-loaded chart", () => {
-    const { rerender } = render(<ChannelTrackRecordChart channelId="ch1" />);
+    const { rerender } = renderPriceView();
     expect(screen.getByTestId("track-record-canvas")).toBeInTheDocument();
     removeSpy.mockClear();
 
@@ -576,7 +592,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("shows the video title as a secondary line under a ticker's row on its turning-point date", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const aaaIndex = addSeriesSpy.mock.calls.findIndex(
       (call) => (call[1] as { title?: string }).title === "AAA",
     );
@@ -597,7 +613,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("shows no video title line on a date that is not a turning point for that ticker", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const aaaIndex = addSeriesSpy.mock.calls.findIndex(
       (call) => (call[1] as { title?: string }).title === "AAA",
     );
@@ -626,7 +642,7 @@ describe("ChannelTrackRecordChart", () => {
     // marker's raw date (the pre-fix behavior), hovering DAYS[3] would find
     // nothing — the title would be permanently unreachable.
     swrData = { ...RESPONSE, tickers: [gapTicker("GGG"), ...RESPONSE.tickers] };
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const gggIndex = addSeriesSpy.mock.calls.findIndex(
       (call) => (call[1] as { title?: string }).title === "GGG",
     );
@@ -647,7 +663,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("defaults the price scale to linear (Normal mode)", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     expect(screen.getByTestId("track-scale-linear")).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -663,7 +679,7 @@ describe("ChannelTrackRecordChart", () => {
   });
 
   it("switches to Logarithmic mode on toggle without tearing down the chart", () => {
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     removeSpy.mockClear();
     createChartSpy.mockClear();
 
@@ -694,7 +710,7 @@ describe("ChannelTrackRecordChart", () => {
     // starts mid-window would be flattened to 0%, destroying the chart's
     // relative geometry (this is why the component computes percentages
     // itself in track-record.ts instead of using this chart mode).
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     fireEvent.click(screen.getByTestId("track-scale-log"));
     fireEvent.click(screen.getByTestId("track-scale-linear"));
     const modesUsed = priceScaleApplyOptionsSpy.mock.calls.map(
@@ -710,7 +726,7 @@ describe("ChannelTrackRecordChart", () => {
     // drives the line-end labels via lastValueVisible/title) renders it back
     // as the percentage the reader expects, e.g. price-scale ticks reading
     // "+20.0%" rather than the raw indexed number "120".
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const opts = createChartSpy.mock.calls[0][1] as {
       localization?: { priceFormatter?: (v: number) => string };
     };
@@ -740,7 +756,7 @@ describe("ChannelTrackRecordChart", () => {
       ...RESPONSE,
       tickers: [earlyBarTicker, ...RESPONSE.tickers.slice(1)],
     };
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const gggIndex = addSeriesSpy.mock.calls.findIndex(
       (call) =>
         (call[0] as { kind?: string }).kind === "line" &&
@@ -775,7 +791,7 @@ describe("ChannelTrackRecordChart", () => {
       ...RESPONSE.benchmark_closes,
     ];
     swrData = { ...RESPONSE, benchmark_closes: earlyBenchmarkCloses };
-    render(<ChannelTrackRecordChart channelId="ch1" />);
+    renderPriceView();
     const benchmarkIndex = addSeriesSpy.mock.calls.findIndex(
       (call) =>
         (call[0] as { kind?: string }).kind === "line" &&
@@ -814,9 +830,8 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     swrData = RESPONSE;
   });
 
-  function switchToPerformance() {
+  function renderPerformanceView() {
     render(<ChannelTrackRecordChart channelId="ch1" />);
-    fireEvent.click(screen.getByTestId("track-view-performance"));
   }
 
   it("tears down and recreates the chart exactly once when switching views, never accumulating series", () => {
@@ -828,20 +843,26 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     // reused) or more than once (leaked chart instances).
     render(<ChannelTrackRecordChart channelId="ch1" />);
     removeSpy.mockClear();
-    fireEvent.click(screen.getByTestId("track-view-performance"));
+    fireEvent.click(screen.getByTestId("track-view-price"));
     expect(removeSpy).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("track-view-performance"));
+    expect(removeSpy).toHaveBeenCalledTimes(2);
   });
 
-  it("defaults to the price view", () => {
+  it("defaults to the performance view", () => {
     render(<ChannelTrackRecordChart channelId="ch1" />);
-    expect(screen.getByTestId("track-view-price")).toHaveAttribute(
+    expect(screen.getByTestId("track-view-performance")).toHaveAttribute(
       "aria-pressed",
       "true",
+    );
+    expect(screen.getByTestId("track-view-price")).toHaveAttribute(
+      "aria-pressed",
+      "false",
     );
   });
 
   it("switches the series type to Baseline with a zero base value", () => {
-    switchToPerformance();
+    renderPerformanceView();
     const baselines = addSeriesSpy.mock.calls.filter(
       (call) => (call[0] as { kind?: string }).kind === "baseline",
     );
@@ -879,15 +900,11 @@ describe("ChannelTrackRecordChart — call performance view", () => {
       ...RESPONSE.benchmark_closes,
     ];
     swrData = { ...RESPONSE, benchmark_closes: earlyBenchmarkCloses };
-    switchToPerformance();
-    // switchToPerformance() mounts in the price view first, then clicks over
-    // to performance — the chart is torn down and rebuilt (see the "tears
-    // down and recreates the chart exactly once" test above), but
-    // addSeriesSpy accumulates calls across BOTH chart instances. The first
-    // "line"+"VOO" match would be the price view's now-torn-down benchmark
-    // series, so this must find the LAST match — the live performance-view
-    // chart's benchmark series — same reasoning as the crosshairSpy lookups
-    // elsewhere in this describe block.
+    renderPerformanceView();
+    // Find the LAST "line"+"VOO" match: addSeriesSpy accumulates calls across
+    // chart (re)creations, so the last match is the live chart's benchmark
+    // series — same reasoning as the crosshairSpy lookups elsewhere in this
+    // describe block.
     let benchmarkIndex = -1;
     for (let i = addSeriesSpy.mock.calls.length - 1; i >= 0; i--) {
       const call = addSeriesSpy.mock.calls[i];
@@ -920,7 +937,7 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     // and would otherwise have zero coverage. Verified to fail if the
     // `entry.baseline` branch in the hover effect were removed (that would
     // route baseline series through the `color`-only path instead).
-    switchToPerformance();
+    renderPerformanceView();
     appliedOptions.length = 0;
     fireEvent.mouseEnter(screen.getByTestId("track-chip-AAA"));
     const opts = appliedOptions as { color?: string; topLineColor?: string }[];
@@ -930,13 +947,14 @@ describe("ChannelTrackRecordChart — call performance view", () => {
   });
 
   it("hides the log toggle, whose signed-log transform breaks on zero-crossing values", () => {
-    switchToPerformance();
+    renderPerformanceView();
     expect(screen.queryByTestId("track-scale-log")).not.toBeInTheDocument();
     expect(screen.queryByTestId("track-scale-linear")).not.toBeInTheDocument();
   });
 
   it("forces a linear price scale even if log was left on in the price view", () => {
     render(<ChannelTrackRecordChart channelId="ch1" />);
+    fireEvent.click(screen.getByTestId("track-view-price"));
     fireEvent.click(screen.getByTestId("track-scale-log"));
     fireEvent.click(screen.getByTestId("track-view-performance"));
     // createChart(el, options) — index 1 is the options object, matching the
@@ -948,7 +966,7 @@ describe("ChannelTrackRecordChart — call performance view", () => {
   });
 
   it("uses the centred percent formatter, not the indexed one", () => {
-    switchToPerformance();
+    renderPerformanceView();
     // createChart(el, options) — index 1 is the options object.
     const opts = createChartSpy.mock.calls[
       createChartSpy.mock.calls.length - 1
@@ -960,7 +978,7 @@ describe("ChannelTrackRecordChart — call performance view", () => {
 
   it("draws no series for an idle run", () => {
     // AAA's first run is idle; only its buy and sell runs may become series
-    switchToPerformance();
+    renderPerformanceView();
     const titles = addSeriesSpy.mock.calls
       .filter((call) => (call[0] as { kind?: string }).kind === "baseline")
       .map((call) => (call[1] as { title?: string }).title)
@@ -973,7 +991,7 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     // localization.priceFormatter), so it has its own chance to mix up the
     // two views' value spaces. 5 is already a percentage point here; the
     // indexed formatter would misread it as "-95.0%" (5 - 100).
-    switchToPerformance();
+    renderPerformanceView();
     const aaaIndex = addSeriesSpy.mock.calls.findIndex(
       (call) =>
         (call[0] as { kind?: string }).kind === "baseline" &&
@@ -983,7 +1001,7 @@ describe("ChannelTrackRecordChart — call performance view", () => {
 
     // crosshairSpy is not cleared in this describe's beforeEach (it
     // accumulates across chart (re)creations); the freshest subscription is
-    // the one from the performance-view chart created by switchToPerformance.
+    // the one from the performance-view chart created by renderPerformanceView().
     const crosshairHandler = crosshairSpy.mock.calls[
       crosshairSpy.mock.calls.length - 1
     ][0] as (param: unknown) => void;
@@ -1004,7 +1022,7 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     // consumer before this component. This is that consumer's own coverage:
     // confirm the data actually handed to the chart series is the negated
     // series, not just that the pure function negates in isolation.
-    switchToPerformance();
+    renderPerformanceView();
     const aaaIndex = addSeriesSpy.mock.calls.findIndex(
       (call) =>
         (call[0] as { kind?: string }).kind === "baseline" &&
@@ -1044,6 +1062,7 @@ describe("ChannelTrackRecordChart — call performance view", () => {
   it("disables a ticker that has no position in this view, but keeps its chip", () => {
     swrData = { ...RESPONSE, tickers: [...RESPONSE.tickers, idleOnlyTicker("ZZZ")] };
     render(<ChannelTrackRecordChart channelId="ch1" />);
+    fireEvent.click(screen.getByTestId("track-view-price"));
     // price view: drawable, so selectable
     expect(screen.getByTestId("track-chip-ZZZ")).not.toBeDisabled();
     fireEvent.click(screen.getByTestId("track-view-performance"));
@@ -1055,6 +1074,7 @@ describe("ChannelTrackRecordChart — call performance view", () => {
   it("shows the empty state when no ticker has a position in this view", () => {
     swrData = { ...RESPONSE, tickers: [idleOnlyTicker("ZZZ")] };
     render(<ChannelTrackRecordChart channelId="ch1" />);
+    fireEvent.click(screen.getByTestId("track-view-price"));
     expect(screen.queryByText("emptyPerformance")).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("track-view-performance"));
     expect(screen.getByText("emptyPerformance")).toBeInTheDocument();
@@ -1068,7 +1088,6 @@ describe("ChannelTrackRecordChart — call performance view", () => {
     // priced, but none holds a position here — see the idle-only test above).
     swrData = { ...RESPONSE, tickers: [] };
     render(<ChannelTrackRecordChart channelId="ch1" />);
-    fireEvent.click(screen.getByTestId("track-view-performance"));
     expect(screen.getByText("empty")).toBeInTheDocument();
     expect(screen.queryByText("emptyPerformance")).not.toBeInTheDocument();
   });

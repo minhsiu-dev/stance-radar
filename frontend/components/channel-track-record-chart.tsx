@@ -163,7 +163,7 @@ export function ChannelTrackRecordChart({
   // several ordinary ones squashes the rest into an unreadable band near
   // zero on a linear axis; log mode is an escape hatch, not the default.
   const [logScale, setLogScale] = useState(false);
-  const [view, setView] = useState<TrackView>("price");
+  const [view, setView] = useState<TrackView>("performance");
   // Named to avoid shadowing the global `window.performance` inside this
   // 785-line component.
   const isPerformanceView = view === "performance";
