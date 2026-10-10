@@ -5,7 +5,7 @@ from sqlalchemy import delete, func, select
 
 from app.analysis.llm import AnalysisError, FakeLLMClient
 from app.analysis.tickers import TickerValidator
-from app.analysis.types import AnalysisResult, MentionResult, StanceResult
+from app.analysis.types import AnalysisResponse, AnalysisResult, MentionResult, StanceResult
 from app.config import Settings
 from app.market.client import FakeMarketClient
 from app.models import (
@@ -93,10 +93,10 @@ async def test_unknown_tickers_are_dropped_and_recorded(sessionmaker):
 
     class UnknownTickerLLM:
         async def analyze(self, *, video_id, video_title, transcript):
-            return AnalysisResult(
+            return AnalysisResponse(AnalysisResult(
                 mentions=(MentionResult("ZZZZ", 1.0, "q", "buy", "r"),),
                 stances=(StanceResult("ZZZZ", "buy", "s"),),
-            )
+            ))
 
     assert await make_stage(sessionmaker, UnknownTickerLLM()).process("v") == SUCCESS
     video = await get(sessionmaker, "v")
@@ -110,7 +110,7 @@ async def test_a_conditional_overall_stance_is_persisted(sessionmaker):
 
     class ConditionalLLM:
         async def analyze(self, *, video_id, video_title, transcript):
-            return AnalysisResult(
+            return AnalysisResponse(AnalysisResult(
                 mentions=(MentionResult(
                     "NVDA", 1.0, "exit plan at 625", "sell", "will trim at 625+",
                     is_conditional=True, condition="at 625+",
@@ -118,7 +118,7 @@ async def test_a_conditional_overall_stance_is_persisted(sessionmaker):
                 stances=(StanceResult(
                     "NVDA", "sell", "exit plan", confidence="high", is_conditional=True,
                 ),),
-            )
+            ))
 
     await make_stage(sessionmaker, ConditionalLLM()).process("v")
     async with sessionmaker() as s:
@@ -238,7 +238,7 @@ async def test_pausing_does_not_cancel_slots_already_in_flight(sessionmaker):
             if video_id == "fast":
                 raise AnalysisError("usage limit reached")
             await asyncio.sleep(0.05)
-            return AnalysisResult.empty()
+            return AnalysisResponse(AnalysisResult.empty())
 
     assert await make_lane(sessionmaker, MixedLLM(), concurrency=2).drain() == 2
     assert (await get(sessionmaker, "slow")).status is VideoStatus.analyzed

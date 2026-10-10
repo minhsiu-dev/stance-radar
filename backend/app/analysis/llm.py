@@ -4,6 +4,7 @@ import json
 import logging
 import signal
 from collections import Counter
+from datetime import datetime, timezone
 from typing import Awaitable, Callable, Protocol
 
 from app.analysis.prompts import ANALYSIS_TOOL, SYSTEM_PROMPT, build_user_prompt
@@ -11,9 +12,12 @@ from app.analysis.types import (
     VALID_CONFIDENCE,
     VALID_HORIZONS,
     VALID_STANCES,
+    AnalysisResponse,
     AnalysisResult,
     MentionResult,
     StanceResult,
+    UsageSnapshot,
+    UsageWindow,
 )
 from app.transcripts.client import Transcript
 
@@ -47,6 +51,16 @@ class AnalysisInfrastructureError(AnalysisError):
     """
 
 
+class UsageLimitReached(AnalysisError):
+    """The Claude subscription's usage limit rejected the call. Not the video's fault:
+    never retried in-process; the analysis lane gives the video back and pauses until
+    `resets_at` (None when the CLI didn't say)."""
+
+    def __init__(self, message: str, resets_at: datetime | None) -> None:
+        super().__init__(message)
+        self.resets_at = resets_at
+
+
 _INFRASTRUCTURE_SIGNALS = frozenset(
     {signal.SIGSEGV, signal.SIGBUS, signal.SIGILL, signal.SIGABRT}
 )
@@ -55,7 +69,7 @@ _INFRASTRUCTURE_SIGNALS = frozenset(
 class LLMClient(Protocol):
     async def analyze(
         self, *, video_id: str, video_title: str, transcript: Transcript
-    ) -> AnalysisResult: ...
+    ) -> AnalysisResponse: ...
 
 
 def _parse_enum_field(item: dict, key: str, valid: frozenset[str]) -> str | None:
@@ -177,12 +191,16 @@ def parse_cli_stdout(stdout: bytes) -> AnalysisResult:
         wrapper = json.loads(stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise AnalysisError(f"claude stdout is not JSON: {stdout[:300]!r}") from exc
+    return parse_result_message(wrapper)
 
+
+def parse_result_message(wrapper) -> AnalysisResult:
+    """Parse the CLI's final `{"type": "result", "result": "..."}` message."""
     if isinstance(wrapper, dict) and "result" in wrapper:
         body = wrapper["result"]
     else:
         # Fallback: maybe the user passed --output-format text or piped raw.
-        body = wrapper if isinstance(wrapper, (dict, list)) else stdout.decode("utf-8")
+        body = wrapper if isinstance(wrapper, (dict, list, str)) else str(wrapper)
 
     if isinstance(body, str):
         cleaned = _strip_code_fences(body)
@@ -194,6 +212,63 @@ def parse_cli_stdout(stdout: bytes) -> AnalysisResult:
             ) from exc
 
     return parse_analysis_payload(body)
+
+
+def _epoch(value) -> datetime | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return datetime.fromtimestamp(value, timezone.utc)
+    return None
+
+
+def _usage_window(raw) -> UsageWindow | None:
+    if not isinstance(raw, dict):
+        return None
+    resets_at = _epoch(raw.get("resetsAt"))
+    utilization = raw.get("utilization")
+    if resets_at is None or not isinstance(utilization, (int, float)):
+        return None
+    return UsageWindow(float(utilization), resets_at)
+
+
+def _usage_snapshot(event: dict) -> UsageSnapshot | None:
+    info = event.get("rate_limit_info")
+    if not isinstance(info, dict):
+        return None
+    windows = info.get("unifiedWindows") if isinstance(info.get("unifiedWindows"), dict) else {}
+    return UsageSnapshot(
+        status=str(info.get("status") or ""),
+        five_hour=_usage_window(windows.get("five_hour")),
+        seven_day=_usage_window(windows.get("seven_day")),
+        resets_at=_epoch(info.get("resetsAt")),
+    )
+
+
+def parse_cli_stream(stdout: bytes) -> tuple[dict | None, UsageSnapshot | None]:
+    """Split `claude -p --output-format stream-json` stdout into its final result
+    message and the last usage report (rate_limit_event). Undecodable lines are skipped."""
+    result: dict | None = None
+    usage: UsageSnapshot | None = None
+    for line in stdout.decode("utf-8", "replace").splitlines():
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(message, dict):
+            continue
+        if message.get("type") == "result":
+            result = message
+        elif message.get("type") == "rate_limit_event":
+            usage = _usage_snapshot(message) or usage
+    return result, usage
+
+
+def _limit_reset(usage: UsageSnapshot | None) -> datetime | None:
+    if usage is None:
+        return None
+    if usage.resets_at is not None:
+        return usage.resets_at
+    windows = [w.resets_at for w in (usage.five_hour, usage.seven_day) if w is not None]
+    return max(windows, default=None)
 
 
 def _schema_hint() -> str:
@@ -295,7 +370,9 @@ class ClaudeCLIClient:
         return [
             self._binary,
             "-p",
-            "--output-format", "json",
+            # stream-json (needs --verbose under -p) also carries the rate_limit_event
+            # with the subscription's 5-hour / 7-day usage
+            "--output-format", "stream-json", "--verbose",
             "--model", self._model,
         ]
 
@@ -306,7 +383,7 @@ class ClaudeCLIClient:
 
     async def analyze(
         self, *, video_id: str, video_title: str, transcript: Transcript
-    ) -> AnalysisResult:
+    ) -> AnalysisResponse:
         stdin_payload = self._stdin_payload(video_title, transcript)
         last_error: Exception | None = None
         for attempt in range(self._max_retries):
@@ -317,12 +394,25 @@ class ClaudeCLIClient:
                         f"claude was killed by signal {-code} for {video_id}; "
                         "the worker process can no longer spawn children"
                     )
+                message, usage = parse_cli_stream(stdout)
+                if message is not None and message.get("is_error"):
+                    # The CLI reports API errors in the result message; stderr is empty.
+                    text = str(message.get("result") or "") or stderr.decode("utf-8", "replace")
+                    if (usage is not None and usage.status == "rejected") or (
+                        message.get("api_error_status") == 429
+                    ):
+                        raise UsageLimitReached(text[:300], _limit_reset(usage))
+                    raise AnalysisError(f"claude exited {code}: {text[:300]}")
                 if code != 0:
                     raise AnalysisError(
                         f"claude exited {code}: {stderr.decode('utf-8', 'replace')[:300]}"
                     )
-                return parse_cli_stdout(stdout)
-            except AnalysisInfrastructureError:
+                if message is None:
+                    raise AnalysisError(
+                        f"claude stream had no result message: {stdout[:300]!r}"
+                    )
+                return AnalysisResponse(parse_result_message(message), usage)
+            except (AnalysisInfrastructureError, UsageLimitReached):
                 raise
             except Exception as exc:
                 last_error = exc
@@ -416,9 +506,24 @@ _FAKE_RESULTS: dict[str, AnalysisResult] = {
 
 
 class FakeLLMClient:
-    """Deterministic seeded results aligned with FakeTranscriptClient / FakeYouTubeClient."""
+    """Deterministic seeded results aligned with FakeTranscriptClient / FakeYouTubeClient.
+
+    `usage` is reported with every result; `limit`, when set, is raised instead."""
+
+    def __init__(
+        self,
+        *,
+        usage: UsageSnapshot | None = None,
+        limit: UsageLimitReached | None = None,
+    ) -> None:
+        self._usage = usage
+        self._limit = limit
 
     async def analyze(
         self, *, video_id: str, video_title: str, transcript: Transcript
-    ) -> AnalysisResult:
-        return _FAKE_RESULTS.get(video_id, AnalysisResult.empty())
+    ) -> AnalysisResponse:
+        if self._limit is not None:
+            raise self._limit
+        return AnalysisResponse(
+            _FAKE_RESULTS.get(video_id, AnalysisResult.empty()), self._usage
+        )

@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -7,11 +8,15 @@ from app.analysis.llm import (
     AnalysisInfrastructureError,
     ClaudeCLIClient,
     FakeLLMClient,
+    UsageLimitReached,
     _default_runner,
     parse_analysis_payload,
     parse_cli_stdout,
+    parse_cli_stream,
 )
-from app.analysis.types import AnalysisResult, MentionResult, StanceResult
+from app.analysis.types import (
+    AnalysisResult, MentionResult, StanceResult, UsageSnapshot, UsageWindow,
+)
 from app.transcripts.client import Transcript, TranscriptSegment
 
 
@@ -117,9 +122,9 @@ async def test_cli_client_retries_then_succeeds():
         sleep=fake_sleep,
         runner=fake_run,
     )
-    result = await client.analyze(
+    result = (await client.analyze(
         video_id="v1", video_title="t", transcript=transcript
-    )
+    )).result
     assert result == AnalysisResult.empty()
     assert len(calls) == 3
     assert sleeps == [1, 2]  # exponential backoff
@@ -127,7 +132,7 @@ async def test_cli_client_retries_then_succeeds():
     args = calls[0]
     assert args[0] == "claude"
     assert "-p" in args
-    assert "--output-format" in args and "json" in args
+    assert "--output-format" in args and "stream-json" in args and "--verbose" in args
     assert "--model" in args and "claude-haiku-4-5" in args
 
 
@@ -304,18 +309,18 @@ def test_default_runner_keeps_child_stderr_when_stdin_is_never_drained():
 async def test_fake_llm_returns_seeded_results():
     fake = FakeLLMClient()
     transcript = Transcript("zh-TW", (TranscriptSegment(1.0, "x"),))
-    result = await fake.analyze(
+    result = (await fake.analyze(
         video_id="alpha_vid_3", video_title="t", transcript=transcript
-    )
+    )).result
     assert result.mentions[0] == MentionResult(
         ticker="AAPL", start_seconds=12.5, quote="蘋果這季財報很強,我會買",
         stance="buy", reasoning="財報優於預期,明確看多",
         confidence="high", time_horizon="long", is_conditional=False,
     )
     assert result.stances[0].stance == "buy"
-    empty = await fake.analyze(
+    empty = (await fake.analyze(
         video_id="alpha_vid_1", video_title="t", transcript=transcript
-    )
+    )).result
     assert empty == AnalysisResult.empty()
 
 
@@ -394,3 +399,106 @@ def test_fake_results_include_tldr():
     for vid in ("alpha_vid_3", "alpha_vid_2", "beta_vid_3", "beta_vid_2"):
         assert _FAKE_RESULTS[vid].tldr, vid
     assert AnalysisResult.empty().tldr is None
+
+
+# ---- stream-json: usage + limit errors ----
+
+RATE_EVENT = {"type": "rate_limit_event", "rate_limit_info": {
+    "status": "allowed", "resetsAt": 1791626400, "rateLimitType": "five_hour",
+    "unifiedWindows": {"five_hour": {"utilization": 0.15, "resetsAt": 1791626400},
+                       "seven_day": {"utilization": 0.26, "resetsAt": 1792011600}}}}
+TRANSCRIPT = Transcript("zh-TW", (TranscriptSegment(1.0, "x"),))
+
+
+def _stream(*objs) -> bytes:
+    return "\n".join(json.dumps(o) for o in objs).encode() + b"\n"
+
+
+def _result(payload: dict, **extra) -> dict:
+    return {"type": "result", "subtype": "success", "is_error": False,
+            "result": json.dumps(payload), **extra}
+
+
+def test_parse_cli_stream_returns_result_and_usage():
+    msg, usage = parse_cli_stream(_stream(
+        {"type": "system"}, RATE_EVENT, _result({"mentions": [], "stances": []})
+    ))
+    assert msg["type"] == "result"
+    assert usage.status == "allowed"
+    assert usage.five_hour == UsageWindow(0.15, datetime.fromtimestamp(1791626400, timezone.utc))
+    assert usage.seven_day.utilization == 0.26
+
+
+def test_parse_cli_stream_skips_garbage_and_tolerates_missing_usage():
+    msg, usage = parse_cli_stream(
+        b"not json\n\n" + _stream(_result({"mentions": [], "stances": []}))
+    )
+    assert msg is not None and usage is None
+
+
+async def test_cli_client_returns_usage_with_the_result():
+    async def run(args, stdin):
+        assert "stream-json" in args and "--verbose" in args
+        return (0, _stream(RATE_EVENT, _result({"mentions": [], "stances": []})), b"")
+
+    resp = await ClaudeCLIClient(model="m", runner=run, sleep=_no_sleep).analyze(
+        video_id="v", video_title="t", transcript=TRANSCRIPT
+    )
+    assert resp.result == AnalysisResult.empty()
+    assert resp.usage.five_hour.utilization == 0.15
+
+
+async def test_rejected_stream_raises_usage_limit_reached_without_retry():
+    calls = 0
+    rejected = {"type": "rate_limit_event",
+                "rate_limit_info": {"status": "rejected", "resetsAt": 1791626400}}
+
+    async def run(args, stdin):
+        nonlocal calls
+        calls += 1
+        return (1, _stream(rejected, {"type": "result", "is_error": True,
+                                      "result": "You've hit your limit"}), b"")
+
+    with pytest.raises(UsageLimitReached) as exc:
+        await ClaudeCLIClient(model="m", max_retries=3, runner=run, sleep=_no_sleep).analyze(
+            video_id="v", video_title="t", transcript=TRANSCRIPT
+        )
+    assert calls == 1
+    assert exc.value.resets_at == datetime.fromtimestamp(1791626400, timezone.utc)
+    assert "hit your limit" in str(exc.value)
+
+
+async def test_http_429_without_rate_event_is_a_limit_with_no_reset_time():
+    async def run(args, stdin):
+        return (1, _stream({"type": "result", "is_error": True, "api_error_status": 429,
+                            "result": "rate limited"}), b"")
+
+    with pytest.raises(UsageLimitReached) as exc:
+        await ClaudeCLIClient(model="m", runner=run, sleep=_no_sleep).analyze(
+            video_id="v", video_title="t", transcript=TRANSCRIPT
+        )
+    assert exc.value.resets_at is None
+
+
+async def test_error_message_uses_result_text_when_stderr_is_empty():
+    async def run(args, stdin):
+        return (1, _stream({"type": "result", "is_error": True, "api_error_status": 404,
+                            "result": "There's an issue with the selected model"}), b"")
+
+    with pytest.raises(AnalysisError, match="issue with the selected model") as exc:
+        await ClaudeCLIClient(model="m", max_retries=1, runner=run, sleep=_no_sleep).analyze(
+            video_id="v", video_title="t", transcript=TRANSCRIPT
+        )
+    assert not isinstance(exc.value, UsageLimitReached)
+
+
+async def test_fake_client_returns_configured_usage_or_raises_limit():
+    usage = UsageSnapshot("allowed", None, None, None)
+    resp = await FakeLLMClient(usage=usage).analyze(
+        video_id="x", video_title="t", transcript=TRANSCRIPT
+    )
+    assert resp.usage is usage
+    with pytest.raises(UsageLimitReached):
+        await FakeLLMClient(limit=UsageLimitReached("limit", None)).analyze(
+            video_id="x", video_title="t", transcript=TRANSCRIPT
+        )

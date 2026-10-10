@@ -45,9 +45,9 @@ class AnalysisStage:
             return NEUTRAL
         transcript = transcript_from_json(stored)
         try:
-            result = await self.llm.analyze(
+            result = (await self.llm.analyze(
                 video_id=video_id, video_title=title, transcript=transcript
-            )
+            )).result
             valid, dropped = await self._validate(video_id, result)
         except (AnalysisInfrastructureError, asyncio.CancelledError):
             # The process is broken (or shutting down), not the video: give the
