@@ -183,7 +183,8 @@ async def pause_for_limit(
 ) -> None:
     """Pause until the Claude usage window resets. One UPDATE: slots finishing together
     can each call this, and the lane keeps the LATER resume_at (resuming earlier would
-    only trip again). Never overrides a manual pause."""
+    only trip again). Never overrides a manual or error ("auto") pause -- those wait
+    for a person, and turning them into a self-lifting pause would hide the cause."""
     now = utcnow()
     at = literal(resume_at, DateTime(timezone=True))
     already = and_(PipelineLane.paused.is_(True), PipelineLane.pause_reason == LIMIT)
@@ -192,7 +193,7 @@ async def pause_for_limit(
             update(PipelineLane)
             .where(
                 PipelineLane.lane == lane,
-                PipelineLane.pause_reason.is_distinct_from(MANUAL),
+                or_(PipelineLane.paused.is_(False), PipelineLane.pause_reason == LIMIT),
             )
             .values(
                 paused=True,

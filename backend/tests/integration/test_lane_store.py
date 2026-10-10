@@ -202,6 +202,17 @@ async def test_pause_for_limit_does_not_override_a_manual_pause(sessionmaker):
     assert row.pause_reason == "manual" and row.resume_at is None
 
 
+async def test_pause_for_limit_does_not_convert_an_error_auto_pause(sessionmaker):
+    await lane_store.ensure_lanes(sessionmaker)
+    await lane_store.record_failure(sessionmaker, ANALYSIS_LANE, "bad model", pause_after=1)
+    await lane_store.pause_for_limit(sessionmaker, ANALYSIS_LANE, utcnow(), "usage 72%")
+    row = await lane_row(sessionmaker, ANALYSIS_LANE)
+    assert (row.pause_reason, row.resume_at, row.last_error) == ("auto", None, "bad model")
+    assert await lane_store.resume_if_due(
+        sessionmaker, ANALYSIS_LANE, utcnow() + timedelta(days=30)
+    ) is False
+
+
 async def test_resume_if_due_only_after_resume_at(sessionmaker):
     await lane_store.ensure_lanes(sessionmaker)
     at = utcnow() + timedelta(minutes=5)

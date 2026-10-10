@@ -468,6 +468,20 @@ async def test_rejected_stream_raises_usage_limit_reached_without_retry():
     assert "hit your limit" in str(exc.value)
 
 
+async def test_rejected_rate_event_without_a_result_message_is_still_a_limit():
+    rejected = {"type": "rate_limit_event",
+                "rate_limit_info": {"status": "rejected", "resetsAt": 1791626400}}
+
+    async def run(args, stdin):
+        return (1, _stream({"type": "system"}, rejected), b"")
+
+    with pytest.raises(UsageLimitReached) as exc:
+        await ClaudeCLIClient(model="m", max_retries=3, runner=run, sleep=_no_sleep).analyze(
+            video_id="v", video_title="t", transcript=TRANSCRIPT
+        )
+    assert exc.value.resets_at == datetime.fromtimestamp(1791626400, timezone.utc)
+
+
 async def test_http_429_without_rate_event_is_a_limit_with_no_reset_time():
     async def run(args, stdin):
         return (1, _stream({"type": "result", "is_error": True, "api_error_status": 429,

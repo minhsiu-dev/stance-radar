@@ -395,18 +395,22 @@ class ClaudeCLIClient:
                         "the worker process can no longer spawn children"
                     )
                 message, usage = parse_cli_stream(stdout)
-                if message is not None and message.get("is_error"):
-                    # The CLI reports API errors in the result message; stderr is empty.
-                    text = str(message.get("result") or "") or stderr.decode("utf-8", "replace")
-                    if (usage is not None and usage.status == "rejected") or (
-                        message.get("api_error_status") == 429
-                    ):
-                        raise UsageLimitReached(text[:300], _limit_reset(usage))
-                    raise AnalysisError(f"claude exited {code}: {text[:300]}")
-                if code != 0:
-                    raise AnalysisError(
-                        f"claude exited {code}: {stderr.decode('utf-8', 'replace')[:300]}"
+                errored = code != 0 or message is None or bool(message.get("is_error"))
+                # The CLI reports API errors in the result message; stderr is empty.
+                text = (
+                    str((message or {}).get("result") or "")
+                    or stderr.decode("utf-8", "replace")
+                    or stdout.decode("utf-8", "replace")
+                )
+                rejected = usage is not None and usage.status == "rejected"
+                if errored and (
+                    rejected or (message or {}).get("api_error_status") == 429
+                ):
+                    raise UsageLimitReached(
+                        text[:300] or "usage limit reached", _limit_reset(usage)
                     )
+                if (message is not None and message.get("is_error")) or code != 0:
+                    raise AnalysisError(f"claude exited {code}: {text[:300]}")
                 if message is None:
                     raise AnalysisError(
                         f"claude stream had no result message: {stdout[:300]!r}"
