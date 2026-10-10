@@ -194,7 +194,8 @@ class PipelineLane(Base):
     paused: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
-    # "manual" (someone pressed pause) or "auto" (the failure streak hit the threshold)
+    # "manual" (someone pressed pause), "auto" (the failure streak hit the threshold) or
+    # "limit" (Claude usage threshold/limit; lifts itself at resume_at)
     pause_reason: Mapped[str | None] = mapped_column(String(8), nullable=True)
     paused_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -211,6 +212,12 @@ class PipelineLane(Base):
     last_error_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # A "limit" pause lifts itself once this passes (the Claude usage window reset)
+    resume_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Last Claude usage the analysis lane saw (UsageSnapshot.to_json() + "at")
+    usage: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class Job(Base):

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 
+from app.analysis.types import UsageSnapshot, UsageWindow
 from app.models import (
     ANALYSIS_LANE, TRANSCRIPT_LANE, Channel, PipelineLane, Video, VideoStatus, utcnow,
 )
@@ -169,3 +170,77 @@ async def test_record_error_leaves_the_pause_flag_alone(sessionmaker):
     assert row.last_error == "killed by signal 11"
     assert row.paused is False
     assert row.consecutive_failures == 0
+
+
+# ---- usage limit pause / auto-resume ----
+
+
+async def test_pause_for_limit_sets_reason_resume_at_and_error(sessionmaker):
+    await lane_store.ensure_lanes(sessionmaker)
+    at = utcnow() + timedelta(hours=2)
+    await lane_store.pause_for_limit(sessionmaker, ANALYSIS_LANE, at, "5-hour usage 72% >= 70%")
+    row = await lane_row(sessionmaker, ANALYSIS_LANE)
+    assert (row.paused, row.pause_reason, row.resume_at, row.last_error) == (
+        True, "limit", at, "5-hour usage 72% >= 70%",
+    )
+    assert row.consecutive_failures == 0
+
+
+async def test_pause_for_limit_keeps_the_later_resume_at(sessionmaker):
+    await lane_store.ensure_lanes(sessionmaker)
+    later, earlier = utcnow() + timedelta(days=3), utcnow() + timedelta(hours=1)
+    await lane_store.pause_for_limit(sessionmaker, ANALYSIS_LANE, later, "a")
+    await lane_store.pause_for_limit(sessionmaker, ANALYSIS_LANE, earlier, "b")
+    assert (await lane_row(sessionmaker, ANALYSIS_LANE)).resume_at == later
+
+
+async def test_pause_for_limit_does_not_override_a_manual_pause(sessionmaker):
+    await lane_store.ensure_lanes(sessionmaker)
+    await lane_store.pause(sessionmaker, ANALYSIS_LANE)
+    await lane_store.pause_for_limit(sessionmaker, ANALYSIS_LANE, utcnow(), "x")
+    row = await lane_row(sessionmaker, ANALYSIS_LANE)
+    assert row.pause_reason == "manual" and row.resume_at is None
+
+
+async def test_resume_if_due_only_after_resume_at(sessionmaker):
+    await lane_store.ensure_lanes(sessionmaker)
+    at = utcnow() + timedelta(minutes=5)
+    await lane_store.pause_for_limit(sessionmaker, ANALYSIS_LANE, at, "x")
+    assert await lane_store.resume_if_due(
+        sessionmaker, ANALYSIS_LANE, at - timedelta(seconds=1)
+    ) is False
+    assert await lane_store.resume_if_due(sessionmaker, ANALYSIS_LANE, at) is True
+    row = await lane_row(sessionmaker, ANALYSIS_LANE)
+    assert (row.paused, row.pause_reason, row.resume_at) == (False, None, None)
+
+
+async def test_resume_if_due_ignores_manual_and_auto_pauses(sessionmaker):
+    await lane_store.ensure_lanes(sessionmaker)
+    far = utcnow() + timedelta(days=30)
+    await lane_store.pause(sessionmaker, ANALYSIS_LANE)
+    assert await lane_store.resume_if_due(sessionmaker, ANALYSIS_LANE, far) is False
+    await lane_store.resume(sessionmaker, ANALYSIS_LANE)
+    await lane_store.record_failure(sessionmaker, ANALYSIS_LANE, "boom", pause_after=1)
+    assert await lane_store.resume_if_due(sessionmaker, ANALYSIS_LANE, far) is False
+    assert (await lane_row(sessionmaker, ANALYSIS_LANE)).pause_reason == "auto"
+
+
+async def test_manual_resume_clears_resume_at(sessionmaker):
+    await lane_store.ensure_lanes(sessionmaker)
+    await lane_store.pause_for_limit(
+        sessionmaker, ANALYSIS_LANE, utcnow() + timedelta(hours=1), "x"
+    )
+    await lane_store.resume(sessionmaker, ANALYSIS_LANE)
+    assert (await lane_row(sessionmaker, ANALYSIS_LANE)).resume_at is None
+
+
+async def test_record_usage_stores_the_snapshot_json(sessionmaker):
+    await lane_store.ensure_lanes(sessionmaker)
+    reset = datetime(2026, 10, 10, 15, tzinfo=timezone.utc)
+    await lane_store.record_usage(
+        sessionmaker, ANALYSIS_LANE,
+        UsageSnapshot("allowed", UsageWindow(0.15, reset), None, reset),
+    )
+    usage = (await lane_row(sessionmaker, ANALYSIS_LANE)).usage
+    assert usage["five_hour"] == {"utilization": 0.15, "resets_at": reset.isoformat()}
+    assert usage["seven_day"] is None and "at" in usage

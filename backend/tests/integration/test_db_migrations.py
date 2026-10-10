@@ -26,6 +26,20 @@ async def test_startup_migrations_idempotent(engine):
         assert kind_col == "kind"
 
 
+async def test_pipeline_lanes_gains_resume_at_and_usage_on_an_older_db(engine):
+    async with engine.begin() as conn:  # a table created before these columns existed
+        await conn.execute(text("ALTER TABLE pipeline_lanes DROP COLUMN IF EXISTS resume_at"))
+        await conn.execute(text("ALTER TABLE pipeline_lanes DROP COLUMN IF EXISTS usage"))
+    await run_startup_migrations(engine)
+    await run_startup_migrations(engine)
+    async with engine.connect() as conn:
+        cols = dict((await conn.execute(text(
+            "SELECT column_name, data_type FROM information_schema.columns"
+            " WHERE table_name = 'pipeline_lanes' AND column_name IN ('resume_at', 'usage')"
+        ))).all())
+    assert cols == {"resume_at": "timestamp with time zone", "usage": "jsonb"}
+
+
 async def test_video_stances_is_conditional_backfilled_from_mentions(engine, sessionmaker):
     from datetime import datetime, timezone
 

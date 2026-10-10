@@ -81,6 +81,9 @@ _STATEMENTS = (
     # create_all builds the table but never its rows
     "INSERT INTO pipeline_lanes (lane) VALUES ('transcript'), ('analysis')"
     " ON CONFLICT (lane) DO NOTHING",
+    # Claude usage throttle: auto-resume time + last seen usage
+    "ALTER TABLE pipeline_lanes ADD COLUMN IF NOT EXISTS resume_at TIMESTAMPTZ",
+    "ALTER TABLE pipeline_lanes ADD COLUMN IF NOT EXISTS usage JSONB",
     # A running analyze job from before the deploy would hold the single job slot
     # discover and load_older still share.
     "UPDATE jobs SET status = 'failed', finished_at = now(),"

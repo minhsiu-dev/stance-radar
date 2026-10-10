@@ -3,16 +3,22 @@
 Every function opens its own short session, so a lane holds no connection while a
 transcript fetch or a five-minute `claude` call is in flight.
 """
-from sqlalchemy import Boolean, DateTime, String, and_, case, literal, select, update
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean, DateTime, String, and_, case, func, literal, or_, select, update,
+)
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.analysis.types import UsageSnapshot
 from app.models import LANES, PipelineLane, Video, VideoStatus, utcnow
 
 Sessionmaker = async_sessionmaker[AsyncSession]
 
 MANUAL = "manual"
 AUTO = "auto"
+LIMIT = "limit"
 
 
 async def ensure_lanes(sessionmaker: Sessionmaker) -> None:
@@ -156,9 +162,67 @@ async def pause(sessionmaker: Sessionmaker, lane: str) -> None:
     )
 
 
+_RESUMED = dict(
+    paused=False, pause_reason=None, paused_at=None, consecutive_failures=0, resume_at=None
+)
+
+
 async def resume(sessionmaker: Sessionmaker, lane: str) -> None:
     """Clears the pause and the streak; last_error stays as a record of what happened."""
+    await _update_lane(sessionmaker, lane, **_RESUMED)
+
+
+async def record_usage(sessionmaker: Sessionmaker, lane: str, usage: UsageSnapshot) -> None:
     await _update_lane(
-        sessionmaker, lane,
-        paused=False, pause_reason=None, paused_at=None, consecutive_failures=0,
+        sessionmaker, lane, usage={**usage.to_json(), "at": utcnow().isoformat()}
     )
+
+
+async def pause_for_limit(
+    sessionmaker: Sessionmaker, lane: str, resume_at: datetime, reason: str
+) -> None:
+    """Pause until the Claude usage window resets. One UPDATE: slots finishing together
+    can each call this, and the lane keeps the LATER resume_at (resuming earlier would
+    only trip again). Never overrides a manual pause."""
+    now = utcnow()
+    at = literal(resume_at, DateTime(timezone=True))
+    already = and_(PipelineLane.paused.is_(True), PipelineLane.pause_reason == LIMIT)
+    async with sessionmaker() as session:
+        await session.execute(
+            update(PipelineLane)
+            .where(
+                PipelineLane.lane == lane,
+                PipelineLane.pause_reason.is_distinct_from(MANUAL),
+            )
+            .values(
+                paused=True,
+                pause_reason=LIMIT,
+                paused_at=case((already, PipelineLane.paused_at), else_=now),
+                resume_at=case(
+                    (already, func.greatest(func.coalesce(PipelineLane.resume_at, at), at)),
+                    else_=at,
+                ),
+                last_error=reason,
+                last_error_at=now,
+            )
+        )
+        await session.commit()
+
+
+async def resume_if_due(sessionmaker: Sessionmaker, lane: str, now: datetime) -> bool:
+    """Lift a "limit" pause whose resume_at has passed; returns whether it did. Manual
+    and failure-streak pauses are never lifted here. A limit pause with no resume_at
+    counts as due, so it can't wedge the lane."""
+    async with sessionmaker() as session:
+        resumed = (await session.execute(
+            update(PipelineLane)
+            .where(
+                PipelineLane.lane == lane,
+                PipelineLane.pause_reason == LIMIT,
+                or_(PipelineLane.resume_at.is_(None), PipelineLane.resume_at <= now),
+            )
+            .values(**_RESUMED)
+            .returning(PipelineLane.lane)
+        )).scalar_one_or_none()
+        await session.commit()
+    return resumed is not None
