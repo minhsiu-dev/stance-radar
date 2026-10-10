@@ -15,6 +15,14 @@ vi.mock("@/lib/api", async (orig) => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }));
 
+/** ISO for local hh:mm, `days` after NOW's local date. */
+function localAt(days: number, hours: number, minutes: number): string {
+  const d = new Date(NOW);
+  d.setDate(d.getDate() + days);
+  d.setHours(hours, minutes, 0, 0);
+  return d.toISOString();
+}
+
 function renderStatus(value: PipelineLane) {
   const onChanged = vi.fn();
   render(
@@ -67,6 +75,41 @@ describe("LaneStatus", () => {
     expect(alert).toHaveTextContent("Paused after an error");
     expect(alert).toHaveTextContent("3m12s ago");
     expect(alert).toHaveTextContent("usage limit reached");
+  });
+
+  it("shows the usage line when usage is known", () => {
+    renderStatus(
+      lane({
+        usage: {
+          five_hour: { utilization: 0.153, resets_at: "2026-10-04T15:00:00Z" },
+          seven_day: null,
+          at: iso(60_000),
+        },
+      }),
+    );
+    expect(screen.getByText("Claude usage: 5h 15% · 7d –%")).toBeInTheDocument();
+  });
+
+  it("shows the limit box with the resume time", () => {
+    renderStatus(
+      lane({
+        paused: true,
+        pause_reason: "limit",
+        resume_at: localAt(0, 15, 0),
+        last_error: "5-hour usage 72% >= 70%",
+      }),
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Usage limit reached — resumes automatically at 15:00");
+    expect(alert).toHaveTextContent("5-hour usage 72% >= 70%");
+    expect(screen.queryByText(/Paused after an error/)).toBeNull();
+  });
+
+  it("shows the date when resume is not today", () => {
+    renderStatus(
+      lane({ paused: true, pause_reason: "limit", resume_at: localAt(3, 9, 5) }),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/\d{1,2}\/\d{1,2} 09:05/);
   });
 
   it("shows how long an offline worker has been silent, with no controls", () => {

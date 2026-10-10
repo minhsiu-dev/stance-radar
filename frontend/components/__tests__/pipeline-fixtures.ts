@@ -23,6 +23,8 @@ export function lane(over: Partial<PipelineLane> = {}): PipelineLane {
     last_error: null,
     last_error_at: null,
     last_heartbeat_at: iso(2_000),
+    resume_at: null,
+    usage: null,
     ...over,
   };
 }

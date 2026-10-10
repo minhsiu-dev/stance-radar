@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAdmin } from "@/components/admin-provider";
 import { apiFetch } from "@/lib/api";
 import { elapsedLabel, laneState, minutesSince, type LaneState } from "@/lib/pipeline";
-import type { LaneName, PipelineLane } from "@/lib/types";
+import type { LaneName, PipelineLane, UsageWindow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const DOT: Record<LaneState, string> = {
@@ -14,6 +14,21 @@ const DOT: Record<LaneState, string> = {
   paused: "bg-amber-500",
   offline: "bg-red-500",
 };
+
+function percent(window: UsageWindow | null): string {
+  return window ? String(Math.round(window.utilization * 100)) : "–";
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Local "HH:mm", with "M/d " in front when it isn't on `now`'s day. */
+function resumeLabel(resumeAt: string, now: number): string {
+  const at = new Date(resumeAt);
+  const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  return at.toDateString() === new Date(now).toDateString()
+    ? time
+    : `${at.getMonth() + 1}/${at.getDate()} ${time}`;
+}
 
 export function LaneStatus({
   name,
@@ -68,6 +83,27 @@ export function LaneStatus({
           </Button>
         )}
       </div>
+      {lane.usage && (
+        <p className="text-xs text-muted-foreground">
+          {t("usage", {
+            fiveHour: percent(lane.usage.five_hour),
+            sevenDay: percent(lane.usage.seven_day),
+          })}
+        </p>
+      )}
+      {state === "paused" && lane.pause_reason === "limit" && (
+        <div
+          role="alert"
+          className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1.5 text-xs"
+        >
+          <p className="font-medium">
+            {t("limitPaused", { time: lane.resume_at ? resumeLabel(lane.resume_at, now) : "?" })}
+          </p>
+          {lane.last_error && (
+            <p className="mt-0.5 break-words font-mono text-[11px]">{lane.last_error}</p>
+          )}
+        </div>
+      )}
       {state === "paused" && lane.pause_reason === "auto" && (
         <div
           role="alert"

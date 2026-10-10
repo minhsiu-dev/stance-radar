@@ -202,6 +202,8 @@
       "pause": "暫停",
       "resume": "恢復",
       "autoPaused": "出錯自動暫停",
+      "limitPaused": "額度達上限，預計 {time} 自動恢復",
+      "usage": "Claude 用量：5 小時 {fiveHour}% · 7 天 {sevenDay}%",
       "ago": "{time} 前",
       "offlineSince": "worker 已 {minutes} 分鐘沒有回應，排隊中的影片會卡住",
       "offlineNever": "worker 尚未回報，排隊中的影片會卡住",

@@ -202,6 +202,8 @@
       "pause": "Pause",
       "resume": "Resume",
       "autoPaused": "Paused after an error",
+      "limitPaused": "Usage limit reached — resumes automatically at {time}",
+      "usage": "Claude usage: 5h {fiveHour}% · 7d {sevenDay}%",
       "ago": "{time} ago",
       "offlineSince": "The worker hasn't responded for {minutes, plural, one {# minute} other {# minutes}}; queued videos are stuck",
       "offlineNever": "The worker hasn't reported in yet; queued videos are stuck",

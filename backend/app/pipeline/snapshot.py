@@ -135,7 +135,7 @@ def _lane_dict(row: PipelineLane | None, now: datetime, offline_after: timedelta
         return {
             "paused": False, "pause_reason": None, "online": False, "concurrency": None,
             "consecutive_failures": 0, "last_error": None, "last_error_at": None,
-            "last_heartbeat_at": None,
+            "last_heartbeat_at": None, "resume_at": None, "usage": None,
         }
     beat = row.last_heartbeat_at
     return {
@@ -147,6 +147,8 @@ def _lane_dict(row: PipelineLane | None, now: datetime, offline_after: timedelta
         "last_error": row.last_error,
         "last_error_at": _iso(row.last_error_at),
         "last_heartbeat_at": _iso(beat),
+        "resume_at": _iso(row.resume_at),
+        "usage": row.usage,
     }
 
 

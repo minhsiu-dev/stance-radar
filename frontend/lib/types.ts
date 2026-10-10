@@ -563,9 +563,23 @@ export interface FailedVideosResponse {
   page_size: number;
 }
 
+export interface UsageWindow {
+  /** 0..1 share of the window's quota used */
+  utilization: number;
+  resets_at: string;
+}
+
+/** Last Claude subscription usage the analysis lane saw. */
+export interface LaneUsage {
+  five_hour: UsageWindow | null;
+  seven_day: UsageWindow | null;
+  at: string;
+}
+
 export interface PipelineLane {
   paused: boolean;
-  pause_reason: "manual" | "auto" | null;
+  /** "limit": Claude usage threshold/limit; lifts itself at `resume_at`. */
+  pause_reason: "manual" | "auto" | "limit" | null;
   /** Heartbeat within the last 30s: the lane's worker container is alive. */
   online: boolean;
   concurrency: number | null;
@@ -573,6 +587,8 @@ export interface PipelineLane {
   last_error: string | null;
   last_error_at: string | null;
   last_heartbeat_at: string | null;
+  resume_at: string | null;
+  usage: LaneUsage | null;
 }
 
 export interface PipelineVideo {

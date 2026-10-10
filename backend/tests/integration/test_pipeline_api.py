@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, update
 
+from app.analysis.types import UsageSnapshot, UsageWindow
 from app.models import (
     ANALYSIS_LANE, TRANSCRIPT_LANE, Channel, PipelineLane, Stance, Video, VideoStance,
     VideoStatus, utcnow,
@@ -145,8 +146,25 @@ async def test_snapshot_survives_missing_lane_rows(api, sessionmaker):
         assert lane == {
             "paused": False, "pause_reason": None, "online": False, "concurrency": None,
             "consecutive_failures": 0, "last_error": None, "last_error_at": None,
-            "last_heartbeat_at": None,
+            "last_heartbeat_at": None, "resume_at": None, "usage": None,
         }
+
+
+async def test_snapshot_reports_a_limit_pause_and_usage(api, sessionmaker):
+    _, client = api
+    reset = datetime(2026, 10, 10, 15, tzinfo=timezone.utc)
+    await lane_store.ensure_lanes(sessionmaker)
+    await lane_store.record_usage(
+        sessionmaker, ANALYSIS_LANE,
+        UsageSnapshot("allowed", UsageWindow(0.15, reset), None, reset),
+    )
+    await lane_store.pause_for_limit(sessionmaker, ANALYSIS_LANE, reset, "5-hour usage 72% >= 70%")
+
+    analysis = (await client.get("/api/pipeline")).json()["data"]["lanes"]["analysis"]
+    assert (analysis["paused"], analysis["pause_reason"]) == (True, "limit")
+    assert datetime.fromisoformat(analysis["resume_at"]) == reset
+    assert analysis["usage"]["five_hour"]["utilization"] == 0.15
+    assert analysis["usage"]["seven_day"] is None
 
 
 async def test_pause_then_resume_a_lane(api, sessionmaker):
