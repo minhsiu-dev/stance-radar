@@ -65,4 +65,6 @@ def test_defaults():
     assert settings.transcript_concurrency == 1
     assert settings.transcript_pause_after_failures == 5
     assert settings.analysis_pause_after_failures == 1
+    assert settings.analysis_max_5h_utilization == 0.70
+    assert settings.analysis_max_7d_utilization == 0.80
     assert settings.lane_offline_seconds == 30

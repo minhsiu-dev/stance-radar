@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # mostly an exhausted Claude quota, so that lane stops on the first one.
     transcript_pause_after_failures: int = 5
     analysis_pause_after_failures: int = 1
+    # Analysis lane pauses once Claude subscription usage reaches these shares (0..1)
+    # of the 5-hour / 7-day window, until that window resets
+    analysis_max_5h_utilization: float = 0.70
+    analysis_max_7d_utilization: float = 0.80
     # /api/pipeline reports a lane offline once its heartbeat is older than this
     lane_offline_seconds: int = 30
     # Max seconds to wait for a single Claude CLI analysis call before killing it and retrying.
