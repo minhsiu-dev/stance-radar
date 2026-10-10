@@ -3,9 +3,12 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select
 
-from app.analysis.llm import AnalysisError, FakeLLMClient
+from app.analysis.llm import AnalysisError, FakeLLMClient, UsageLimitReached
 from app.analysis.tickers import TickerValidator
-from app.analysis.types import AnalysisResponse, AnalysisResult, MentionResult, StanceResult
+from app.analysis.types import (
+    AnalysisResponse, AnalysisResult, MentionResult, StanceResult, UsageSnapshot, UsageWindow,
+)
+from app.pipeline import lane_store
 from app.config import Settings
 from app.market.client import FakeMarketClient
 from app.models import (
@@ -243,3 +246,73 @@ async def test_pausing_does_not_cancel_slots_already_in_flight(sessionmaker):
     assert await make_lane(sessionmaker, MixedLLM(), concurrency=2).drain() == 2
     assert (await get(sessionmaker, "slow")).status is VideoStatus.analyzed
     assert (await get(sessionmaker, "fast")).status is VideoStatus.failed
+
+
+# ---- Claude usage throttle ----
+
+
+def over_5h(reset) -> UsageSnapshot:
+    return UsageSnapshot("allowed", UsageWindow(0.72, reset), UsageWindow(0.1, reset), reset)
+
+
+async def analysis_row(sessionmaker) -> PipelineLane:
+    async with sessionmaker() as s:
+        return await s.get(PipelineLane, ANALYSIS_LANE)
+
+
+async def test_a_usage_limit_gives_the_video_back_unfailed(sessionmaker):
+    await seed(sessionmaker, "alpha_vid_3")
+    reset = utcnow() + timedelta(hours=2)
+    llm = FakeLLMClient(limit=UsageLimitReached("hit", reset))
+    out = await make_stage(sessionmaker, llm).process("alpha_vid_3")
+    assert (out.kind, out.resume_at) == ("limit", reset)
+    video = await get(sessionmaker, "alpha_vid_3")
+    assert (video.status, video.analysis_attempts, video.claimed_at) == (
+        VideoStatus.transcribed, 0, None,
+    )
+
+
+async def test_a_limit_without_reset_time_falls_back_to_30_minutes(sessionmaker):
+    await seed(sessionmaker, "alpha_vid_3")
+    before = utcnow()
+    llm = FakeLLMClient(limit=UsageLimitReached("hit", None))
+    out = await make_stage(sessionmaker, llm).process("alpha_vid_3")
+    assert before + timedelta(minutes=30) <= out.resume_at <= utcnow() + timedelta(minutes=30)
+
+
+async def test_success_carries_the_usage(sessionmaker):
+    await seed(sessionmaker, "alpha_vid_3")
+    usage = UsageSnapshot("allowed", None, None, None)
+    out = await make_stage(sessionmaker, FakeLLMClient(usage=usage)).process("alpha_vid_3")
+    assert (out.kind, out.usage) == ("success", usage)
+
+
+async def test_crossing_the_5h_threshold_pauses_the_lane_until_reset(sessionmaker):
+    await seed(sessionmaker, "v0", "v1", claimed=False)
+    reset = utcnow() + timedelta(hours=2)
+    assert await make_lane(sessionmaker, FakeLLMClient(usage=over_5h(reset))).drain() == 1
+    row = await analysis_row(sessionmaker)
+    assert (row.paused, row.pause_reason, row.resume_at) == (True, "limit", reset)
+    assert row.last_error == "5-hour usage 72% >= 70%"
+    assert row.usage["five_hour"]["utilization"] == 0.72
+    assert (await get(sessionmaker, "v0")).status is VideoStatus.transcribed  # not claimed
+
+
+async def test_a_limit_pause_resumes_by_itself_once_due(sessionmaker):
+    await seed(sessionmaker, "v0", claimed=False)
+    await lane_store.ensure_lanes(sessionmaker)
+    await lane_store.pause_for_limit(
+        sessionmaker, ANALYSIS_LANE, utcnow() - timedelta(seconds=1), "x"
+    )
+    assert await make_lane(sessionmaker, FakeLLMClient()).drain() == 1
+    assert (await get(sessionmaker, "v0")).status is VideoStatus.analyzed
+    assert (await analysis_row(sessionmaker)).paused is False
+
+
+async def test_a_limit_outcome_does_not_count_as_a_failure(sessionmaker):
+    await seed(sessionmaker, "v0", claimed=False)
+    llm = FakeLLMClient(limit=UsageLimitReached("hit", utcnow() + timedelta(hours=1)))
+    await make_lane(sessionmaker, llm).drain()
+    row = await analysis_row(sessionmaker)
+    assert (row.pause_reason, row.consecutive_failures, row.last_error) == ("limit", 0, "hit")
+    assert (await get(sessionmaker, "v0")).status is VideoStatus.transcribed

@@ -4,10 +4,11 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select, update
 
+from app.analysis.types import UsageSnapshot, UsageWindow
 from app.models import TRANSCRIPT_LANE, Channel, PipelineLane, Video, VideoStatus, utcnow
 from app.pipeline import lane_store
 from app.pipeline.lanes import Lane
-from app.pipeline.stages import NEUTRAL, SUCCESS, failure
+from app.pipeline.stages import NEUTRAL, SUCCESS, StageOutcome, failure
 
 BASE = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
@@ -120,6 +121,16 @@ async def test_success_resets_the_streak(sessionmaker):
 
     await make_lane(sessionmaker, RecordingStage(sessionmaker)).drain()
     assert (await lane_row(sessionmaker)).consecutive_failures == 0
+
+
+async def test_the_transcript_lane_never_throttles(sessionmaker):
+    reset = utcnow() + timedelta(hours=2)
+    over = UsageSnapshot("allowed", UsageWindow(0.99, reset), UsageWindow(0.99, reset), reset)
+    await seed(sessionmaker, ["v0", "v1"])
+    stage = RecordingStage(sessionmaker, outcome=StageOutcome("success", usage=over))
+
+    assert await make_lane(sessionmaker, stage).drain() == 2
+    assert (await lane_row(sessionmaker)).paused is False
 
 
 async def test_neutral_leaves_the_streak_alone(sessionmaker):

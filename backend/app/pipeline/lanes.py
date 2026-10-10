@@ -10,12 +10,14 @@ propagates so the worker exits and Docker restarts it with a clean address space
 import asyncio
 import logging
 import time
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.models import VideoStatus
+from app.models import VideoStatus, utcnow
 from app.pipeline import lane_store
 from app.pipeline.stages import Stage, StageOutcome, failure
+from app.pipeline.usage_throttle import throttle_until
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,8 @@ class Lane:
         poll_seconds: float = 1.0,
         heartbeat_seconds: float = 5.0,
         fatal: tuple[type[BaseException], ...] = (),
+        max_5h_utilization: float | None = None,
+        max_7d_utilization: float | None = None,
     ) -> None:
         self.name = name
         self.stage = stage
@@ -43,6 +47,9 @@ class Lane:
         self._poll_seconds = poll_seconds
         self._heartbeat_seconds = heartbeat_seconds
         self._fatal = fatal
+        # Claude usage thresholds; only the analysis lane sets them
+        self._max_5h = max_5h_utilization
+        self._max_7d = max_7d_utilization
         self._last_heartbeat = float("-inf")
 
     async def startup(self) -> int:
@@ -104,6 +111,8 @@ class Lane:
             await self._cancel(in_flight)
 
     async def _fill(self, in_flight: set[asyncio.Task[None]]) -> None:
+        if await lane_store.resume_if_due(self._sessionmaker, self.name, utcnow()):
+            logger.info("%s lane: usage window reset, resuming", self.name)
         while len(in_flight) < self._concurrency:
             if await lane_store.is_paused(self._sessionmaker, self.name):
                 return
@@ -127,8 +136,15 @@ class Lane:
         await self._record(outcome)
 
     async def _record(self, outcome: StageOutcome) -> None:
+        if outcome.usage is not None:
+            await lane_store.record_usage(self._sessionmaker, self.name, outcome.usage)
         if outcome.kind == "success":
             await lane_store.record_success(self._sessionmaker, self.name)
+            await self._maybe_throttle(outcome)
+        elif outcome.kind == "limit":
+            await self._pause_for_limit(
+                outcome.resume_at or utcnow(), outcome.error or "usage limit reached"
+            )
         elif outcome.kind == "failure":
             paused = await lane_store.record_failure(
                 self._sessionmaker, self.name, outcome.error or "",
@@ -136,6 +152,19 @@ class Lane:
             )
             if paused:
                 logger.warning("%s lane paused: %s", self.name, outcome.error)
+
+    async def _maybe_throttle(self, outcome: StageOutcome) -> None:
+        if self._max_5h is None or self._max_7d is None:
+            return
+        decision = throttle_until(
+            outcome.usage, max_5h=self._max_5h, max_7d=self._max_7d, now=utcnow()
+        )
+        if decision is not None:
+            await self._pause_for_limit(*decision)
+
+    async def _pause_for_limit(self, resume_at: datetime, reason: str) -> None:
+        await lane_store.pause_for_limit(self._sessionmaker, self.name, resume_at, reason)
+        logger.warning("%s lane paused until %s: %s", self.name, resume_at, reason)
 
     async def _maybe_heartbeat(self) -> None:
         now = time.monotonic()

@@ -6,19 +6,23 @@ written in one commit together with status=analyzed and the released claim.
 """
 import asyncio
 import logging
+from datetime import timedelta
 
 from sqlalchemy import delete, func, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.analysis.context import excerpt_around
-from app.analysis.llm import AnalysisInfrastructureError, LLMClient
+from app.analysis.llm import AnalysisInfrastructureError, LLMClient, UsageLimitReached
 from app.analysis.tickers import TickerValidatorLike
 from app.analysis.types import AnalysisResult
 from app.models import Mention, Stance, Video, VideoStance, VideoStatus, utcnow
-from app.pipeline.stages import NEUTRAL, SUCCESS, StageOutcome, failure
+from app.pipeline.stages import NEUTRAL, StageOutcome, failure
 from app.transcripts.client import Transcript, transcript_from_json
 
 logger = logging.getLogger(__name__)
+
+# A usage limit that didn't say when it resets: try again after this long
+LIMIT_FALLBACK = timedelta(minutes=30)
 
 
 class AnalysisStage:
@@ -45,15 +49,23 @@ class AnalysisStage:
             return NEUTRAL
         transcript = transcript_from_json(stored)
         try:
-            result = (await self.llm.analyze(
+            response = await self.llm.analyze(
                 video_id=video_id, video_title=title, transcript=transcript
-            )).result
+            )
+            result = response.result
             valid, dropped = await self._validate(video_id, result)
         except (AnalysisInfrastructureError, asyncio.CancelledError):
             # The process is broken (or shutting down), not the video: give the
             # attempt back and leave it queued for a fresh worker.
             await self._give_back(video_id)
             raise
+        except UsageLimitReached as exc:
+            # The subscription ran out, not the video: hand it back untouched and let
+            # the lane wait for the window to reset.
+            await self._give_back(video_id)
+            return StageOutcome(
+                "limit", error=str(exc), resume_at=exc.resets_at or utcnow() + LIMIT_FALLBACK
+            )
         except Exception as exc:  # AnalysisError (incl. timeouts) and anything else
             error = str(exc) or type(exc).__name__
             logger.warning("analysis failed for %s: %s", video_id, error)
@@ -62,7 +74,7 @@ class AnalysisStage:
             return NEUTRAL
         if not await self._persist(video_id, transcript, result, valid, dropped):
             return NEUTRAL
-        return SUCCESS
+        return StageOutcome("success", usage=response.usage)
 
     async def _stamp_attempt(self, video_id: str) -> tuple[str, dict | None] | None:
         """Commit the attempt up front, so a crash mid-call still counts."""

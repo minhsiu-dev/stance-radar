@@ -43,4 +43,6 @@ def build_analysis_lane(
         pause_after=settings.analysis_pause_after_failures,
         poll_seconds=settings.worker_poll_seconds,
         fatal=(AnalysisInfrastructureError,),
+        max_5h_utilization=settings.analysis_max_5h_utilization,
+        max_7d_utilization=settings.analysis_max_7d_utilization,
     )

@@ -6,15 +6,22 @@ the lane can keep its failure streak. On cancellation it gives its attempt back,
 clears the claim, and re-raises.
 """
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal, Protocol
 
-OutcomeKind = Literal["success", "neutral", "failure"]
+from app.analysis.types import UsageSnapshot
+
+# "limit": the Claude usage limit stopped the call -- not a failure; the lane pauses
+# until resume_at instead of counting it toward the streak
+OutcomeKind = Literal["success", "neutral", "failure", "limit"]
 
 
 @dataclass(frozen=True)
 class StageOutcome:
     kind: OutcomeKind
     error: str | None = None
+    usage: UsageSnapshot | None = None
+    resume_at: datetime | None = None
 
 
 SUCCESS = StageOutcome("success")
