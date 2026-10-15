@@ -13,6 +13,8 @@ import { PIPELINE_KEY } from "@/lib/pipeline";
 import type { DiscoveredResponse } from "@/lib/types";
 
 export const DISCOVERED_KEY = "/api/videos?status=discovered";
+/** Videos shorter than this start out checked; longer or unknown-length ones are opt-in. */
+const DEFAULT_SELECT_MAX_SECONDS = 3600;
 
 type Group = DiscoveredResponse["groups"][number];
 
@@ -106,6 +108,21 @@ export function Inbox({ total }: { total: number }) {
     () => (data?.groups ?? []).flatMap((g) => g.videos.map((v) => v.id)),
     [data],
   );
+  // Pre-check short videos once, the first time each appears, so a refresh never
+  // re-checks something the operator unchecked.
+  const defaultedIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const fresh = (data?.groups ?? [])
+      .flatMap((g) => g.videos)
+      .filter((v) => !defaultedIds.current.has(v.id));
+    if (!fresh.length) return;
+    for (const v of fresh) defaultedIds.current.add(v.id);
+    const short = fresh.filter(
+      (v) => v.duration_seconds != null && v.duration_seconds < DEFAULT_SELECT_MAX_SECONDS,
+    );
+    if (short.length) setChecked((prev) => new Set([...prev, ...short.map((v) => v.id)]));
+  }, [data]);
+
   const selected = allIds.filter((id) => checked.has(id));
   // Ids on screen when the operator first touched a checkbox: only those were reviewed,
   // so videos that arrive later are never skipped unseen.

@@ -183,7 +183,7 @@
     "inbox": {
       "title": "① To decide",
       "count": "{count, plural, one {# video} other {# videos}}",
-      "description": "Checked videos go on to transcript fetching and analysis. Unchecked ones are skipped — you can recover them anytime from the channel page.",
+      "description": "Checked videos go on to transcript fetching and analysis. Unchecked ones are skipped — you can recover them anytime from the channel page. Videos under 1 hour are checked by default.",
       "empty": "Nothing waiting for a decision",
       "expand": "Show",
       "collapse": "Hide",

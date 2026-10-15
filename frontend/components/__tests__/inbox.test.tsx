@@ -32,7 +32,7 @@ const response: DiscoveredResponse = {
       channel: { id: "UC_b", title: "Beta", thumbnail_url: "" },
       videos: [
         { id: "v3", title: "Video 3", thumbnail_url: "", published_at: "2026-06-06T12:00:00Z",
-          duration_seconds: 300, status: "discovered" },
+          duration_seconds: 3600, status: "discovered" },
       ],
     },
   ],
@@ -56,38 +56,78 @@ beforeEach(() => {
 });
 
 describe("Inbox", () => {
-  it("starts with nothing selected (opt-in)", async () => {
+  it("pre-checks only videos shorter than an hour", async () => {
     renderInbox();
-    expect(await screen.findByText("Video 1")).toBeInTheDocument();
-    for (const box of screen.getAllByRole("checkbox")) expect(box).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Send 0 · skip the rest" })).toBeInTheDocument();
+    expect(await screen.findByRole("checkbox", { name: /Video 1/ })).toBeChecked(); // 10 min
+    expect(screen.getByRole("checkbox", { name: /Video 2/ })).not.toBeChecked(); // unknown length
+    expect(screen.getByRole("checkbox", { name: /Video 3/ })).not.toBeChecked(); // exactly 1 h
+    expect(screen.getByRole("button", { name: "Send 1 · skip the rest" })).toBeInTheDocument();
   });
 
   it("counts what is checked, per video and per channel", async () => {
     renderInbox();
     await userEvent.click(await screen.findByRole("checkbox", { name: /Video 3/ }));
-    expect(screen.getByRole("button", { name: "Send 1 · skip the rest" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send 2 · skip the rest" })).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button", { name: "Select all" })[0]);
     expect(screen.getByRole("button", { name: "Send 3 · skip the rest" })).toBeInTheDocument();
   });
 
   it("skips the unchecked, analyzes the checked, and stays on the page", async () => {
     renderInbox();
-    await userEvent.click(await screen.findByRole("checkbox", { name: /Video 1/ }));
-    await userEvent.click(screen.getByRole("button", { name: "Send 1 · skip the rest" }));
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Video 3/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Send 2 · skip the rest" }));
 
     await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
     expect(apiFetchMock.mock.calls[0]).toEqual([
       "/api/videos/skip",
-      { method: "POST", body: JSON.stringify({ video_ids: ["v2", "v3"] }) },
+      { method: "POST", body: JSON.stringify({ video_ids: ["v2"] }) },
     ]);
     expect(apiFetchMock.mock.calls[1]).toEqual([
       "/api/videos/analyze",
-      { method: "POST", body: JSON.stringify({ video_ids: ["v1"] }) },
+      { method: "POST", body: JSON.stringify({ video_ids: ["v1", "v3"] }) },
     ]);
   });
 
   it("does not skip videos that arrived after the operator started picking", async () => {
+    const v4 = {
+      id: "v4", title: "Video 4", thumbnail_url: "", published_at: "2026-06-09T12:00:00Z",
+      duration_seconds: 7200, status: "discovered" as const,
+    };
+    const grown: DiscoveredResponse = {
+      total: 4,
+      groups: [
+        { ...response.groups[0], videos: [v4, ...response.groups[0].videos] },
+        response.groups[1],
+      ],
+    };
+    const fetcher = vi.fn().mockResolvedValue(response);
+    const tree = (total: number) => (
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <SWRConfig value={{ fetcher, provider: () => new Map(), dedupingInterval: 0 }}>
+          <Inbox total={total} />
+        </SWRConfig>
+      </NextIntlClientProvider>
+    );
+    const { rerender } = render(tree(3));
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Video 3/ }));
+
+    fetcher.mockResolvedValue(grown);
+    rerender(tree(4));
+    expect(await screen.findByText("Video 4")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Send 2 · skip the rest" }));
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
+    expect(apiFetchMock.mock.calls[0]).toEqual([
+      "/api/videos/skip",
+      { method: "POST", body: JSON.stringify({ video_ids: ["v2"] }) },
+    ]);
+    expect(apiFetchMock.mock.calls[1]).toEqual([
+      "/api/videos/analyze",
+      { method: "POST", body: JSON.stringify({ video_ids: ["v1", "v3"] }) },
+    ]);
+  });
+
+  it("pre-checks short arrivals once, without re-checking what the operator unchecked", async () => {
     const v4 = {
       id: "v4", title: "Video 4", thumbnail_url: "", published_at: "2026-06-09T12:00:00Z",
       duration_seconds: 100, status: "discovered" as const,
@@ -109,12 +149,18 @@ describe("Inbox", () => {
     );
     const { rerender } = render(tree(3));
     await userEvent.click(await screen.findByRole("checkbox", { name: /Video 1/ }));
+    expect(screen.getByRole("checkbox", { name: /Video 1/ })).not.toBeChecked();
 
     fetcher.mockResolvedValue(grown);
     rerender(tree(4));
-    expect(await screen.findByText("Video 4")).toBeInTheDocument();
+    expect(await screen.findByRole("checkbox", { name: /Video 4/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Video 1/ })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Send 1 · skip the rest" })).toBeInTheDocument();
+  });
 
-    await userEvent.click(screen.getByRole("button", { name: "Send 1 · skip the rest" }));
+  it("sending with no interaction analyzes the pre-checked and skips the rest shown", async () => {
+    renderInbox();
+    await userEvent.click(await screen.findByRole("button", { name: "Send 1 · skip the rest" }));
     await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
     expect(apiFetchMock.mock.calls[0]).toEqual([
       "/api/videos/skip",
@@ -126,20 +172,10 @@ describe("Inbox", () => {
     ]);
   });
 
-  it("Send 0 with no interaction still skips everything shown", async () => {
-    renderInbox();
-    await userEvent.click(await screen.findByRole("button", { name: "Send 0 · skip the rest" }));
-    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(1));
-    expect(apiFetchMock.mock.calls[0]).toEqual([
-      "/api/videos/skip",
-      { method: "POST", body: JSON.stringify({ video_ids: ["v1", "v2", "v3"] }) },
-    ]);
-  });
-
   it("shows a failed submit and routes a 401 through handleAuthError", async () => {
     apiFetchMock.mockRejectedValue(new Error("boom"));
     renderInbox();
-    await userEvent.click(await screen.findByRole("button", { name: "Send 0 · skip the rest" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Send 1 · skip the rest" }));
     expect(await screen.findByText("Submit failed: boom")).toBeInTheDocument();
     expect(handleAuthError).toHaveBeenCalled();
   });
