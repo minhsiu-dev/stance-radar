@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from app.config import Settings
 from app.models import Channel, Job, JobKind, JobStatus, Mention, Video, VideoStatus
 from app.pipeline.refresh import RefreshDeps, RefreshRunner
-from app.youtube.client import FakeYouTubeClient, QuotaExceededError
+from app.youtube.client import FakeYouTubeClient, QuotaExceededError, YouTubeError
 
 
 def make_settings(**overrides) -> Settings:
@@ -29,6 +29,19 @@ async def seed_channels(session) -> None:
             uploads_playlist_id=info.uploads_playlist_id,
         ))
     await session.commit()
+
+
+async def make_channel_info_stale(sessionmaker) -> None:
+    async with sessionmaker() as s:
+        channel = await s.get(Channel, "UC_fake_alpha")
+        channel.title = "Old Alpha"
+        channel.thumbnail_url = "https://fake.example/old-alpha.jpg"
+        await s.commit()
+
+
+async def stored_channel(sessionmaker, channel_id: str) -> Channel:
+    async with sessionmaker() as s:
+        return await s.get(Channel, channel_id)
 
 
 async def run_job(runner: RefreshRunner, kind: JobKind) -> int:
@@ -129,3 +142,65 @@ async def test_concurrent_start_returns_same_job(session, sessionmaker):
     assert created is True and created2 is False
     assert job_id == job_id2  # discover and load_older share a single job slot
     await runner.current_task
+
+
+async def test_discover_refreshes_channel_title_and_avatar(session, sessionmaker):
+    """A channel that changed its avatar: the stored URL starts 403ing, so discover
+    re-reads title / avatar from YouTube."""
+    await seed_channels(session)
+    await make_channel_info_stale(sessionmaker)
+
+    await run_job(make_runner(sessionmaker), JobKind.discover)
+
+    channel = await stored_channel(sessionmaker, "UC_fake_alpha")
+    assert channel.title == "頻道 Alpha"
+    assert channel.thumbnail_url == "https://fake.example/alpha.jpg"
+
+
+async def test_discover_keeps_listing_when_channel_info_sync_fails(session, sessionmaker):
+    await seed_channels(session)
+    await make_channel_info_stale(sessionmaker)
+
+    class BrokenChannelsYouTube(FakeYouTubeClient):
+        async def get_channels(self, channel_ids):
+            raise YouTubeError("YouTube API 500: backend error")
+
+    job_id = await run_job(
+        make_runner(sessionmaker, youtube=BrokenChannelsYouTube()), JobKind.discover
+    )
+
+    job = await session.get(Job, job_id)
+    assert job.status == JobStatus.done
+    assert job.progress["discovered"] == 6
+    assert (await stored_channel(sessionmaker, "UC_fake_alpha")).title == "Old Alpha"
+
+
+async def test_discover_fails_when_channel_info_sync_hits_quota(session, sessionmaker):
+    await seed_channels(session)
+
+    class QuotaChannelsYouTube(FakeYouTubeClient):
+        async def get_channels(self, channel_ids):
+            raise QuotaExceededError("YouTube API quota exhausted, retry tomorrow")
+
+    job_id = await run_job(
+        make_runner(sessionmaker, youtube=QuotaChannelsYouTube()), JobKind.discover
+    )
+
+    job = await session.get(Job, job_id)
+    assert job.status == JobStatus.failed
+    assert "quota" in job.error_message
+
+
+async def test_discover_leaves_channels_youtube_no_longer_returns(session, sessionmaker):
+    await seed_channels(session)
+    await make_channel_info_stale(sessionmaker)
+
+    class GoneChannelsYouTube(FakeYouTubeClient):
+        async def get_channels(self, channel_ids):
+            return []
+
+    await run_job(make_runner(sessionmaker, youtube=GoneChannelsYouTube()), JobKind.discover)
+
+    channel = await stored_channel(sessionmaker, "UC_fake_alpha")
+    assert channel.title == "Old Alpha"
+    assert channel.thumbnail_url == "https://fake.example/old-alpha.jpg"

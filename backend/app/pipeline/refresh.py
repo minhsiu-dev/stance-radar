@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.config import Settings
 from app.models import Channel, JobKind, Video, VideoStatus, utcnow
 from app.pipeline import jobs
-from app.youtube.client import QuotaExceededError, YouTubeClient
+from app.youtube.client import QuotaExceededError, YouTubeClient, YouTubeError
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +129,7 @@ class RefreshRunner:
         async with deps.sessionmaker() as session:
             channels = list((await session.execute(select(Channel))).scalars().all())
 
+        await self._sync_channel_info(channels)
         total_channels = len(channels)
         discovered = 0
         for i, channel in enumerate(channels):
@@ -143,6 +144,34 @@ class RefreshRunner:
             "channels_done": total_channels, "channels_total": total_channels,
             "discovered": discovered,
         })
+
+    async def _sync_channel_info(self, channels: list[Channel]) -> None:
+        """Re-read each channel's title / avatar from YouTube (1 quota unit per 50).
+
+        A channel that changes its avatar invalidates the stored URL (it starts 403ing),
+        so it is refreshed on every discover. Best-effort: on a non-quota YouTube error
+        the stored values stay and listing goes ahead. Channels YouTube no longer
+        returns (deleted / terminated) are left as they are.
+        """
+        deps = self._deps
+        try:
+            infos = await deps.youtube.get_channels([c.id for c in channels])
+        except QuotaExceededError:
+            raise
+        except YouTubeError:
+            logger.warning("channel info sync failed; keeping stored titles/avatars",
+                           exc_info=True)
+            return
+        async with deps.sessionmaker() as session:
+            for info in infos:
+                row = await session.get(Channel, info.id)
+                if row is None:
+                    continue
+                if info.title:
+                    row.title = info.title
+                if info.thumbnail_url:
+                    row.thumbnail_url = info.thumbnail_url
+            await session.commit()
 
     async def _ingest_channel_videos(self, channel: Channel) -> int:
         """Ingest the channel's new videos (status=discovered); returns the number added.

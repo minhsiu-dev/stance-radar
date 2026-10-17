@@ -40,6 +40,7 @@ class VideoInfo:
 class YouTubeClient(Protocol):
     async def resolve_channel(self, channel_id: str) -> ChannelInfo: ...
     async def resolve_channel_by_handle(self, handle: str) -> ChannelInfo: ...
+    async def get_channels(self, channel_ids: list[str]) -> list[ChannelInfo]: ...
     async def list_new_uploads(
         self, playlist_id: str, *, known_video_ids: set[str], limit: int | None
     ) -> list[VideoInfo]: ...
@@ -126,6 +127,20 @@ class DataAPIYouTubeClient:
         if not items:
             raise ChannelNotFound(handle)
         return self._channel_info(items[0])
+
+    async def get_channels(self, channel_ids: list[str]) -> list[ChannelInfo]:
+        """Current info for each channel, 50 ids per request (1 quota unit each).
+
+        Channels YouTube no longer returns (deleted / terminated) are simply absent.
+        """
+        infos: list[ChannelInfo] = []
+        for i in range(0, len(channel_ids), 50):
+            batch = channel_ids[i : i + 50]
+            data = await self._get(
+                "/channels", {"part": "snippet,contentDetails", "id": ",".join(batch)}
+            )
+            infos.extend(self._channel_info(item) for item in data.get("items", []))
+        return infos
 
     async def list_new_uploads(
         self, playlist_id: str, *, known_video_ids: set[str], limit: int | None
@@ -271,6 +286,9 @@ class FakeYouTubeClient:
         if channel_id is None:
             raise ChannelNotFound(handle)
         return self.CHANNELS[channel_id]
+
+    async def get_channels(self, channel_ids: list[str]) -> list[ChannelInfo]:
+        return [self.CHANNELS[cid] for cid in channel_ids if cid in self.CHANNELS]
 
     async def list_new_uploads(
         self, playlist_id: str, *, known_video_ids: set[str], limit: int | None

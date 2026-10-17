@@ -149,6 +149,54 @@ async def test_get_durations_batches_and_parses():
     assert durations == {"v1": 600, "v2": 3600}
 
 
+# ---- get_channels ----
+
+def _channel_item(channel_id: str) -> dict:
+    return {
+        "id": channel_id,
+        "snippet": {
+            "title": f"title {channel_id}",
+            "thumbnails": {"medium": {"url": f"https://img/{channel_id}.jpg"}},
+        },
+        "contentDetails": {"relatedPlaylists": {"uploads": f"UU{channel_id}"}},
+    }
+
+
+async def test_get_channels_batches_by_50_and_parses():
+    requested: list[list[str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/channels")
+        ids = request.url.params["id"].split(",")
+        requested.append(ids)
+        return httpx.Response(200, json={"items": [_channel_item(i) for i in ids]})
+
+    ids = [f"UC{i}" for i in range(51)]
+    infos = await make_client(handler).get_channels(ids)
+
+    assert [len(batch) for batch in requested] == [50, 1]
+    assert len(infos) == 51
+    assert infos[0] == ChannelInfo(
+        id="UC0", title="title UC0",
+        thumbnail_url="https://img/UC0.jpg", uploads_playlist_id="UUUC0",
+    )
+
+
+async def test_get_channels_omits_channels_youtube_does_not_return():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"items": [_channel_item("UCalive")]})
+
+    infos = await make_client(handler).get_channels(["UCalive", "UCgone"])
+    assert [i.id for i in infos] == ["UCalive"]
+
+
+async def test_get_channels_with_no_ids_makes_no_request():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("no request expected")
+
+    assert await make_client(handler).get_channels([]) == []
+
+
 # ---- Fake ----
 
 async def test_fake_client_has_seeded_channels():
@@ -159,6 +207,11 @@ async def test_fake_client_has_seeded_channels():
     assert len(videos) == 4  # 3 normal videos + 1 short (filtering happens in the pipeline, not the client)
     with pytest.raises(ChannelNotFound):
         await fake.resolve_channel("UC_unknown")
+
+
+async def test_fake_get_channels_returns_seeded_and_skips_unknown():
+    infos = await FakeYouTubeClient().get_channels(["UC_fake_beta", "UC_unknown"])
+    assert infos == [FakeYouTubeClient.CHANNELS["UC_fake_beta"]]
 
 
 # ---- list_older_uploads ----
