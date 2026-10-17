@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { useEffect, useState } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import { NextIntlClientProvider } from "next-intl";
@@ -58,6 +59,35 @@ function renderButton() {
     </NextIntlClientProvider>,
   );
 }
+
+/** Re-renders every second and creates <RefreshButton /> in its own render, like
+ *  PipelinePage does with useNow(). */
+function TickingParent() {
+  const [, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <RefreshButton />;
+}
+
+it("keeps polling a running job while its parent re-renders every second", async () => {
+  apiFetchMock.mockResolvedValueOnce(runningJob).mockResolvedValue({
+    ...runningJob,
+    progress: { stage: "listing", channels_done: 1, channels_total: 2 },
+  });
+  render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <TickingParent />
+      </SWRConfig>
+    </NextIntlClientProvider>,
+  );
+  expect(await screen.findByRole("button", { name: /Checking channels 0\/2/ })).toBeDisabled();
+  expect(
+    await screen.findByRole("button", { name: /Checking channels 1\/2/ }, { timeout: 4000 }),
+  ).toBeDisabled();
+}, 8000);
 
 it("says so when a finished discover found nothing new", async () => {
   apiFetchMock.mockResolvedValueOnce(runningJob).mockResolvedValue({

@@ -9,6 +9,8 @@ import { apiFetch } from "@/lib/api";
 import { PIPELINE_KEY } from "@/lib/pipeline";
 import type { JobInfo } from "@/lib/types";
 
+const JOB_POLL_MS = 2000;
+
 function progressLabel(
   job: JobInfo,
   t: ReturnType<typeof useTranslations<"Dashboard.refresh">>,
@@ -30,10 +32,15 @@ export function RefreshButton() {
   const [triggerError, setTriggerError] = useState<string | null>(null);
   const [noNew, setNoNew] = useState(false);
   const prevStatus = useRef<string | null>(null);
+  // A number in state, not a `(latest) => ...` function: SWR restarts its polling
+  // timer whenever refreshInterval changes identity, and /pipeline re-renders every
+  // second (useNow), so an inline function reset the 2s timer before it ever fired.
+  const [pollMs, setPollMs] = useState(0);
 
   const { data: job } = useSWR<JobInfo | null>("/api/jobs/current", apiFetch, {
-    refreshInterval: (latest) => (latest?.status === "running" ? 2000 : 0),
+    refreshInterval: pollMs,
     onSuccess: (latest) => {
+      setPollMs(latest?.status === "running" ? JOB_POLL_MS : 0);
       // The moment running → done/failed: refresh what the job changed. New videos
       // simply show up in the import inbox, so there is nothing to navigate to.
       if (prevStatus.current === "running" && latest?.status !== "running") {
